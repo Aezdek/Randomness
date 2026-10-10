@@ -1,6 +1,7 @@
 package xyz.aezdek.aezprint
 
 import android.app.Application
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
@@ -58,14 +59,21 @@ class PrintFlowTest {
     fun tearDown() = env.close()
 
     private fun waitForCurrentRender() {
-        compose.awaitReal(10_000) {
+        compose.awaitReal(10_000, { describe() }) {
             val state = viewModel.state.value
             state.printer != null && (state.render as? RenderState.Ready)?.options == state.options
         }
     }
 
     private fun sheetTotal(text: String) {
-        compose.awaitReal(10_000) { compose.onAllNodes(hasTestTag("sheetTotal").and(hasText(text))).fetchSemanticsNodes().isNotEmpty() }
+        compose.awaitReal(10_000, { describe() }) {
+            compose.onAllNodes(hasTestTag("sheetTotal").and(hasText(text))).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun describe(): String {
+        val state = viewModel.state.value
+        return "options=${state.options} render=${state.render} sheets=${state.sheetCount} errors=${state.errors}"
     }
 
     @Test
@@ -130,7 +138,7 @@ class PrintFlowTest {
         compose.onNodeWithText("Custom").performScrollTo().performClick()
         compose.onNodeWithTag("pageRangeField").performScrollTo().performTextReplacement("2-9")
         compose.awaitReal(5_000) { viewModel.state.value.errors.isNotEmpty() }
-        compose.onNodeWithText("Page 9 doesn't exist; this document has 3 pages").assertExists()
+        compose.onNodeWithTag("pageRangeField").assert(hasText("Page 9 doesn't exist; this document has 3 pages"))
         compose.onNodeWithTag("printButton").assertExists()
         assertTrue(!viewModel.state.value.canPrint)
     }
@@ -150,6 +158,8 @@ class PrintFlowTest {
         compose.onNodeWithTag("printButton").performClick()
         compose.awaitReal(5_000) { openedJob != null }
         val localId = checkNotNull(openedJob)
-        compose.awaitReal(15_000) { env.records.all.value.firstOrNull { it.localId == localId }?.jobState == JobState.COMPLETED }
+        compose.awaitReal(15_000, { "${env.records.all.value}" }) {
+            env.records.all.value.firstOrNull { it.localId == localId }?.jobState == JobState.COMPLETED
+        }
     }
 }

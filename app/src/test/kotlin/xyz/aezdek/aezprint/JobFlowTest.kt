@@ -43,7 +43,8 @@ class JobFlowTest {
     @After
     fun tearDown() = env.close()
 
-    private fun enqueue(options: PrintOptions): String = runBlocking { env.queue.enqueue(env.document, options) }
+    private fun enqueue(options: PrintOptions): String =
+        runBlocking { env.queue.enqueue(env.document, options) }.also { watched = it }
 
     private fun state(localId: String) = env.records.all.value.first { it.localId == localId }
 
@@ -54,8 +55,13 @@ class JobFlowTest {
         }
     }
 
+    private var watched: String? = null
+
+    private fun waitFor(timeout: Long = 15_000, condition: () -> Boolean) =
+        compose.awaitReal(timeout, { "Record: ${watched?.let(::state)}" }, condition)
+
     private fun waitForTag(tag: String, timeout: Long = 15_000) =
-        compose.waitUntil(timeout) { compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty() }
+        waitFor(timeout) { compose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty() }
 
     @Test
     fun manualDuplexPausesForTheFlipAndResumesOnContinue() {
@@ -67,7 +73,7 @@ class JobFlowTest {
         compose.onNodeWithText("Time to flip the stack").assertExists()
 
         compose.onNodeWithTag("continueAfterFlip").performClick()
-        compose.awaitReal(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Printed"))).fetchSemanticsNodes().isNotEmpty() }
+        waitFor(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Printed"))).fetchSemanticsNodes().isNotEmpty() }
         val finished = state(localId)
         assertEquals(JobState.COMPLETED, finished.jobState)
         assertEquals(finished.sheetsTotal, finished.sheetsCompleted)
@@ -79,17 +85,17 @@ class JobFlowTest {
         val localId = enqueue(PrintOptions(copies = 5))
         showJob(localId)
 
-        compose.awaitReal(15_000) { state(localId).jobId != null }
+        waitFor(15_000) { state(localId).jobId != null }
         waitForTag("cancelJob")
         compose.onNodeWithTag("cancelJob").performClick()
-        compose.awaitReal(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Canceled"))).fetchSemanticsNodes().isNotEmpty() }
+        waitFor(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Canceled"))).fetchSemanticsNodes().isNotEmpty() }
         assertEquals(JobState.CANCELED, state(localId).jobState)
     }
 
     @Test
     fun historyReprintsWithOneTap() {
         val first = enqueue(PrintOptions(copies = 2))
-        compose.awaitReal(15_000) { state(first).jobState == JobState.COMPLETED }
+        waitFor(15_000) { state(first).jobState == JobState.COMPLETED }
 
         val viewModel = env.historyViewModel()
         compose.setContent {
@@ -97,11 +103,11 @@ class JobFlowTest {
         }
         waitForTag("reprint-$first")
         compose.onNodeWithTag("reprint-$first").performClick()
-        compose.awaitReal(5_000) { opened != null }
+        waitFor(5_000) { opened != null }
 
-        val reprint = checkNotNull(opened)
+        val reprint = checkNotNull(opened).also { watched = it }
         assertNotEquals(first, reprint)
         assertEquals(state(first).options, state(reprint).options)
-        compose.awaitReal(15_000) { state(reprint).jobState == JobState.COMPLETED }
+        waitFor(15_000) { state(reprint).jobState == JobState.COMPLETED }
     }
 }

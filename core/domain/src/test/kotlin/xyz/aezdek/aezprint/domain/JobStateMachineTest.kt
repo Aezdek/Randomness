@@ -59,6 +59,14 @@ class JobStateMachineTest {
         assertEquals(JobState.PROCESSING, JobStateMachine.merge(JobState.PROCESSING, JobState.QUEUED))
         assertEquals(JobState.AWAITING_FLIP, JobStateMachine.merge(JobState.PROCESSING, JobState.AWAITING_FLIP))
         assertEquals(JobState.QUEUED, JobStateMachine.merge(null, JobState.QUEUED))
+        assertEquals(JobState.CANCELED, JobStateMachine.merge(JobState.CANCELED, JobState.PROCESSING))
+    }
+
+    @Test
+    fun `polls may skip intermediate states`() {
+        assertEquals(JobState.COMPLETED, JobStateMachine.merge(JobState.QUEUED, JobState.COMPLETED))
+        assertEquals(JobState.AWAITING_FLIP, JobStateMachine.merge(JobState.QUEUED, JobState.AWAITING_FLIP))
+        assertEquals(JobState.PROCESSING, JobStateMachine.merge(JobState.AWAITING_FLIP, JobState.PROCESSING))
     }
 
     @Test

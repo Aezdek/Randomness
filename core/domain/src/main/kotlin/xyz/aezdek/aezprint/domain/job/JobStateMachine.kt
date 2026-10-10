@@ -52,13 +52,15 @@ object JobStateMachine {
     fun canContinue(state: JobState): Boolean = state == AWAITING_FLIP
 
     /**
-     * Polls can arrive out of order on a flaky connection; a stale response must never move a job
-     * backwards, so only forward transitions are accepted.
+     * Merges a polled state into what we already know. Polls can skip states (a short job goes from
+     * queued to completed between two polls) or arrive late on a flaky connection, so anything moves a
+     * job forward except going back to queued or leaving a terminal state.
      */
     fun merge(current: JobState?, observed: JobState): JobState = when {
         current == null -> observed
-        canTransition(current, observed) -> observed
-        else -> current
+        current.isTerminal -> current
+        observed == QUEUED && current != QUEUED -> current
+        else -> observed
     }
 }
 
