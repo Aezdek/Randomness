@@ -1,6 +1,8 @@
 package xyz.aezdek.aezprint
 
 import android.app.Application
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasContentDescription
@@ -14,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -72,6 +75,12 @@ class PrintFlowTest {
         }
     }
 
+    /** Activates a control the way TalkBack does, independent of where the long panel is scrolled. */
+    private fun SemanticsNodeInteraction.activate() {
+        performScrollTo()
+        performSemanticsAction(SemanticsActions.OnClick)
+    }
+
     private fun describe(): String {
         val state = viewModel.state.value
         return "options=${state.options} render=${state.render} sheets=${state.sheetCount} errors=${state.errors}"
@@ -90,21 +99,21 @@ class PrintFlowTest {
     fun everyOptionGroupUpdatesThePreview() {
         launch()
 
-        compose.onNodeWithText("Multiple").performScrollTo().performClick()
+        compose.onNodeWithText("Multiple").activate()
         waitForCurrentRender()
         sheetTotal("2 sheets")
 
-        compose.onNodeWithText("Booklet").performScrollTo().performClick()
+        compose.onNodeWithText("Booklet").activate()
         waitForCurrentRender()
         sheetTotal("1 sheet")
         assertEquals(Duplex.SHORT_EDGE, viewModel.state.value.options.duplex)
 
-        compose.onNodeWithText("Poster").performScrollTo().performClick()
+        compose.onNodeWithText("Poster").activate()
         waitForCurrentRender()
         assertTrue(viewModel.state.value.sheetCount >= 3)
 
-        compose.onNodeWithText("Fit").performScrollTo().performClick()
-        compose.onNodeWithText("Custom").performScrollTo().performClick()
+        compose.onNodeWithText("Fit").activate()
+        compose.onNodeWithText("Custom").activate()
         compose.onNodeWithTag("pageRangeField").performScrollTo().performTextReplacement("1-2")
         compose.onNodeWithTag("pageRangeField").performImeAction()
         waitForCurrentRender()
@@ -112,19 +121,19 @@ class PrintFlowTest {
         assertEquals(PageSelection.Custom("1-2"), viewModel.state.value.options.pages)
 
         compose.waitForIdle()
-        compose.onNodeWithText("Flip on long edge").performScrollTo().performClick()
+        compose.onNodeWithText("Flip on long edge").activate()
         compose.awaitReal(5_000, { describe() }) { viewModel.state.value.options.duplex == Duplex.LONG_EDGE }
         waitForCurrentRender()
         sheetTotal("1 sheet")
 
-        compose.onNodeWithText("Landscape").performScrollTo().performClick()
-        compose.onNodeWithText("Letter").performScrollTo().performClick()
-        compose.onNodeWithText("Form fields only").performScrollTo().performClick()
-        compose.onNodeWithText("Save toner").performScrollTo().performClick()
-        compose.onNodeWithText("Print as image").performScrollTo().performClick()
-        compose.onNodeWithText("1200 dpi").performScrollTo().performClick()
-        compose.onNodeWithText("Reverse pages").performScrollTo().performClick()
-        compose.onNode(hasContentDescription("More copies")).performScrollTo().performClick()
+        compose.onNodeWithText("Landscape").activate()
+        compose.onNodeWithText("Letter").activate()
+        compose.onNodeWithText("Form fields only").activate()
+        compose.onNodeWithText("Save toner").activate()
+        compose.onNodeWithText("Print as image").activate()
+        compose.onNodeWithText("1200 dpi").activate()
+        compose.onNodeWithText("Reverse pages").activate()
+        compose.onNode(hasContentDescription("More copies")).activate()
         waitForCurrentRender()
 
         val options = viewModel.state.value.options
