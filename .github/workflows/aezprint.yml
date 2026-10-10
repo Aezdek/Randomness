@@ -31,7 +31,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit and UI tests (JVM + Robolectric)
-        run: ./gradlew --stacktrace :core:domain:test testDebugUnitTest
+        run: ./gradlew --continue :core:domain:test testDebugUnitTest
 
       - name: Upload test reports
         if: failure()
@@ -59,7 +59,7 @@ jobs:
           AEZPRINT_KEYSTORE_PASSWORD: ${{ secrets.AEZPRINT_KEYSTORE_PASSWORD }}
           AEZPRINT_KEY_ALIAS: ${{ secrets.AEZPRINT_KEY_ALIAS }}
           AEZPRINT_KEY_PASSWORD: ${{ secrets.AEZPRINT_KEY_PASSWORD }}
-        run: ./gradlew --stacktrace :app:assembleRelease
+        run: ./gradlew :app:assembleRelease
 
       - name: Require the stable signing key
         if: steps.signing.outputs.available != 'true'

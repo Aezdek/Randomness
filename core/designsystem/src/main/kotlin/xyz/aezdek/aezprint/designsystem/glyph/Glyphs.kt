@@ -48,14 +48,14 @@ private fun DrawScope.sheet(rect: Rect, colors: GlyphColors) {
 
 private fun DrawScope.paperRect(landscape: Boolean, fill: Float = 0.82f): Rect {
     val ratio = 1.414f
-    val maxW = size.width * fill
-    val maxH = size.height * fill
+    val maxW = this.size.width * fill
+    val maxH = this.size.height * fill
     val (w, h) = if (landscape) {
         val w = minOf(maxW, maxH * ratio); w to w / ratio
     } else {
         val h = minOf(maxH, maxW * ratio); h / ratio to h
     }
-    return Rect(Offset((size.width - w) / 2, (size.height - h) / 2), Size(w, h))
+    return Rect(Offset((this.size.width - w) / 2, (this.size.height - h) / 2), Size(w, h))
 }
 
 private fun DrawScope.textLines(area: Rect, colors: GlyphColors, lines: Int = 4) {
@@ -74,9 +74,9 @@ fun OrientationGlyph(orientation: Orientation, selected: Boolean, modifier: Modi
             Orientation.PORTRAIT -> paperRect(false).let { sheet(it, colors); textLines(it.deflate(it.width * 0.2f), colors) }
             Orientation.LANDSCAPE -> paperRect(true).let { sheet(it, colors); textLines(it.deflate(it.height * 0.2f), colors, 3) }
             Orientation.AUTO -> {
-                val back = paperRect(true, 0.7f).translate(-size.width * 0.08f, -size.height * 0.08f)
+                val back = paperRect(true, 0.7f).translate(-this.size.width * 0.08f, -this.size.height * 0.08f)
                 drawRoundRect(colors.muted, back.topLeft, back.size, CornerRadius(2.dp.toPx()), style = Stroke(1.5.dp.toPx()))
-                val front = paperRect(false, 0.7f).translate(size.width * 0.08f, size.height * 0.08f)
+                val front = paperRect(false, 0.7f).translate(this.size.width * 0.08f, this.size.height * 0.08f)
                 sheet(front, colors)
             }
         }
@@ -169,8 +169,8 @@ fun BookletGlyph(binding: Binding, selected: Boolean, modifier: Modifier = Modif
 @Composable
 fun BookletSubsetGlyph(subset: BookletSubset, selected: Boolean, modifier: Modifier = Modifier, size: Dp = 48.dp) =
     Glyph(modifier, size, selected) { colors ->
-        val back = paperRect(true, 0.66f).translate(size.width * 0.08f, size.height * 0.1f)
-        val front = paperRect(true, 0.66f).translate(-size.width * 0.08f, -size.height * 0.1f)
+        val back = paperRect(true, 0.66f).translate(this.size.width * 0.08f, this.size.height * 0.1f)
+        val front = paperRect(true, 0.66f).translate(-this.size.width * 0.08f, -this.size.height * 0.1f)
         val dashed = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)))
         if (subset == BookletSubset.FRONT_ONLY) {
             drawRect(colors.muted, back.topLeft, back.size, style = dashed)
@@ -197,14 +197,14 @@ fun DuplexGlyph(duplex: Duplex, selected: Boolean, modifier: Modifier = Modifier
         val stroke = Stroke(1.75.dp.toPx(), cap = StrokeCap.Round)
         val path = Path()
         if (duplex == Duplex.LONG_EDGE) {
-            val x = paper.right + size.width * 0.06f
-            path.moveTo(paper.left + paper.width * 0.5f, paper.top - size.height * 0.04f)
-            path.quadraticTo(x + size.width * 0.06f, paper.center.y - paper.height * 0.4f, x, paper.center.y)
+            val x = paper.right + this.size.width * 0.06f
+            path.moveTo(paper.left + paper.width * 0.5f, paper.top - this.size.height * 0.04f)
+            path.quadraticTo(x + this.size.width * 0.06f, paper.center.y - paper.height * 0.4f, x, paper.center.y)
             drawLine(colors.accent, Offset(paper.right, paper.top), Offset(paper.right, paper.bottom), 3.dp.toPx(), StrokeCap.Round)
         } else {
-            val y = paper.top - size.height * 0.04f
-            path.moveTo(paper.left - size.width * 0.04f, paper.center.y)
-            path.quadraticTo(paper.left, y - size.height * 0.04f, paper.center.x, y)
+            val y = paper.top - this.size.height * 0.04f
+            path.moveTo(paper.left - this.size.width * 0.04f, paper.center.y)
+            path.quadraticTo(paper.left, y - this.size.height * 0.04f, paper.center.x, y)
             drawLine(colors.accent, Offset(paper.left, paper.top), Offset(paper.right, paper.top), 3.dp.toPx(), StrokeCap.Round)
         }
         drawPath(path, colors.accent, style = stroke)
