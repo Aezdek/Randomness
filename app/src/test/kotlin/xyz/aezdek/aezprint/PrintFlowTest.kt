@@ -58,14 +58,14 @@ class PrintFlowTest {
     fun tearDown() = env.close()
 
     private fun waitForCurrentRender() {
-        compose.waitUntil(10_000) {
+        compose.awaitReal(10_000) {
             val state = viewModel.state.value
             state.printer != null && (state.render as? RenderState.Ready)?.options == state.options
         }
     }
 
     private fun sheetTotal(text: String) {
-        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("sheetTotal").and(hasText(text))).fetchSemanticsNodes().isNotEmpty() }
+        compose.awaitReal(10_000) { compose.onAllNodes(hasTestTag("sheetTotal").and(hasText(text))).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test
@@ -129,7 +129,7 @@ class PrintFlowTest {
         launch()
         compose.onNodeWithText("Custom").performScrollTo().performClick()
         compose.onNodeWithTag("pageRangeField").performScrollTo().performTextReplacement("2-9")
-        compose.waitUntil(5_000) { viewModel.state.value.errors.isNotEmpty() }
+        compose.awaitReal(5_000) { viewModel.state.value.errors.isNotEmpty() }
         compose.onNodeWithText("Page 9 doesn't exist; this document has 3 pages").assertExists()
         compose.onNodeWithTag("printButton").assertExists()
         assertTrue(!viewModel.state.value.canPrint)
@@ -140,7 +140,7 @@ class PrintFlowTest {
         launch()
         runBlocking { env.settings.updateFakeServer { it.copy(rejectPosterOptions = true) } }
         compose.onNodeWithText("Poster").performScrollTo().performClick()
-        compose.waitUntil(10_000) { viewModel.state.value.serverErrors.isNotEmpty() }
+        compose.awaitReal(10_000) { viewModel.state.value.serverErrors.isNotEmpty() }
         compose.onAllNodesWithText("Poster tiling isn't supported for this paper").onFirst().performScrollTo().assertExists()
     }
 
@@ -148,8 +148,8 @@ class PrintFlowTest {
     fun printingQueuesAJobThatRunsToCompletion() {
         launch()
         compose.onNodeWithTag("printButton").performClick()
-        compose.waitUntil(5_000) { openedJob != null }
+        compose.awaitReal(5_000) { openedJob != null }
         val localId = checkNotNull(openedJob)
-        compose.waitUntil(15_000) { env.records.all.value.firstOrNull { it.localId == localId }?.jobState == JobState.COMPLETED }
+        compose.awaitReal(15_000) { env.records.all.value.firstOrNull { it.localId == localId }?.jobState == JobState.COMPLETED }
     }
 }

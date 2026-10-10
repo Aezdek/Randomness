@@ -67,7 +67,7 @@ class JobFlowTest {
         compose.onNodeWithText("Time to flip the stack").assertExists()
 
         compose.onNodeWithTag("continueAfterFlip").performClick()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Printed"))).fetchSemanticsNodes().isNotEmpty() }
+        compose.awaitReal(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Printed"))).fetchSemanticsNodes().isNotEmpty() }
         val finished = state(localId)
         assertEquals(JobState.COMPLETED, finished.jobState)
         assertEquals(finished.sheetsTotal, finished.sheetsCompleted)
@@ -79,17 +79,17 @@ class JobFlowTest {
         val localId = enqueue(PrintOptions(copies = 5))
         showJob(localId)
 
-        compose.waitUntil(15_000) { state(localId).jobId != null }
+        compose.awaitReal(15_000) { state(localId).jobId != null }
         waitForTag("cancelJob")
         compose.onNodeWithTag("cancelJob").performClick()
-        compose.waitUntil(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Canceled"))).fetchSemanticsNodes().isNotEmpty() }
+        compose.awaitReal(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Canceled"))).fetchSemanticsNodes().isNotEmpty() }
         assertEquals(JobState.CANCELED, state(localId).jobState)
     }
 
     @Test
     fun historyReprintsWithOneTap() {
         val first = enqueue(PrintOptions(copies = 2))
-        compose.waitUntil(15_000) { state(first).jobState == JobState.COMPLETED }
+        compose.awaitReal(15_000) { state(first).jobState == JobState.COMPLETED }
 
         val viewModel = env.historyViewModel()
         compose.setContent {
@@ -97,11 +97,11 @@ class JobFlowTest {
         }
         waitForTag("reprint-$first")
         compose.onNodeWithTag("reprint-$first").performClick()
-        compose.waitUntil(5_000) { opened != null }
+        compose.awaitReal(5_000) { opened != null }
 
         val reprint = checkNotNull(opened)
         assertNotEquals(first, reprint)
         assertEquals(state(first).options, state(reprint).options)
-        compose.waitUntil(15_000) { state(reprint).jobState == JobState.COMPLETED }
+        compose.awaitReal(15_000) { state(reprint).jobState == JobState.COMPLETED }
     }
 }

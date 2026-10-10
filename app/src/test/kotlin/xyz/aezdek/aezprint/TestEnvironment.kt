@@ -124,11 +124,7 @@ class InProcessQueue(
     override suspend fun enqueue(document: LocalDocument, options: PrintOptions): String {
         val record = PrintRecord(UUID.randomUUID().toString(), document.id, document.displayName, options, System.nanoTime())
         records.upsert(record)
-        scope.launch {
-            println("AEZTEST run start ${record.localId}")
-            runner.run(record.localId) { println("AEZTEST update ${it.phase} ${it.jobState} ${it.message}") }
-            println("AEZTEST run end")
-        }
+        scope.launch { runner.run(record.localId) }
         return record.localId
     }
 
