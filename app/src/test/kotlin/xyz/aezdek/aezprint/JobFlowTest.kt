@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,7 +27,7 @@ import xyz.aezdek.aezprint.feature.jobs.history.JobHistoryRoute
 import xyz.aezdek.aezprint.feature.jobs.progress.JobProgressRoute
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class)
+@Config(application = Application::class, qualifiers = "w600dp-h1200dp")
 class JobFlowTest {
 
     @get:Rule val compose = createComposeRule()
@@ -72,7 +73,7 @@ class JobFlowTest {
         assertEquals(JobState.AWAITING_FLIP, state(localId).jobState)
         compose.onNodeWithText("Time to flip the stack").assertExists()
 
-        compose.onNodeWithTag("continueAfterFlip").performClick()
+        compose.onNodeWithTag("continueAfterFlip").performScrollTo().performClick()
         waitFor(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Printed"))).fetchSemanticsNodes().isNotEmpty() }
         val finished = state(localId)
         assertEquals(JobState.COMPLETED, finished.jobState)
@@ -87,7 +88,7 @@ class JobFlowTest {
 
         waitFor(15_000) { state(localId).jobId != null }
         waitForTag("cancelJob")
-        compose.onNodeWithTag("cancelJob").performClick()
+        compose.onNodeWithTag("cancelJob").performScrollTo().performClick()
         waitFor(15_000) { compose.onAllNodes(hasTestTag("jobOutcome").and(hasText("Canceled"))).fetchSemanticsNodes().isNotEmpty() }
         assertEquals(JobState.CANCELED, state(localId).jobState)
     }
