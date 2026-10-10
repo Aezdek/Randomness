@@ -100,10 +100,8 @@ class AdvancedPrintOptionsActivity : ComponentActivity() {
             finish()
             return
         }
-        val options = viewModel.state.value.options
         val updated = PrintJobInfo.Builder(original)
             .putAdvancedOption(SystemPrintMapping.OPTIONS_KEY, viewModel.encoded())
-            .apply { setCopies(options.copies) }
             .build()
         setResult(Activity.RESULT_OK, Intent().putExtra(PrintService.EXTRA_PRINT_JOB_INFO, updated))
         finish()

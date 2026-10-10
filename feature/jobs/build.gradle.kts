@@ -49,3 +49,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+// No unit tests yet: these screens are covered by the Robolectric flow tests in :app.
+tasks.withType<Test>().configureEach {
+    failOnNoDiscoveredTests.set(false)
+}

@@ -65,7 +65,9 @@ class AezPrintService : PrintService() {
                 val advanced = printJob.getAdvancedStringOption(SystemPrintMapping.OPTIONS_KEY)
                     ?.let { runCatching { json.decodeFromString(PrintOptions.serializer(), it) }.getOrNull() }
                 val base = advanced ?: presets.library.first().default?.options ?: PrintOptions()
-                val options = SystemPrintMapping.merge(base, info.attributes, info.copies, info.pages)
+                // The spooler can't take copies from the options activity, so honour them unless the dialog raised it.
+                val copies = if (advanced != null && info.copies <= 1) advanced.copies else info.copies
+                val options = SystemPrintMapping.merge(base, info.attributes, copies, info.pages)
                 queue.enqueue(document, options)
                 printJob.complete()
             } catch (e: CancellationException) {
