@@ -1,6 +1,7 @@
 package xyz.aezdek.aezprint
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,7 +41,7 @@ import java.util.UUID
 /** The real fake server and job runner wired to in-memory stores, with timings shrunk for tests. */
 class TestEnvironment(directory: File) : AutoCloseable {
 
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> e.printStackTrace() })
     val settings = InMemorySettings()
     val server = FakePrintServer(settings, FakeSheetRenderer(), scope)
     val documents = InMemoryDocuments()
@@ -123,7 +124,11 @@ class InProcessQueue(
     override suspend fun enqueue(document: LocalDocument, options: PrintOptions): String {
         val record = PrintRecord(UUID.randomUUID().toString(), document.id, document.displayName, options, System.nanoTime())
         records.upsert(record)
-        scope.launch { runner.run(record.localId) }
+        scope.launch {
+            println("AEZTEST run start ${record.localId}")
+            runner.run(record.localId) { println("AEZTEST update ${it.phase} ${it.jobState} ${it.message}") }
+            println("AEZTEST run end")
+        }
         return record.localId
     }
 
