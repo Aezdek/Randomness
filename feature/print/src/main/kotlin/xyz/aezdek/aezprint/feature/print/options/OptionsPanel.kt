@@ -1,6 +1,5 @@
 package xyz.aezdek.aezprint.feature.print.options
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -47,7 +46,7 @@ fun OptionsPanel(
     modifier: Modifier = Modifier,
     generalError: String? = null,
 ) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 20.dp).animateContentSize()) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         if (generalError != null) {
             ListItem(
                 headlineContent = { Text(generalError) },

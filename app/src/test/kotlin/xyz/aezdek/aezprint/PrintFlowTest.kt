@@ -109,6 +109,7 @@ class PrintFlowTest {
         sheetTotal("2 sheets")
         assertEquals(PageSelection.Custom("1-2"), viewModel.state.value.options.pages)
 
+        compose.waitForIdle()
         compose.onNodeWithText("Flip on long edge").performScrollTo().performClick()
         compose.awaitReal(5_000, { describe() }) { viewModel.state.value.options.duplex == Duplex.LONG_EDGE }
         waitForCurrentRender()
