@@ -1,0 +1,93 @@
+name: AezPrint
+
+on:
+  push:
+    branches: [aezprint]
+    tags: ["aezprint-v*"]
+  pull_request:
+    branches: [aezprint]
+  workflow_dispatch:
+
+concurrency:
+  group: aezprint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Test and build signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit and UI tests (JVM + Robolectric)
+        run: ./gradlew --stacktrace :core:domain:test testDebugUnitTest
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+
+      - name: Restore signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.AEZPRINT_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/aezprint-release.jks"
+          echo "AEZPRINT_KEYSTORE_PATH=$RUNNER_TEMP/aezprint-release.jks" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        env:
+          AEZPRINT_KEYSTORE_PASSWORD: ${{ secrets.AEZPRINT_KEYSTORE_PASSWORD }}
+          AEZPRINT_KEY_ALIAS: ${{ secrets.AEZPRINT_KEY_ALIAS }}
+          AEZPRINT_KEY_PASSWORD: ${{ secrets.AEZPRINT_KEY_PASSWORD }}
+        run: ./gradlew --stacktrace :app:assembleRelease
+
+      - name: Require the stable signing key
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          echo "::error title=Signing key missing::Add AEZPRINT_KEYSTORE_BASE64, AEZPRINT_KEYSTORE_PASSWORD, AEZPRINT_KEY_ALIAS and AEZPRINT_KEY_PASSWORD as repository secrets (see README, 'Signed APKs'). The code built and tests passed; only signing is missing."
+          exit 1
+
+      - name: Verify signature and collect APK
+        id: apk
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1)
+          if [ -z "$APK" ]; then echo "::error::No signed APK was produced"; exit 1; fi
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)apksigner
+          "$APKSIGNER" verify --print-certs "$APK" | tee signature.txt
+          OUT="AezPrint-1.0.${GITHUB_RUN_NUMBER}.apk"
+          cp "$APK" "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AezPrint-apk
+          path: |
+            ${{ steps.apk.outputs.path }}
+            signature.txt
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/aezprint-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.path }}
+          generate_release_notes: true
