@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import kotlinx.coroutines.runBlocking
@@ -105,6 +106,7 @@ class PrintFlowTest {
         compose.onNodeWithText("Fit").performScrollTo().performClick()
         compose.onNodeWithText("Custom").performScrollTo().performClick()
         compose.onNodeWithTag("pageRangeField").performScrollTo().performTextReplacement("1-2")
+        compose.onNodeWithTag("pageRangeField").performImeAction()
         waitForCurrentRender()
         sheetTotal("2 sheets")
         assertEquals(PageSelection.Custom("1-2"), viewModel.state.value.options.pages)
