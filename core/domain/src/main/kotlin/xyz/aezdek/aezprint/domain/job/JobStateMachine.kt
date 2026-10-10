@@ -24,17 +24,6 @@ sealed interface JobEvent {
  */
 object JobStateMachine {
 
-    private val transitions: Map<JobState, Set<JobState>> = mapOf(
-        QUEUED to setOf(PROCESSING, CANCELED, FAILED),
-        PROCESSING to setOf(AWAITING_FLIP, COMPLETED, CANCELED, FAILED),
-        AWAITING_FLIP to setOf(PROCESSING, CANCELED, FAILED),
-        COMPLETED to emptySet(),
-        CANCELED to emptySet(),
-        FAILED to emptySet(),
-    )
-
-    fun canTransition(from: JobState, to: JobState): Boolean = from == to || to in transitions.getValue(from)
-
     fun reduce(state: JobState, event: JobEvent): JobState {
         val next = when (event) {
             JobEvent.Start -> PROCESSING.takeIf { state == QUEUED }
