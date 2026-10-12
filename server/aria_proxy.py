@@ -213,13 +213,32 @@ def search(query, limit):
     return results
 
 
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    if os.name == "nt":
+        # On Windows SO_REUSEADDR lets a second program share the port without an error,
+        # and then requests go to whichever one Windows picks. Claim the port exclusively.
+        allow_reuse_address = False
+
+        def server_bind(self):
+            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AriaProxy/" + VERSION
     protocol_version = "HTTP/1.1"
     token = None
 
-    def log_message(self, fmt, *args):  # quieter than the default access log
+    def log_message(self, fmt, *args):  # replaced by log_request below
         pass
+
+    def log_request(self, code="-", size="-"):
+        path = urllib.parse.urlsplit(self.path).path
+        if path.startswith("/thumb/") or (path.startswith("/stream/") and self.headers.get("Range", "bytes=0-")[:8] != "bytes=0-"):
+            return  # artwork and seeking are too chatty to log
+        log(f"{self.client_address[0]} {self.command} {path} -> {code}")
 
     # Helpers
 
@@ -406,6 +425,17 @@ def lan_address():
         s.close()
 
 
+def self_check(port):
+    time.sleep(1)
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(f"http://127.0.0.1:{port}/", timeout=10) as resp:
+            ok = resp.status == 200 and b"Aria" in resp.read()
+        log("Self-check passed: the server answers on this computer. Every visit is logged below."
+            if ok else "Self-check failed: something else answered on this port.")
+    except Exception as exc:  # noqa: BLE001
+        log(f"Self-check failed: {exc}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="YouTube audio proxy for the Aria iPod app")
     parser.add_argument("--host", default="0.0.0.0")
@@ -418,13 +448,19 @@ def main():
     os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")
 
     Handler.token = args.token
-    server = ThreadingHTTPServer((args.host, args.port), Handler)
-    server.daemon_threads = True
+    try:
+        server = Server((args.host, args.port), Handler)
+    except OSError as exc:
+        log(f"Can't listen on port {args.port}: {exc}")
+        log("Another program is using it, or Aria is already running in another window.")
+        log(f"Close the other window, or pick another port, for example: --port {args.port + 1}")
+        sys.exit(1)
     log(f"Aria proxy {VERSION} (yt-dlp {yt_dlp.version.__version__})")
     address = f"http://{lan_address()}:{args.port}"
     log(f"On the iPod, open {address} in Safari to install Aria")
     log(f"In the app, set Server to: {address}")
     threading.Thread(target=lambda: (PACKAGE.prepare(args.deb), log(f"App package: {PACKAGE.status}")), daemon=True).start()
+    threading.Thread(target=self_check, args=(args.port,), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

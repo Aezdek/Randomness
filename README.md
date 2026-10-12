@@ -101,6 +101,7 @@ Your synced music is already in the **Library** tab and works without the server
 
 | Problem | Fix |
 | --- | --- |
+| The page stays blank on the computer too | Read the server window. The self-check line says whether the server answers, and every visit appears as a line such as `GET / -> 200`. If visits don't show up, another program has the port: close every Aria window, run it once, or use `--port 8766`. Type the address with `http://` and the port. |
 | Safari can't open the server page | Make sure both devices are on the same Wi-Fi and the server window is open. Check the firewall (see Step 1). Some guest or "client isolated" networks block devices from reaching each other. |
 | The page says the app package isn't available | The server couldn't download it from GitHub. Download the `.deb` from Releases, put it in the `server` folder, and restart the server. |
 | Test Connection says "Wrong or missing access key" | You started the server with `--token`. Enter the same value in Settings → **Key**. |
