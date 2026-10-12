@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refresh the home screen's app list so the Aria icon appears without a reboot.
+if [ -x /usr/bin/uicache ]; then
+    su -c /usr/bin/uicache mobile 2>/dev/null || /usr/bin/uicache
+fi
+exit 0

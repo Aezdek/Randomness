@@ -64,4 +64,5 @@ jobs:
           body: |
             Install on a jailbroken iPod: start the server (`server/run.bat` or `server/run.sh`), open its address in Safari on the iPod, and tap **Install Aria**. Full guide: https://github.com/${{ github.repository }}/tree/aria#install
           files: app/packages/*.deb
+          overwrite_files: true
           make_latest: false
