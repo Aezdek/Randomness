@@ -12,6 +12,8 @@ seeking works.
     python3 aria_proxy.py --token secret  # require ?key=secret on every request
 
 Endpoints:
+    GET /                             a page for the iPod's Safari with an install link
+    GET /aria.deb                     the Aria app package, to install with Filza
     GET /api/ping                     server info
     GET /api/search?q=...&limit=25    search results as JSON
     GET /stream/<id>.m4a              audio, with support for Range requests
@@ -20,7 +22,10 @@ Endpoints:
 
 import argparse
 import collections
+import glob
+import html
 import json
+import os
 import re
 import socket
 import sys
@@ -37,6 +42,8 @@ except ImportError:  # pragma: no cover
     sys.exit("yt-dlp is missing. Install it with: pip install -r requirements.txt")
 
 VERSION = "1.0.0"
+REPO = "Aezdek/Randomness"
+HERE = os.path.dirname(os.path.abspath(__file__))
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 # iOS 9 plays AAC (mp4a) in an mp4 container natively. Itag 140 is 128 kbps AAC.
 AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/140"
@@ -111,6 +118,57 @@ RESOLVER = Resolver()
 THUMBS = ThumbCache()
 
 
+class Package:
+    """Finds the Aria .deb so the iPod can install it from this server.
+
+    Looks for --deb, then a .deb next to this script or in ../app/packages, then
+    downloads the newest aria-v* release from GitHub into this folder.
+    """
+
+    def __init__(self):
+        self.path = None
+        self.status = "looking for the app package"
+
+    def find_local(self, explicit=None):
+        if explicit:
+            return explicit if os.path.isfile(explicit) else None
+        candidates = glob.glob(os.path.join(HERE, "*.deb")) + glob.glob(os.path.join(HERE, "..", "app", "packages", "*.deb"))
+        return max(candidates, key=os.path.getmtime) if candidates else None
+
+    def prepare(self, explicit=None):
+        self.path = self.find_local(explicit)
+        if self.path:
+            self.status = f"serving {os.path.basename(self.path)}"
+            return
+        if explicit:
+            self.status = f"{explicit} not found"
+            return
+        try:
+            req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases?per_page=30",
+                                         headers={"Accept": "application/vnd.github+json", "User-Agent": "aria-proxy"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                releases = json.load(resp)
+            for rel in releases:
+                if not rel.get("tag_name", "").startswith("aria-v") or rel.get("draft"):
+                    continue
+                asset = next((a for a in rel.get("assets", []) if a["name"].endswith(".deb")), None)
+                if not asset:
+                    continue
+                target = os.path.join(HERE, asset["name"])
+                with urllib.request.urlopen(asset["browser_download_url"], timeout=60) as resp, open(target + ".part", "wb") as out:
+                    out.write(resp.read())
+                os.replace(target + ".part", target)
+                self.path = target
+                self.status = f"serving {asset['name']} (downloaded from {rel['tag_name']})"
+                return
+            self.status = "no Aria release found on GitHub"
+        except Exception as exc:  # noqa: BLE001
+            self.status = f"couldn't download the app package: {exc}"
+
+
+PACKAGE = Package()
+
+
 def search(query, limit):
     opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -162,10 +220,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(parsed.query)
-        if self.token and query.get("key", [""])[0] != self.token:
+        public = parsed.path in ("/", "/index.html", "/aria.deb")
+        if self.token and not public and query.get("key", [""])[0] != self.token:
             return self.error_json(401, "Wrong or missing access key")
         path = parsed.path
         try:
+            if path in ("/", "/index.html"):
+                return self.handle_home()
+            if path == "/aria.deb":
+                return self.handle_deb()
             if path == "/api/ping":
                 return self.send_json(200, {"ok": True, "name": "Aria proxy", "version": VERSION,
                                             "ytdlp": yt_dlp.version.__version__})
@@ -187,6 +250,40 @@ class Handler(BaseHTTPRequestHandler):
                 self.error_json(502, message[:300])
             except OSError:
                 pass
+
+    def handle_home(self):
+        host = self.headers.get("Host") or ""
+        if not host or host.startswith(("127.", "localhost", "[::1]")):
+            host = f"{lan_address()}:{self.server.server_port}"  # opened on the computer itself
+        install = ('<a class="button" href="/aria.deb">Install Aria</a>'
+                   '<p>Safari downloads it, then tap <b>Open in Filza</b> and <b>Install</b>.</p>'
+                   if PACKAGE.path else f"<p>The app package isn't available: {html.escape(PACKAGE.status)}.</p>")
+        body = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Aria</title>
+<style>body{{font-family:-apple-system,Helvetica,sans-serif;background:#0b0b10;color:#f5f5f7;margin:0;padding:32px 20px;text-align:center}}
+h1{{font-size:34px;margin:0 0 6px}}p{{color:#8e8e9a;line-height:1.4}}code{{color:#ff3b6b;font-size:18px}}
+.button{{display:block;background:#ff3b6b;color:#fff;text-decoration:none;font-weight:600;font-size:18px;padding:14px;border-radius:12px;margin:28px 0 8px}}</style>
+</head><body><h1>Aria</h1><p>The proxy is running.</p>{install}
+<p>Then open Aria &rarr; Settings and set Server to</p><code>http://{html.escape(host)}</code></body></html>""".encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def handle_deb(self):
+        if not PACKAGE.path:
+            return self.error_json(404, PACKAGE.status)
+        with open(PACKAGE.path, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-debian-package")
+        self.send_header("Content-Disposition", f'attachment; filename="{os.path.basename(PACKAGE.path)}"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     def handle_search(self, query):
         q = (query.get("q", [""])[0]).strip()
@@ -287,14 +384,21 @@ def main():
     parser = argparse.ArgumentParser(description="YouTube audio proxy for the Aria iPod app")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--token", help="require this access key (the app's Access Key setting)")
+    parser.add_argument("--token", help="require this access key (the app's Key setting)")
+    parser.add_argument("--deb", help="the Aria .deb to offer for install (found or downloaded automatically)")
     args = parser.parse_args()
+
+    # yt-dlp needs a JavaScript runtime (deno) for YouTube. pip installs it next to Python.
+    os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")
 
     Handler.token = args.token
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.daemon_threads = True
     log(f"Aria proxy {VERSION} (yt-dlp {yt_dlp.version.__version__})")
-    log(f"In the app, set Server to: http://{lan_address()}:{args.port}")
+    address = f"http://{lan_address()}:{args.port}"
+    log(f"On the iPod, open {address} in Safari to install Aria")
+    log(f"In the app, set Server to: {address}")
+    threading.Thread(target=lambda: (PACKAGE.prepare(args.deb), log(f"App package: {PACKAGE.status}")), daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
