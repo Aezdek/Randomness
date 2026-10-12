@@ -297,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_home(self):
         host = self.headers.get("Host") or ""
         if not host or host.startswith(("127.", "localhost", "[::1]")):
-            host = f"{lan_address()}:{self.server.server_port}"  # opened on the computer itself
+            host = f"{best_address()}:{self.server.server_port}"  # opened on the computer itself
         install = ('<a class="button" href="/aria.deb">Install Aria</a>'
                    '<p>Safari downloads it, then tap <b>Open in Filza</b> and <b>Install</b>.</p>'
                    if PACKAGE.path else f"<p>The app package isn't available: {html.escape(PACKAGE.status)}.</p>")
@@ -436,8 +436,11 @@ def self_check(port):
         log(f"Self-check failed: {exc}")
 
 
-def other_addresses(primary):
-    """Every IPv4 address of this computer except loopback, in case the guess above is a VPN or Docker one."""
+VIRTUAL = ("wg", "tun", "tap", "docker", "br-", "veth", "virbr", "tailscale", "zt", "utun", "vmnet", "vboxnet", "proton", "mullvad", "nordlynx")
+
+
+def interface_addresses():
+    """[(address, interface)] for this computer's IPv4 addresses. Interface names are known on Linux only."""
     found = []
     try:
         import subprocess
@@ -445,13 +448,27 @@ def other_addresses(primary):
             out = subprocess.run(["ip", "-4", "-o", "addr", "show", "scope", "global"], capture_output=True, text=True, timeout=3).stdout
             for line in out.splitlines():
                 parts = line.split()
-                found.append(f"{parts[3].split('/')[0]} ({parts[1]})")
+                found.append((parts[3].split("/")[0], parts[1]))
         else:
             for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-                found.append(info[4][0])
+                found.append((info[4][0], ""))
     except Exception:  # noqa: BLE001
         pass
-    return [a for a in dict.fromkeys(found) if not a.startswith(("127.", primary + " ")) and a != primary]
+    return [(a, i) for a, i in dict.fromkeys(found) if not a.startswith("127.")]
+
+
+def is_virtual(interface):
+    name = interface.lower()
+    return name == "lo" or any(v in name for v in VIRTUAL)
+
+
+def best_address():
+    """The address other devices on the Wi-Fi can reach. VPNs (Mullvad, WireGuard, Tailscale) and Docker
+    often own the default route, so prefer a real adapter with a private address."""
+    for address, interface in interface_addresses():
+        if interface and not is_virtual(interface) and address.startswith(("192.168.", "10.", "172.")):
+            return address
+    return lan_address()
 
 
 def main():
@@ -474,10 +491,11 @@ def main():
         log(f"Close the other window, or pick another port, for example: --port {args.port + 1}")
         sys.exit(1)
     log(f"Aria proxy {VERSION} (yt-dlp {yt_dlp.version.__version__})")
-    address = f"http://{lan_address()}:{args.port}"
+    primary = best_address()
+    address = f"http://{primary}:{args.port}"
     log(f"On the iPod, open {address} in Safari to install Aria")
     log(f"In the app, set Server to: {address}")
-    others = other_addresses(lan_address())
+    others = [f"{a} ({i})" if i else a for a, i in interface_addresses() if a != primary]
     if others:
         log(f"If the iPod can't open that, try this computer's other addresses: {', '.join(others)} (same port)")
     threading.Thread(target=lambda: (PACKAGE.prepare(args.deb), log(f"App package: {PACKAGE.status}")), daemon=True).start()
