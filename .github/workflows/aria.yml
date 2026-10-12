@@ -70,13 +70,8 @@ jobs:
       # The first release's download link is shared (and shortened), so it always serves the newest build.
       - name: Point the permanent install link at this build
         if: github.event_name == 'push' && github.ref == 'refs/heads/aria'
-        run: mkdir -p link && cp app/packages/*.deb link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb
-
-      - name: Update the permanent install link
-        if: github.event_name == 'push' && github.ref == 'refs/heads/aria'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: aria-v1.0.0
-          files: link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb
-          overwrite_files: true
-          make_latest: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p link && cp app/packages/*.deb link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb
+          gh release upload aria-v1.0.0 link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb --clobber --repo "$GITHUB_REPOSITORY"
