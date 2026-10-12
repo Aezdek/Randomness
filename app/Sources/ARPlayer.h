@@ -28,6 +28,10 @@ extern NSString *const ARPlayerTimeNotification;
 @property (nonatomic, readonly) NSTimeInterval currentTime;
 @property (nonatomic, readonly) NSTimeInterval duration;
 @property (nonatomic, readonly) NSString *errorMessage;
+/// Goes up when the current track's title or artwork changes, so views know to reload artwork.
+@property (nonatomic, readonly) NSUInteger metadataVersion;
+/// Skip the non-music parts of YouTube videos (from SponsorBlock). On by default.
+@property (nonatomic) BOOL skipsNonMusic;
 @property (nonatomic) BOOL shuffle;
 @property (nonatomic) ARRepeatMode repeatMode;
 

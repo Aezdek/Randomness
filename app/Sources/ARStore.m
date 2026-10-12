@@ -70,6 +70,19 @@ static const NSUInteger ARRecentLimit = 30;
     [self save:_recent key:ARRecentKey];
 }
 
+- (void)updateTrack:(ARTrack *)track {
+    BOOL changed = NO;
+    for (NSMutableArray *list in @[_saved, _recent]) {
+        NSUInteger i = [self indexOf:track in:list];
+        if (i == NSNotFound) continue;
+        list[i] = track;
+        changed = YES;
+    }
+    if (!changed) return;
+    [[NSUserDefaults standardUserDefaults] setObject:[_saved valueForKey:@"dictionaryRepresentation"] forKey:ARSavedKey];
+    [self save:_recent key:ARRecentKey];
+}
+
 - (void)clearRecent {
     [_recent removeAllObjects];
     [self save:_recent key:ARRecentKey];

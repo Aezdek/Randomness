@@ -16,6 +16,7 @@ Endpoints:
     GET /aria.deb                     the Aria app package, to install with Filza
     GET /api/ping                     server info
     GET /api/search?q=...&limit=25    search results as JSON
+    GET /api/track/<id>               song, artist, album, album art and segments to skip
     GET /stream/<id>.m4a              audio, with support for Range requests
     GET /thumb/<id>.jpg?size=small    thumbnail (small or large)
 """
@@ -41,7 +42,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("yt-dlp is missing. Install it with: pip install -r requirements.txt")
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 REPO = "Aezdek/Randomness"
 HERE = os.path.dirname(os.path.abspath(__file__))
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -86,6 +87,12 @@ class Resolver:
                 "url": info["url"],
                 "headers": dict(info.get("http_headers") or {}),
                 "title": info.get("title"),
+                "channel": info.get("channel") or info.get("uploader") or "",
+                "duration": info.get("duration") or 0,
+                # YouTube's "Music in this video" data, when it has it
+                "track": info.get("track"),
+                "artists": info.get("artists") or ([info["artist"]] if info.get("artist") else []),
+                "album": info.get("album"),
                 "expires": time.time() + self.TTL,
             }
             log(f"resolved {vid} ({info.get('format_id')}, {info.get('ext')}) in {time.time() - started:.1f}s")
@@ -193,6 +200,148 @@ class Package:
 PACKAGE = Package()
 
 
+# Metadata: YouTube titles are video titles ("Artist - Song (Official Video) [4K]") and the
+# channel is often "ArtistVEVO" or "Artist - Topic". Clean those up, prefer YouTube's own music
+# data, and match against the iTunes catalog for the album and square album art.
+
+NOISE_WORDS = (r"official|lyric|lyrics|audio|video|visuali[sz]er|music video|hd|hq|4k|8k|1080p|"
+               r"720p|mv|m/v|clip officiel|videoclip|video oficial|letra|explicit|clean|full song")
+NOISE = re.compile(r"\s*[\(\[\{][^\)\]\}]*\b(?:" + NOISE_WORDS + r")\b[^\)\]\}]*[\)\]\}]", re.I)
+TRAILING_NOISE = re.compile(r"\s*[|｜/]\s*.*$")
+DASHES = re.compile(r"\s+[-–—~]\s+")
+
+
+def clean_channel(channel):
+    channel = re.sub(r"\s*-\s*Topic$", "", channel or "").strip()
+    channel = re.sub(r"\s*(?:VEVO|Vevo|vevo)$", "", channel).strip()
+    channel = re.sub(r"\s*(?:Official|official|OFFICIAL)(?:\s*(?:Channel|YouTube Channel|Music))?$", "", channel).strip()
+    return channel
+
+
+def clean_song(text):
+    text = NOISE.sub("", text or "")
+    text = TRAILING_NOISE.sub("", text)
+    text = text.strip().strip('"“”\'').strip()
+    return re.sub(r"\s{2,}", " ", text)
+
+
+def guess_metadata(title, channel):
+    """(song, artist) from a video title and channel name."""
+    title = title or ""
+    if (channel or "").endswith(" - Topic"):
+        # Auto-generated "Topic" uploads are official audio: the title is just the song.
+        return clean_song(title) or title, clean_channel(channel)
+    stripped = NOISE.sub("", title).strip()
+    quoted = re.match(r'^(.+?)\s+["“](.+?)["”]$', stripped)
+    if quoted:  # Artist "Song"
+        return clean_song(quoted.group(2)), quoted.group(1).strip()
+    parts = DASHES.split(stripped, maxsplit=1)
+    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+        return clean_song(parts[1]) or title, parts[0].strip().strip('"')
+    return clean_song(title) or title, clean_channel(channel)
+
+
+def _norm(text):
+    text = re.sub(r"\s*[\(\[].*?[\)\]]", "", (text or "").lower())
+    text = re.split(r"\s+(?:feat\.?|ft\.?|featuring|with|x|&|,)\s+", text)[0]
+    return re.sub(r"[^0-9a-zÀ-￿]+", "", text)
+
+
+def _similar(a, b):
+    a, b = _norm(a), _norm(b)
+    return bool(a and b) and (a == b or (min(len(a), len(b)) >= 4 and (a in b or b in a)))
+
+
+def itunes_lookup(song, artist, duration):
+    """The matching iTunes catalog entry, or None. Only accepted when title, artist and length agree."""
+    term = urllib.parse.quote(f"{artist} {song}".strip())
+    req = urllib.request.Request(f"https://itunes.apple.com/search?term={term}&entity=song&limit=10",
+                                 headers={"User-Agent": "aria-proxy"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        results = json.load(resp).get("results") or []
+    for r in results:
+        if not (_similar(r.get("trackName"), song) and _similar(r.get("artistName"), artist)):
+            continue
+        length = (r.get("trackTimeMillis") or 0) / 1000
+        if duration and length and abs(length - duration) > 15:
+            continue  # same name, different version (live, remix, extended...)
+        art = r.get("artworkUrl100") or ""
+        return {
+            "title": r.get("trackName"),
+            "artist": r.get("artistName"),
+            "album": r.get("collectionName") or "",
+            "artwork": art.replace("100x100bb", "600x600bb") if art else None,
+        }
+    return None
+
+
+SKIP_CATEGORIES = ["sponsor", "selfpromo", "interaction", "music_offtopic"]
+
+
+def sponsorblock_segments(vid):
+    """[[start, end], ...] to skip: sponsor reads, self-promotion, "subscribe" bits, non-music parts."""
+    cats = urllib.parse.quote(json.dumps(SKIP_CATEGORIES))
+    req = urllib.request.Request(f"https://sponsor.ajay.app/api/skipSegments?videoID={vid}&categories={cats}",
+                                 headers={"User-Agent": "aria-proxy"})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return []  # no segments submitted for this video
+        raise
+    segments = [s["segment"] for s in data if s.get("actionType", "skip") == "skip" and len(s.get("segment") or []) == 2]
+    return sorted([round(a, 2), round(b, 2)] for a, b in segments if b - a >= 1)
+
+
+class TrackInfo:
+    """Cached /api/track answers. Each part is optional: a failed lookup just leaves it out."""
+
+    def __init__(self):
+        self._cache = {}
+        self._lock = threading.Lock()
+
+    def artwork_url(self, vid):
+        with self._lock:
+            hit = self._cache.get(vid)
+        return hit and hit.get("_artwork")
+
+    def get(self, vid):
+        with self._lock:
+            if vid in self._cache:
+                return self._cache[vid]
+        entry = RESOLVER.resolve(vid)
+        duration = entry.get("duration") or 0
+        song, artist = guess_metadata(entry.get("title"), entry.get("channel"))
+        album = ""
+        if entry.get("track") and entry.get("artists"):
+            song, artist, album = entry["track"], ", ".join(entry["artists"]), entry.get("album") or ""
+        artwork = None
+        try:
+            match = itunes_lookup(song, artist.split(",")[0], duration)
+            if match:
+                if not entry.get("track"):
+                    song, artist = match["title"], match["artist"]
+                album = album or match["album"]
+                artwork = match["artwork"]
+        except Exception as exc:  # noqa: BLE001
+            log(f"iTunes lookup for {vid} failed: {exc}")
+        try:
+            skip = sponsorblock_segments(vid)
+        except Exception as exc:  # noqa: BLE001
+            log(f"SponsorBlock lookup for {vid} failed: {exc}")
+            skip = []
+        info = {"id": vid, "title": song, "artist": artist, "album": album, "duration": duration,
+                "artwork": bool(artwork), "skip": skip, "_artwork": artwork}
+        log(f"track {vid}: {artist} - {song}" + (f" [{album}]" if album else "") + (f", {len(skip)} skip" if skip else ""))
+        with self._lock:
+            self._cache[vid] = info
+        return info
+
+
+TRACKS = TrackInfo()
+
+
 def search(query, limit):
     opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -204,10 +353,11 @@ def search(query, limit):
             continue
         if e.get("live_status") in ("is_live", "is_upcoming") or e.get("duration") is None:
             continue  # live streams and premieres can't be played as a file
+        song, artist = guess_metadata(e.get("title") or "Untitled", e.get("channel") or e.get("uploader") or "")
         results.append({
             "id": vid,
-            "title": e.get("title") or "Untitled",
-            "artist": e.get("channel") or e.get("uploader") or "",
+            "title": song,
+            "artist": artist,
             "duration": e.get("duration") or 0,
         })
     return results
@@ -280,6 +430,10 @@ class Handler(BaseHTTPRequestHandler):
             m = re.match(r"^/stream/([A-Za-z0-9_-]{11})(?:\.m4a)?$", path)
             if m:
                 return self.handle_stream(m.group(1))
+            m = re.match(r"^/api/track/([A-Za-z0-9_-]{11})$", path)
+            if m:
+                info = TRACKS.get(m.group(1))
+                return self.send_json(200, {k: v for k, v in info.items() if not k.startswith("_")})
             m = re.match(r"^/thumb/([A-Za-z0-9_-]{11})(?:\.jpg)?$", path)
             if m:
                 return self.handle_thumb(m.group(1), query.get("size", ["small"])[0])
@@ -392,8 +546,16 @@ h1{{font-size:34px;margin:0 0 6px}}p{{color:#8e8e9a;line-height:1.4}}code{{color
 
     def handle_thumb(self, vid, size):
         names = ["maxresdefault", "sddefault", "hqdefault"] if size == "large" else ["mqdefault"]
-        key = f"{vid}:{size}"
+        album_art = TRACKS.artwork_url(vid)
+        key = f"{vid}:{size}:{'album' if album_art else 'video'}"
         data = THUMBS.get(key)
+        if data is None and album_art:
+            try:
+                url = album_art if size == "large" else album_art.replace("600x600bb", "200x200bb")
+                with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "aria-proxy"}), timeout=10) as resp:
+                    data = resp.read()
+            except Exception:  # noqa: BLE001
+                data = None  # fall back to the video thumbnail
         if data is None:
             for name in names:
                 try:

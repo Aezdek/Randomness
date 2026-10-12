@@ -98,6 +98,10 @@ static NSString *const ARAccessKeyKey = @"ARProxyAccessKey";
     }];
 }
 
+- (void)trackInfoForVideoID:(NSString *)videoID completion:(void (^)(NSDictionary *, NSError *))completion {
+    [self getJSON:[self URLForPath:[NSString stringWithFormat:@"/api/track/%@", videoID] query:nil] timeout:40 completion:completion];
+}
+
 - (void)pingWithCompletion:(void (^)(NSDictionary *, NSError *))completion {
     [self getJSON:[self URLForPath:@"/api/ping" query:nil] timeout:8 completion:completion];
 }

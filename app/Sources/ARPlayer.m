@@ -40,9 +40,11 @@ static void *ARRateContext = &ARRateContext;
 
         __weak typeof(self) weakSelf = self;
         _timeObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.5, 600) queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
+            [weakSelf skipSegmentIfNeeded];
             [[NSNotificationCenter defaultCenter] postNotificationName:ARPlayerTimeNotification object:weakSelf];
         }];
 
+        [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"ARSkipNonMusic": @YES}];
         _shuffle = [[NSUserDefaults standardUserDefaults] boolForKey:@"ARShuffle"];
         _repeatMode = [[NSUserDefaults standardUserDefaults] integerForKey:@"ARRepeat"];
 
@@ -218,6 +220,7 @@ static void *ARRateContext = &ARRateContext;
         [_player play];
     }
     [[ARStore shared] addRecent:track];
+    if (track.source == ARTrackSourceYouTube) [self fetchInfoForTrack:track];
 
     [ARArtwork loadArtworkForTrack:track size:300 completion:^(UIImage *image) {
         if (self.currentTrack != track) return;
@@ -244,26 +247,80 @@ static void *ARRateContext = &ARRateContext;
     });
 }
 
+- (BOOL)skipsNonMusic {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"ARSkipNonMusic"];
+}
+
+- (void)setSkipsNonMusic:(BOOL)skipsNonMusic {
+    [[NSUserDefaults standardUserDefaults] setBool:skipsNonMusic forKey:@"ARSkipNonMusic"];
+}
+
+/// Asks the proxy for the real song title, artist, album, album art and the parts to skip.
+- (void)fetchInfoForTrack:(ARTrack *)track {
+    [[ARProxyClient shared] trackInfoForVideoID:track.identifier completion:^(NSDictionary *info, NSError *error) {
+        if (!info) return; // keep what search gave us
+        NSString *title = [info[@"title"] isKindOfClass:[NSString class]] ? info[@"title"] : nil;
+        NSString *artist = [info[@"artist"] isKindOfClass:[NSString class]] ? info[@"artist"] : nil;
+        NSString *album = [info[@"album"] isKindOfClass:[NSString class]] ? info[@"album"] : nil;
+        if (title.length) track.title = title;
+        if (artist.length) track.artist = artist;
+        if (album) track.album = album;
+        NSMutableArray *segments = [NSMutableArray array];
+        for (NSArray *seg in info[@"skip"]) {
+            if ([seg isKindOfClass:[NSArray class]] && seg.count == 2) [segments addObject:@[@([seg[0] doubleValue]), @([seg[1] doubleValue])]];
+        }
+        track.skipSegments = segments;
+        if ([info[@"artwork"] boolValue]) [ARArtwork forgetArtworkForTrack:track];
+        [[ARStore shared] updateTrack:track];
+        if (self.currentTrack != track) return;
+        self->_metadataVersion++;
+        [ARArtwork loadArtworkForTrack:track size:300 completion:^(UIImage *image) {
+            if (self.currentTrack != track || !image) return;
+            self->_artwork = image;
+            [self updateNowPlayingInfo];
+        }];
+        [self skipSegmentIfNeeded];
+        [self changed];
+    }];
+}
+
+- (void)skipSegmentIfNeeded {
+    ARTrack *track = self.currentTrack;
+    if (!track.skipSegments.count || !self.skipsNonMusic || _item.status != AVPlayerItemStatusReadyToPlay) return;
+    NSTimeInterval t = self.currentTime, duration = self.duration;
+    for (NSArray<NSNumber *> *seg in track.skipSegments) {
+        NSTimeInterval start = seg[0].doubleValue, end = seg[1].doubleValue;
+        if (t < start || t >= end - 0.5) continue;
+        if (duration > 0 && end >= duration - 1) {
+            [self trackFinished]; // the rest of the video isn't music
+        } else {
+            [_player seekToTime:CMTimeMakeWithSeconds(end, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+        }
+        return;
+    }
+}
+
 - (void)itemDidEnd:(NSNotification *)note {
     if (note.object != _item) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.repeatMode == ARRepeatOne) {
-            [self->_player seekToTime:kCMTimeZero];
-            [self->_player play];
-            return;
-        }
-        if (self->_index + 1 < (NSInteger)self->_queue.count) {
-            self->_index++;
-            [self loadCurrentAndPlay:YES];
-        } else if (self.repeatMode == ARRepeatAll && self->_queue.count) {
-            self->_index = 0;
-            [self loadCurrentAndPlay:YES];
-        } else {
-            self->_wantsPlay = NO;
-            [self->_player seekToTime:kCMTimeZero];
-            [self changed];
-        }
-    });
+    dispatch_async(dispatch_get_main_queue(), ^{ [self trackFinished]; });
+}
+
+- (void)trackFinished {
+    if (_repeatMode == ARRepeatOne) {
+        [_player seekToTime:kCMTimeZero];
+        [_player play];
+    } else if (_index + 1 < (NSInteger)_queue.count) {
+        _index++;
+        [self loadCurrentAndPlay:YES];
+    } else if (_repeatMode == ARRepeatAll && _queue.count) {
+        _index = 0;
+        [self loadCurrentAndPlay:YES];
+    } else {
+        _wantsPlay = NO;
+        [_player pause];
+        [_player seekToTime:kCMTimeZero];
+        [self changed];
+    }
 }
 
 - (void)itemFailed:(NSNotification *)note {

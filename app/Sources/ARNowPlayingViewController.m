@@ -45,6 +45,7 @@
     UIImageView *_volumeHigh;
     UIButton *_queueButton;
     ARTrack *_shownTrack;
+    NSUInteger _shownVersion;
     BOOL _scrubbing;
     BOOL _artworkExpanded;
 }
@@ -249,10 +250,12 @@
     _repeatButton.tintColor = player.repeatMode != ARRepeatOff ? [ARTheme accent] : [UIColor colorWithWhite:1 alpha:0.55];
     _queueButton.tintColor = [UIColor colorWithWhite:1 alpha:0.7];
 
-    if (track != _shownTrack) {
+    if (track != _shownTrack || player.metadataVersion != _shownVersion) {
+        BOOL sameTrack = track == _shownTrack;
         _shownTrack = track;
+        _shownVersion = player.metadataVersion;
         UIImage *cached = [ARArtwork cachedArtworkForTrack:track size:300];
-        [self showArtwork:cached ?: [ARTheme placeholderArtworkOfSize:300] backdrop:cached animated:NO];
+        if (cached || !sameTrack) [self showArtwork:cached ?: [ARTheme placeholderArtworkOfSize:300] backdrop:cached animated:sameTrack];
         if (!cached) {
             [ARArtwork loadArtworkForTrack:track size:300 completion:^(UIImage *image) {
                 if (image && self->_shownTrack == track) [self showArtwork:image backdrop:image animated:YES];

@@ -3,6 +3,7 @@
 #import "ARStore.h"
 #import "ARTheme.h"
 #import "ARIcons.h"
+#import "ARPlayer.h"
 
 typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, ARSectionAbout };
 
@@ -105,6 +106,10 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
     [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:2 inSection:ARSectionProxy]] withRowAnimation:UITableViewRowAnimationNone];
 }
 
+- (void)skipToggled:(UISwitch *)toggle {
+    [ARPlayer shared].skipsNonMusic = toggle.on;
+}
+
 #pragma mark - Table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
@@ -112,7 +117,7 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
         case ARSectionProxy: return 3;
-        case ARSectionData: return 2;
+        case ARSectionData: return 3;
         default: return 1;
     }
 }
@@ -126,6 +131,9 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if (section == ARSectionData) {
+        return @"Skips sponsor segments, \"subscribe\" reminders and non-music intros and outros in YouTube videos, using SponsorBlock.";
+    }
     if (section == ARSectionProxy) {
         return @"Run aria_proxy.py on a computer on the same Wi-Fi and enter the address it prints. Music streams through it, so keep it running while you listen.";
     }
@@ -173,9 +181,20 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
         cell.detailTextLabel.numberOfLines = 2;
         return cell;
     }
+    if (indexPath.section == ARSectionData && indexPath.row == 0) {
+        UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        cell.textLabel.text = @"Skip Non-Music Parts";
+        UISwitch *toggle = [UISwitch new];
+        toggle.onTintColor = [ARTheme accent];
+        toggle.on = [ARPlayer shared].skipsNonMusic;
+        [toggle addTarget:self action:@selector(skipToggled:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+        return cell;
+    }
     if (indexPath.section == ARSectionData) {
         UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
-        cell.textLabel.text = indexPath.row == 0 ? @"Clear Recently Played" : @"Clear Saved";
+        cell.textLabel.text = indexPath.row == 1 ? @"Clear Recently Played" : @"Clear Saved";
         cell.textLabel.textColor = [ARTheme accent];
         return cell;
     }
@@ -194,8 +213,8 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == ARSectionProxy && indexPath.row == 2 && !_testing) {
         [self testConnection];
-    } else if (indexPath.section == ARSectionData) {
-        BOOL recent = indexPath.row == 0;
+    } else if (indexPath.section == ARSectionData && indexPath.row > 0) {
+        BOOL recent = indexPath.row == 1;
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:recent ? @"Clear Recently Played?" : @"Clear Saved?"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleAlert];

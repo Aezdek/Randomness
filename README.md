@@ -13,6 +13,11 @@ small server that runs on your computer.
 
 - **Library**: every song and album synced with iTunes, with search, Shuffle All, and album pages that have Play and Shuffle buttons.
 - **Stream**: search YouTube, play results right away, and keep tracks with the heart button. Saved and Recently Played appear on the Stream tab.
+- **No ads, and clean song info for streams**:
+  - Audio comes straight from YouTube's stream, so there are no YouTube ads.
+  - Sponsor reads, "subscribe" reminders and non-music intros and outros are skipped automatically using [SponsorBlock](https://sponsor.ajay.app). You can turn this off in Settings.
+  - Titles show as *Song* by *Artist* instead of "Artist - Song (Official Video) [4K]".
+  - The album and real square album art come from YouTube's music data and the iTunes catalog, and they show on the lock screen too.
 - **Now Playing**:
   - The background is a blur of the artwork, and the artwork shrinks when paused.
   - Big transport controls, a scrubber, shuffle and repeat (all or one), a volume slider and an Up Next queue.
@@ -80,6 +85,9 @@ Note **your** address (the `http://192.168.…:8765` part). Leave this window op
   scp xyz.aezdek.aria_1.0.0_iphoneos-arm.deb root@<ipod-ip>:/tmp/
   ssh root@<ipod-ip> "dpkg -i /tmp/xyz.aezdek.aria_*.deb && uicache"
   ```
+- **Straight from GitHub in the iPod's Safari** (iOS 9 can open it). This link always gives the newest version:
+  `https://github.com/Aezdek/Randomness/releases/download/aria-v1.0.0/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb`
+  Tap **Open in "Filza"**, then **Install**.
 - **The `.deb` file directly**: from [Releases](https://github.com/Aezdek/Randomness/releases), or from GitHub → Actions → **Aria** → the latest run → the `aria-deb` artifact.
 
 ### Step 3: Connect the app to the server
@@ -137,6 +145,7 @@ Thumbnails go through the proxy too. Local songs play straight from the iPod.
 | `GET /aria.deb` | The app package |
 | `GET /api/ping` | Server and yt-dlp version |
 | `GET /api/search?q=…` | YouTube search results |
+| `GET /api/track/<id>` | Clean title, artist and album, whether album art exists, and the segments to skip |
 | `GET /stream/<id>.m4a` | Audio, with Range support |
 | `GET /thumb/<id>.jpg?size=small\|large` | Thumbnails |
 

@@ -17,6 +17,8 @@ typedef NS_ENUM(NSInteger, ARTrackSource) {
 @property (nonatomic) NSTimeInterval duration;
 @property (nonatomic, strong) NSURL *assetURL;
 @property (nonatomic, strong) MPMediaItem *mediaItem;
+/// [[start, end], ...] in seconds: non-music parts of a YouTube video to skip.
+@property (nonatomic, copy) NSArray<NSArray<NSNumber *> *> *skipSegments;
 
 + (instancetype)trackWithMediaItem:(MPMediaItem *)item;
 + (instancetype)trackWithDictionary:(NSDictionary *)dictionary;

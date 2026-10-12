@@ -16,5 +16,7 @@ extern NSString *const ARStoreDidChangeNotification;
 - (void)toggleSaved:(ARTrack *)track;
 - (void)addRecent:(ARTrack *)track;
 - (void)clearRecent;
+/// Saves new metadata for a track wherever it appears in Saved and Recently Played.
+- (void)updateTrack:(ARTrack *)track;
 
 @end

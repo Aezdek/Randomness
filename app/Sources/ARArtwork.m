@@ -27,6 +27,11 @@
     return [NSString stringWithFormat:@"%ld:%@:%@", (long)track.source, track.identifier, [self isLarge:size] ? @"L" : @"S"];
 }
 
++ (void)forgetArtworkForTrack:(ARTrack *)track {
+    [[self cache] removeObjectForKey:[self keyForTrack:track size:48]];
+    [[self cache] removeObjectForKey:[self keyForTrack:track size:300]];
+}
+
 + (UIImage *)cachedArtworkForTrack:(ARTrack *)track size:(CGFloat)size {
     if (!track) return nil;
     return [[self cache] objectForKey:[self keyForTrack:track size:size]];

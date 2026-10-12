@@ -17,6 +17,7 @@
     UIActivityIndicatorView *_spinner;
     UIView *_hairline;
     ARTrack *_shownTrack;
+    NSUInteger _shownVersion;
 }
 
 + (CGFloat)height { return 58; }
@@ -127,9 +128,12 @@
     if (buffering) [_spinner startAnimating];
     else [_spinner stopAnimating];
 
-    if (track != _shownTrack) {
+    if (track != _shownTrack || player.metadataVersion != _shownVersion) {
+        BOOL sameTrack = track == _shownTrack;
         _shownTrack = track;
-        _artwork.image = [ARArtwork cachedArtworkForTrack:track size:48] ?: [ARTheme placeholderArtworkOfSize:42];
+        _shownVersion = player.metadataVersion;
+        UIImage *cached = [ARArtwork cachedArtworkForTrack:track size:48];
+        if (cached || !sameTrack) _artwork.image = cached ?: [ARTheme placeholderArtworkOfSize:42];
         [ARArtwork loadArtworkForTrack:track size:48 completion:^(UIImage *image) {
             if (image && self->_shownTrack == track) self->_artwork.image = image;
         }];
