@@ -1,0 +1,9 @@
+Package: xyz.aezdek.aria
+Name: Aria
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: A modern music player for the iPod touch. Plays your synced library and streams from YouTube through a proxy on your network.
+Maintainer: Aezdek
+Author: Aezdek
+Section: Multimedia
+Depends: firmware (>= 9.0)
