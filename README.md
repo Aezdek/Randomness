@@ -142,8 +142,8 @@ Thumbnails go through the proxy too. Local songs play straight from the iPod.
 ## Building the app
 
 The app is Objective-C for iOS 9 and is built with [Theos](https://theos.dev) on Linux, macOS or WSL. CI
-does this on every push to `aria`. Pushing a tag such as `aria-v1.0.1` publishes a release, and the server
-downloads the newest release automatically.
+builds it on every push to `aria` and publishes it as the release `aria-v<version>`. To make a new
+release, bump `Version:` in `app/control`. The server downloads the newest release automatically.
 
 ```sh
 # One time: Theos, an iOS toolchain, and the iOS 12.4 SDK (the newest one that still has armv7)
