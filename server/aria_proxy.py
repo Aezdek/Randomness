@@ -436,6 +436,24 @@ def self_check(port):
         log(f"Self-check failed: {exc}")
 
 
+def other_addresses(primary):
+    """Every IPv4 address of this computer except loopback, in case the guess above is a VPN or Docker one."""
+    found = []
+    try:
+        import subprocess
+        if sys.platform.startswith("linux"):
+            out = subprocess.run(["ip", "-4", "-o", "addr", "show", "scope", "global"], capture_output=True, text=True, timeout=3).stdout
+            for line in out.splitlines():
+                parts = line.split()
+                found.append(f"{parts[3].split('/')[0]} ({parts[1]})")
+        else:
+            for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                found.append(info[4][0])
+    except Exception:  # noqa: BLE001
+        pass
+    return [a for a in dict.fromkeys(found) if not a.startswith(("127.", primary + " ")) and a != primary]
+
+
 def main():
     parser = argparse.ArgumentParser(description="YouTube audio proxy for the Aria iPod app")
     parser.add_argument("--host", default="0.0.0.0")
@@ -459,6 +477,9 @@ def main():
     address = f"http://{lan_address()}:{args.port}"
     log(f"On the iPod, open {address} in Safari to install Aria")
     log(f"In the app, set Server to: {address}")
+    others = other_addresses(lan_address())
+    if others:
+        log(f"If the iPod can't open that, try this computer's other addresses: {', '.join(others)} (same port)")
     threading.Thread(target=lambda: (PACKAGE.prepare(args.deb), log(f"App package: {PACKAGE.status}")), daemon=True).start()
     threading.Thread(target=self_check, args=(args.port,), daemon=True).start()
     try:
