@@ -53,7 +53,7 @@ The first start takes a minute, because it installs yt-dlp and Deno into `server
 12:54:23 Aria proxy 1.0.0 (yt-dlp 2026.08.19)
 12:54:23 On the iPod, open http://192.168.1.20:8765 in Safari to install Aria
 12:54:23 In the app, set Server to: http://192.168.1.20:8765
-12:54:24 App package: serving xyz.aezdek.aria_1.0.0_iphoneos-arm.deb (downloaded from aria-v1.0.0)
+12:54:24 App package: serving xyz.aezdek.aria_1.0.0_iphoneos-arm.deb (release aria-v1.0.0)
 ```
 
 Note **your** address (the `http://192.168.…:8765` part). Leave this window open while you listen.

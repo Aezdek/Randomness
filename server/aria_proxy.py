@@ -121,28 +121,48 @@ THUMBS = ThumbCache()
 class Package:
     """Finds the Aria .deb so the iPod can install it from this server.
 
-    Looks for --deb, then a .deb next to this script or in ../app/packages, then
-    downloads the newest aria-v* release from GitHub into this folder.
+    Uses --deb if given, then a build in ../app/packages, then the newest aria-v*
+    release from GitHub (downloaded into this folder, and reused when offline).
     """
 
     def __init__(self):
         self.path = None
         self.status = "looking for the app package"
+        self.explicit = None
+        self._lock = threading.Lock()
 
-    def find_local(self, explicit=None):
-        if explicit:
-            return explicit if os.path.isfile(explicit) else None
-        candidates = glob.glob(os.path.join(HERE, "*.deb")) + glob.glob(os.path.join(HERE, "..", "app", "packages", "*.deb"))
-        return max(candidates, key=os.path.getmtime) if candidates else None
+    @staticmethod
+    def newest(pattern):
+        found = glob.glob(pattern)
+        return max(found, key=os.path.getmtime) if found else None
 
     def prepare(self, explicit=None):
-        self.path = self.find_local(explicit)
-        if self.path:
-            self.status = f"serving {os.path.basename(self.path)}"
-            return
-        if explicit:
-            self.status = f"{explicit} not found"
-            return
+        with self._lock:
+            if explicit:
+                self.explicit = explicit
+            if self.path:
+                return
+            for attempt in range(3):
+                if self._prepare() or self.explicit:
+                    return
+                time.sleep(2 * (attempt + 1))
+            cached = self.newest(os.path.join(HERE, "*.deb"))
+            if cached:  # offline: fall back to the last release downloaded
+                self.path = cached
+                self.status = f"serving {os.path.basename(cached)} (GitHub unreachable, using the copy downloaded earlier)"
+
+    def _prepare(self):
+        """Returns True when it's done looking: found a package or there is none to find."""
+        if self.explicit:
+            ok = os.path.isfile(self.explicit)
+            self.path = self.explicit if ok else None
+            self.status = f"serving {os.path.basename(self.explicit)}" if ok else f"{self.explicit} not found"
+            return True
+        built = self.newest(os.path.join(HERE, "..", "app", "packages", "*.deb"))
+        if built:  # a build made on this computer wins
+            self.path = built
+            self.status = f"serving {os.path.basename(built)} (local build)"
+            return True
         try:
             req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases?per_page=30",
                                          headers={"Accept": "application/vnd.github+json", "User-Agent": "aria-proxy"})
@@ -155,15 +175,19 @@ class Package:
                 if not asset:
                     continue
                 target = os.path.join(HERE, asset["name"])
-                with urllib.request.urlopen(asset["browser_download_url"], timeout=60) as resp, open(target + ".part", "wb") as out:
-                    out.write(resp.read())
-                os.replace(target + ".part", target)
+                if not os.path.isfile(target):
+                    asset_req = urllib.request.Request(asset["browser_download_url"], headers={"User-Agent": "aria-proxy"})
+                    with urllib.request.urlopen(asset_req, timeout=60) as resp, open(target + ".part", "wb") as out:
+                        out.write(resp.read())
+                    os.replace(target + ".part", target)
                 self.path = target
-                self.status = f"serving {asset['name']} (downloaded from {rel['tag_name']})"
-                return
+                self.status = f"serving {asset['name']} (release {rel['tag_name']})"
+                return True
             self.status = "no Aria release found on GitHub"
+            return True
         except Exception as exc:  # noqa: BLE001
             self.status = f"couldn't download the app package: {exc}"
+            return False
 
 
 PACKAGE = Package()
@@ -273,6 +297,8 @@ h1{{font-size:34px;margin:0 0 6px}}p{{color:#8e8e9a;line-height:1.4}}code{{color
             self.wfile.write(body)
 
     def handle_deb(self):
+        if not PACKAGE.path:
+            PACKAGE.prepare()  # the download at startup may have failed, for example while offline
         if not PACKAGE.path:
             return self.error_json(404, PACKAGE.status)
         with open(PACKAGE.path, "rb") as f:
