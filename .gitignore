@@ -10,3 +10,6 @@ captures/
 *.keystore
 keystore.properties
 signing/
+aria/app/.theos/
+aria/app/packages/
+__pycache__/

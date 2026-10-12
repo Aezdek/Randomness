@@ -1,0 +1,54 @@
+name: Aria
+
+on:
+  push:
+    paths: ["aria/**", ".github/workflows/aria.yml"]
+    tags: ["aria-v*"]
+  pull_request:
+    paths: ["aria/**", ".github/workflows/aria.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: aria-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build .deb for jailbroken iOS 9
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      THEOS: ${{ github.workspace }}/theos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the proxy compiles
+        run: python3 -m py_compile aria/server/aria_proxy.py
+
+      - name: Install Theos, the iOS toolchain and the iOS 12.4 SDK (armv7)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq rsync >/dev/null
+          git clone --quiet --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+          mkdir -p "$THEOS/toolchain"
+          curl -sSLf https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz | tar -xJ -C "$THEOS/toolchain"
+          git clone --quiet --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git /tmp/sdks
+          git -C /tmp/sdks sparse-checkout set iPhoneOS12.4.sdk
+          mv /tmp/sdks/iPhoneOS12.4.sdk "$THEOS/sdks/"
+
+      - name: Build package
+        working-directory: aria/app
+        run: make package FINALPACKAGE=1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aria-deb
+          path: aria/app/packages/*.deb
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/aria-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aria/app/packages/*.deb
