@@ -80,6 +80,7 @@ import androidx.work.WorkManager
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import xyz.aezdek.aria.core.Track
+import xyz.aezdek.aria.core.Updater
 import xyz.aezdek.aria.core.formatTime
 
 private val Accent = Color(0xFFFF3B6B)
@@ -367,6 +368,19 @@ fun SettingsTab(initialWatchStatus: String? = null) {
                         updating = false
                     }
                 }) { Text(if (updating) "Updating…" else "Update") }
+            }
+        }
+        item { Text("Updates", style = MaterialTheme.typography.titleMedium) }
+        item {
+            val update by Updater.status.collectAsState()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Aria ${Updater.installedVersion(context).second}" + (update?.let { " · $it" } ?: "") +
+                        "\nUpdates install automatically. Android may ask you to confirm.",
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilledTonalButton(onClick = { Updater.checkNow(context, "aria-phone.apk") }) { Text("Check") }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }

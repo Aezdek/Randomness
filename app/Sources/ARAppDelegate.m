@@ -9,6 +9,7 @@
 #import "ARPlayer.h"
 #import "ARSync.h"
 #import "ARTheme.h"
+#import "ARUpdater.h"
 
 @implementation ARAppDelegate
 
@@ -46,6 +47,10 @@
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(settingsChanged:) name:ARSettingsDidChangeNotification object:nil];
     [[ARSync shared] start];
     return YES;
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    [ARUpdater checkFrom:self.window.rootViewController force:NO];
 }
 
 /// The look changed (usually from the website): rebuild the screens. The player keeps playing.

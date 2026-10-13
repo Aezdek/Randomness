@@ -14,8 +14,10 @@ android {
         applicationId = "xyz.aezdek.aria"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI numbers each build (-PariaBuild=<run number>) so the apps can tell which is newer.
+        val build = (project.findProperty("ariaBuild") as String?)?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "1.1.$build"
         // yt-dlp ships a Python runtime per CPU type. Phones are ARM.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }

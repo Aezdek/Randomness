@@ -17,6 +17,8 @@ android {
 dependencies {
     api(libs.okhttp)
     api(libs.coroutines.android)
+    implementation(libs.core.ktx)
+    api(libs.work.runtime)
     testImplementation(libs.junit)
     testImplementation(libs.json)
 }

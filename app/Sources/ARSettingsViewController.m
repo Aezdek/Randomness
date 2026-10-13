@@ -5,6 +5,7 @@
 #import "ARIcons.h"
 #import "ARPlayer.h"
 #import "ARSettings.h"
+#import "ARUpdater.h"
 
 typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionStreaming, ARSectionProxy, ARSectionWebsite, ARSectionData, ARSectionAbout, ARSectionCount };
 
@@ -249,8 +250,8 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionStreaming, ARSectionPro
         return cell;
     }
     UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleValue1];
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.textLabel.text = @"Aria";
+    cell.textLabel.text = @"Check for Updates";
+    cell.textLabel.textColor = [ARTheme accent];
     cell.detailTextLabel.text = [NSString stringWithFormat:@"Version %@", [NSBundle mainBundle].infoDictionary[@"CFBundleShortVersionString"]];
     return cell;
 }
@@ -263,6 +264,8 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionStreaming, ARSectionPro
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == ARSectionProxy && indexPath.row == 2 && !_testing) {
         [self testConnection];
+    } else if (indexPath.section == ARSectionAbout) {
+        [ARUpdater checkFrom:self force:YES];
     } else if (indexPath.section == ARSectionData) {
         BOOL recent = indexPath.row == 0;
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:recent ? @"Clear Recently Played?" : @"Clear Saved?"

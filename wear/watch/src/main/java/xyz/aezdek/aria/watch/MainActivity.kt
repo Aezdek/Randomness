@@ -100,6 +100,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.aezdek.aria.core.Track
+import xyz.aezdek.aria.core.Updater
 import xyz.aezdek.aria.core.formatTime
 
 /** The song a details screen shows. */
@@ -484,7 +485,12 @@ fun SettingsScreen() {
             val mb = Library.bytesUsed() / (1024 * 1024)
             MenuChip("Delete downloads", Icons.Rounded.Delete, "${tracks.size} songs · $mb MB") { Library.removeAll() }
         }
-        item { Text("Aria for Wear OS 1.0", style = MaterialTheme.typography.caption3, color = Color.Gray) }
+        item {
+            val update by Updater.status.collectAsState()
+            MenuChip("Check for updates", Icons.Rounded.Refresh, update ?: "Version ${Updater.installedVersion(context).second}") {
+                Updater.checkNow(context, "aria-watch.apk")
+            }
+        }
     }
 }
 
