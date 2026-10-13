@@ -16,7 +16,7 @@ android {
 
 dependencies {
     api(libs.okhttp)
-    api(libs.coroutines-android)
+    api(libs.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.json)
 }
