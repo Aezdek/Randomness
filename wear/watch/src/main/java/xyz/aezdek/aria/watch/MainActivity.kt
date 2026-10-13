@@ -129,7 +129,10 @@ val LocalArtworkPreview = staticCompositionLocalOf<((Track) -> Painter)?> { null
 fun AriaWatchTheme(content: @Composable () -> Unit) {
     val changes by Prefs.changes.collectAsState()
     val accent = remember(changes) { Prefs.accentColor }
-    MaterialTheme(colors = Colors(primary = accent, secondary = accent, onPrimary = Color.White), content = content)
+    MaterialTheme(colors = Colors(primary = accent, secondary = accent, onPrimary = Color.White)) {
+        // Black behind every screen, whatever the system theme draws.
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colors.background)) { content() }
+    }
 }
 
 @Composable
