@@ -82,3 +82,61 @@ jobs:
         run: |
           mkdir -p link && cp app/packages/*.deb link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb
           gh release upload aria-v1.0.0 link/xyz.aezdek.aria_1.0.0_iphoneos-arm.deb --clobber --repo "$GITHUB_REPOSITORY"
+
+  wear:
+    name: Build the Wear OS watch app and the phone app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: wear
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon :core:testDebugUnitTest
+
+      - name: Build APKs
+        run: ./gradlew --no-daemon :watch:assembleRelease :phone:assembleRelease
+
+      - name: Collect APKs
+        id: apks
+        run: |
+          mkdir -p out
+          cp watch/build/outputs/apk/release/watch-release.apk out/aria-watch.apk
+          cp phone/build/outputs/apk/release/phone-release.apk out/aria-phone.apk
+          ls -la out
+          echo "version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' watch/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aria-wear-apks
+          path: wear/out/*.apk
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-test-reports
+          path: wear/**/build/reports/
+
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/aria'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: aria-wear-v${{ steps.apks.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Aria for Wear OS ${{ steps.apks.outputs.version }}
+          body: |
+            aria-watch.apk goes on the Galaxy Watch (install with adb over Wi-Fi), aria-phone.apk on the Android phone.
+            Guide: https://github.com/${{ github.repository }}/tree/aria/wear#readme
+          files: wear/out/*.apk
+          overwrite_files: true
+          make_latest: false

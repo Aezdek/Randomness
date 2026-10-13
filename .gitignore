@@ -7,3 +7,8 @@ __pycache__/
 *.deb.part
 aria-data.json
 aria-data.json.tmp
+
+# Wear OS and phone apps
+wear/.gradle/
+wear/**/build/
+wear/local.properties
