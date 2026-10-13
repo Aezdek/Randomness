@@ -47,7 +47,7 @@
         _artwork = [UIImageView new];
         _artwork.contentMode = UIViewContentModeScaleAspectFill;
         _artwork.clipsToBounds = YES;
-        _artwork.layer.cornerRadius = 5;
+        _artwork.layer.cornerRadius = [ARTheme artworkCornerRadius:5];
         [self addSubview:_artwork];
 
         _title = [UILabel new];

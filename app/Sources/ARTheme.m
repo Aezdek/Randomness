@@ -1,5 +1,6 @@
 #import "ARTheme.h"
 #import "ARIcons.h"
+#import "ARSettings.h"
 
 static UIColor *ARHex(uint32_t hex) {
     return [UIColor colorWithRed:((hex >> 16) & 0xFF) / 255.0
@@ -10,11 +11,28 @@ static UIColor *ARHex(uint32_t hex) {
 
 @implementation ARTheme
 
-+ (UIColor *)background { return ARHex(0x0B0B10); }
-+ (UIColor *)surface { return ARHex(0x17171F); }
-+ (UIColor *)surfaceHighlight { return ARHex(0x24242F); }
++ (UIColor *)background {
+    NSString *theme = [ARSettings shared].theme;
+    if ([theme isEqualToString:@"black"]) return ARHex(0x000000);
+    if ([theme isEqualToString:@"midnight"]) return ARHex(0x0B1020);
+    return ARHex(0x0B0B10);
+}
+
++ (UIColor *)surface {
+    NSString *theme = [ARSettings shared].theme;
+    if ([theme isEqualToString:@"black"]) return ARHex(0x121214);
+    if ([theme isEqualToString:@"midnight"]) return ARHex(0x151C30);
+    return ARHex(0x17171F);
+}
+
++ (UIColor *)surfaceHighlight {
+    NSString *theme = [ARSettings shared].theme;
+    if ([theme isEqualToString:@"black"]) return ARHex(0x1E1E22);
+    if ([theme isEqualToString:@"midnight"]) return ARHex(0x212A44);
+    return ARHex(0x24242F);
+}
 + (UIColor *)separator { return [UIColor colorWithWhite:1 alpha:0.08]; }
-+ (UIColor *)accent { return ARHex(0xFF3B6B); }
++ (UIColor *)accent { return [ARSettings shared].accentColor; }
 + (UIColor *)textPrimary { return ARHex(0xF5F5F7); }
 + (UIColor *)textSecondary { return ARHex(0x8E8E9A); }
 
@@ -72,6 +90,10 @@ static UIColor *ARHex(uint32_t hex) {
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return image;
+}
+
++ (CGFloat)artworkCornerRadius:(CGFloat)rounded {
+    return [ARSettings shared].squareArtwork ? MIN(rounded, 2) : rounded;
 }
 
 + (NSString *)formatTime:(NSTimeInterval)seconds {

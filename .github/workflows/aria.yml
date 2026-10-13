@@ -41,6 +41,13 @@ jobs:
         working-directory: app
         run: make package FINALPACKAGE=1
 
+      - name: Check the app only uses symbols iOS 9 has
+        working-directory: app
+        run: |
+          # Empty @[] literals and @available compile to symbols missing on iOS 9, which crash at launch.
+          bad=$("$THEOS/toolchain/linux/iphone/bin/nm" -arch armv7 -u .theos/obj/Aria.app/Aria | grep -E '___NSArray0__|___NSDictionary0__|isPlatformVersionAtLeast|isOSVersionAtLeast' || true)
+          if [ -n "$bad" ]; then echo "::error::Symbols iOS 9 lacks: $bad"; exit 1; fi
+
       - name: Read version
         id: version
         run: |

@@ -23,16 +23,20 @@
     t.identifier = vid;
     t.title = [d[@"title"] isKindOfClass:[NSString class]] ? d[@"title"] : @"Untitled";
     t.artist = [d[@"artist"] isKindOfClass:[NSString class]] ? d[@"artist"] : @"";
-    t.album = @"";
     t.duration = [d[@"duration"] respondsToSelector:@selector(doubleValue)] ? [d[@"duration"] doubleValue] : 0;
+    t.album = [d[@"album"] isKindOfClass:[NSString class]] ? d[@"album"] : @"";
+    t.artworkURLString = [d[@"artwork"] isKindOfClass:[NSString class]] ? d[@"artwork"] : nil;
     return t;
 }
 
 - (NSDictionary *)dictionaryRepresentation {
-    return @{@"id": self.identifier ?: @"",
-             @"title": self.title ?: @"",
-             @"artist": self.artist ?: @"",
-             @"duration": @(self.duration)};
+    NSMutableDictionary *d = [NSMutableDictionary dictionaryWithDictionary:@{@"id": self.identifier ?: @"",
+                                                                             @"title": self.title ?: @"",
+                                                                             @"artist": self.artist ?: @"",
+                                                                             @"duration": @(self.duration)}];
+    if (self.album.length) d[@"album"] = self.album;
+    if (self.artworkURLString.length) d[@"artwork"] = self.artworkURLString;
+    return d;
 }
 
 - (BOOL)isPlayable {

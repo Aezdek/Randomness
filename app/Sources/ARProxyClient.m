@@ -1,5 +1,6 @@
 #import "ARProxyClient.h"
 #import "ARTrack.h"
+#import "ARSettings.h"
 
 static NSString *const ARBaseURLKey = @"ARProxyBaseURL";
 static NSString *const ARAccessKeyKey = @"ARProxyAccessKey";
@@ -64,11 +65,21 @@ static NSString *const ARAccessKeyKey = @"ARProxyAccessKey";
 }
 
 - (NSURLSessionDataTask *)getJSON:(NSURL *)url timeout:(NSTimeInterval)timeout completion:(void (^)(NSDictionary *, NSError *))completion {
+    return [self request:url method:@"GET" body:nil timeout:timeout completion:completion];
+}
+
+- (NSURLSessionDataTask *)request:(NSURL *)url method:(NSString *)method body:(id)body timeout:(NSTimeInterval)timeout
+                       completion:(void (^)(NSDictionary *, NSError *))completion {
     if (!url) {
         completion(nil, [self errorWithMessage:@"Set your proxy server in Settings first."]);
         return nil;
     }
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:timeout];
+    request.HTTPMethod = method;
+    if (body) {
+        request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+        [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    }
     NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         NSDictionary *json = nil;
         if (data.length) {
@@ -85,7 +96,8 @@ static NSString *const ARAccessKeyKey = @"ARProxyAccessKey";
 }
 
 - (NSURLSessionDataTask *)search:(NSString *)query completion:(void (^)(NSArray<ARTrack *> *, NSError *))completion {
-    NSURL *url = [self URLForPath:@"/api/search" query:@{@"q": query, @"limit": @"25"}];
+    NSString *limit = [NSString stringWithFormat:@"%ld", (long)[ARSettings shared].searchResults];
+    NSURL *url = [self URLForPath:@"/api/search" query:@{@"q": query, @"limit": limit}];
     return [self getJSON:url timeout:30 completion:^(NSDictionary *json, NSError *error) {
         if (error) return completion(nil, error);
         NSMutableArray *tracks = [NSMutableArray array];
@@ -100,6 +112,18 @@ static NSString *const ARAccessKeyKey = @"ARProxyAccessKey";
 
 - (void)trackInfoForVideoID:(NSString *)videoID completion:(void (^)(NSDictionary *, NSError *))completion {
     [self getJSON:[self URLForPath:[NSString stringWithFormat:@"/api/track/%@", videoID] query:nil] timeout:40 completion:completion];
+}
+
+- (void)fetchConfig:(void (^)(NSDictionary *, NSError *))completion {
+    [self getJSON:[self URLForPath:@"/api/config" query:nil] timeout:10 completion:completion];
+}
+
+- (void)uploadSettings:(NSDictionary *)settings completion:(void (^)(NSDictionary *, NSError *))completion {
+    [self request:[self URLForPath:@"/api/settings" query:nil] method:@"POST" body:settings timeout:10 completion:completion];
+}
+
+- (void)uploadSaved:(NSArray<NSDictionary *> *)saved updated:(NSTimeInterval)updated completion:(void (^)(NSDictionary *, NSError *))completion {
+    [self request:[self URLForPath:@"/api/saved" query:nil] method:@"PUT" body:@{@"saved": saved, @"updated": @(updated)} timeout:10 completion:completion];
 }
 
 - (void)pingWithCompletion:(void (^)(NSDictionary *, NSError *))completion {

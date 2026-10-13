@@ -2,6 +2,8 @@
 #import "ARTrack.h"
 
 NSString *const ARStoreDidChangeNotification = @"ARStoreDidChangeNotification";
+NSString *const ARStoreSavedChangedLocallyNotification = @"ARStoreSavedChangedLocallyNotification";
+static NSString *const ARSavedUpdatedKey = @"ARSavedUpdated";
 
 static NSString *const ARSavedKey = @"ARSavedTracks";
 static NSString *const ARRecentKey = @"ARRecentTracks";
@@ -58,7 +60,7 @@ static const NSUInteger ARRecentLimit = 30;
     NSUInteger i = [self indexOf:track in:_saved];
     if (i == NSNotFound) [_saved insertObject:track atIndex:0];
     else [_saved removeObjectAtIndex:i];
-    [self save:_saved key:ARSavedKey];
+    [self savedChangedLocally];
 }
 
 - (void)addRecent:(ARTrack *)track {
@@ -79,8 +81,37 @@ static const NSUInteger ARRecentLimit = 30;
         changed = YES;
     }
     if (!changed) return;
-    [[NSUserDefaults standardUserDefaults] setObject:[_saved valueForKey:@"dictionaryRepresentation"] forKey:ARSavedKey];
+    if ([self indexOf:track in:_saved] != NSNotFound) [self savedChangedLocally]; // better names reach the website too
     [self save:_recent key:ARRecentKey];
+}
+
+- (NSTimeInterval)savedUpdated {
+    return [[NSUserDefaults standardUserDefaults] doubleForKey:ARSavedUpdatedKey];
+}
+
+- (void)savedChangedLocally {
+    [[NSUserDefaults standardUserDefaults] setDouble:[[NSDate date] timeIntervalSince1970] forKey:ARSavedUpdatedKey];
+    [self save:_saved key:ARSavedKey];
+    [[NSNotificationCenter defaultCenter] postNotificationName:ARStoreSavedChangedLocallyNotification object:self];
+}
+
+- (void)replaceSaved:(NSArray<NSDictionary *> *)saved updated:(NSTimeInterval)updated {
+    NSMutableArray *tracks = [NSMutableArray array];
+    for (NSDictionary *d in saved) {
+        if (![d isKindOfClass:[NSDictionary class]]) continue;
+        ARTrack *t = [ARTrack trackWithDictionary:d];
+        if (!t) continue;
+        // Keep album art and album the iPod already found for this song.
+        NSUInteger old = [self indexOf:t in:_saved];
+        if (old != NSNotFound) {
+            if (!t.artworkURLString.length) t.artworkURLString = _saved[old].artworkURLString;
+            if (!t.album.length) t.album = _saved[old].album;
+        }
+        [tracks addObject:t];
+    }
+    _saved = tracks;
+    [[NSUserDefaults standardUserDefaults] setDouble:updated forKey:ARSavedUpdatedKey];
+    [self save:_saved key:ARSavedKey];
 }
 
 - (void)clearRecent {

@@ -19,6 +19,8 @@ typedef NS_ENUM(NSInteger, ARTrackSource) {
 @property (nonatomic, strong) MPMediaItem *mediaItem;
 /// [[start, end], ...] in seconds: non-music parts of a YouTube video to skip.
 @property (nonatomic, copy) NSArray<NSArray<NSNumber *> *> *skipSegments;
+/// Square album art found for a YouTube track (600x600), when there is some.
+@property (nonatomic, copy) NSString *artworkURLString;
 
 + (instancetype)trackWithMediaItem:(MPMediaItem *)item;
 + (instancetype)trackWithDictionary:(NSDictionary *)dictionary;

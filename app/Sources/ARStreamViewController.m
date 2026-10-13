@@ -7,6 +7,8 @@
 #import "ARTrack.h"
 #import "ARTheme.h"
 #import "ARIcons.h"
+#import "ARYouTube.h"
+#import "ARSettings.h"
 
 @interface ARStreamViewController () <UISearchBarDelegate>
 @end
@@ -14,7 +16,8 @@
 @implementation ARStreamViewController {
     UISearchBar *_searchBar;
     UIActivityIndicatorView *_spinner;
-    NSURLSessionDataTask *_task;
+    BOOL _searching;
+    NSUInteger _searchID; // answers to older searches are ignored
     NSArray<ARTrack *> *_results;   // nil when not showing search results
     NSArray<NSString *> *_sectionTitles;
     NSArray<NSArray<ARTrack *> *> *_sections;
@@ -81,16 +84,16 @@
 
 - (void)updateEmptyState {
     __weak typeof(self) weakSelf = self;
-    if (![ARProxyClient shared].configured) {
+    if ([ARSettings shared].mode == ARStreamModeProxy && ![ARProxyClient shared].configured) {
         [self showEmptyStateWithTitle:@"Connect Your Proxy"
-                              message:@"Aria streams YouTube through aria_proxy.py running on a computer on your Wi-Fi. Add its address in Settings."
+                              message:@"Streaming is set to Proxy, so Aria needs aria_proxy.py running on a computer on your Wi-Fi. Add its address in Settings, or switch Streaming to Auto."
                           buttonTitle:@"Open Settings"
                                action:^{ if (weakSelf.onOpenSettings) weakSelf.onOpenSettings(); }];
     } else if (_lastError && _results.count == 0) {
         [self showEmptyStateWithTitle:@"Couldn't Search" message:_lastError buttonTitle:@"Try Again" action:^{
             [weakSelf runSearch];
         }];
-    } else if (_results && _results.count == 0 && !_task) {
+    } else if (_results && _results.count == 0 && !_searching) {
         [self showEmptyStateWithTitle:@"No Results" message:@"Try different words." buttonTitle:nil action:nil];
     } else if (!_results && _sections.count == 0) {
         [self showEmptyStateWithTitle:@"Stream Anything"
@@ -107,15 +110,16 @@
 - (void)runSearch {
     NSString *q = [_searchBar.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     if (!q.length) return;
-    [_task cancel];
     _lastError = nil;
     [_spinner startAnimating];
     [self hideEmptyState];
     __weak typeof(self) weakSelf = self;
-    _task = [[ARProxyClient shared] search:q completion:^(NSArray<ARTrack *> *results, NSError *error) {
+    _searching = YES;
+    NSUInteger searchID = ++_searchID;
+    [ARYouTube search:q completion:^(NSArray<ARTrack *> *results, NSError *error) {
         typeof(self) strongSelf = weakSelf;
-        if (!strongSelf) return;
-        strongSelf->_task = nil;
+        if (!strongSelf || searchID != strongSelf->_searchID) return;
+        strongSelf->_searching = NO;
         [strongSelf->_spinner stopAnimating];
         strongSelf->_lastError = error.localizedDescription;
         strongSelf->_results = results ?: [NSArray array];
@@ -143,8 +147,8 @@
 }
 
 - (void)clearSearch {
-    [_task cancel];
-    _task = nil;
+    _searching = NO;
+    _searchID++;
     [_spinner stopAnimating];
     _results = nil;
     _lastError = nil;

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aria Settings</title>
+<style>
+:root {
+  --bg: #0b0b10; --surface: #16161e; --surface2: #1f1f2a; --line: rgba(255,255,255,.08);
+  --text: #f5f5f7; --muted: #8e8e9a; --accent: #ff3b6b; --ok: #34c759; --danger: #ff453a;
+  --radius: 14px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+a { color: var(--accent); }
+header { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(18px); background: rgba(11,11,16,.8); border-bottom: 1px solid var(--line); }
+.bar { max-width: 920px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(160deg, #ff5478, #7a40ff); display: grid; place-items: center; font-weight: 800; }
+.bar h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: -.01em; }
+.status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+main { max-width: 920px; margin: 0 auto; padding: 20px 16px 80px; display: grid; gap: 22px; }
+main > *, .grid2 > * { min-width: 0; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+section > h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: -.01em; }
+section > p.sub { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row .label b { display: block; font-weight: 600; }
+.row .label span { color: var(--muted); font-size: 13px; }
+.seg { display: inline-flex; background: var(--surface2); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.card { text-align: left; border: 2px solid var(--line); background: var(--surface2); color: var(--text); border-radius: 12px; padding: 12px; cursor: pointer; font: inherit; }
+.card.on { border-color: var(--accent); }
+.card b { display: block; margin-bottom: 2px; }
+.card span { color: var(--muted); font-size: 13px; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; }
+.swatch.on { border-color: var(--text); }
+input[type=color] { width: 30px; height: 30px; border: 0; border-radius: 50%; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); padding: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
+input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type=color]::-webkit-color-swatch { border: 0; border-radius: 50%; opacity: 0; }
+input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; opacity: 0; }
+.switch { position: relative; width: 50px; height: 30px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: var(--surface2); border-radius: 30px; transition: .2s; cursor: pointer; }
+.switch span:before { content: ""; position: absolute; width: 26px; height: 26px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .2s; }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span:before { transform: translateX(20px); }
+input[type=range] { accent-color: var(--accent); width: 160px; }
+input[type=search], input[type=password], textarea { width: 100%; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+textarea { font: 12px/1.4 ui-monospace, Menlo, monospace; min-height: 220px; }
+.btn { border: 0; border-radius: 10px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; background: var(--surface2); color: var(--text); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
+.searchrow { display: flex; gap: 8px; margin-bottom: 12px; }
+.tracks { list-style: none; margin: 0; padding: 0; }
+.track { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.track:first-child { border-top: 0; }
+.track img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background: var(--surface2); flex: none; }
+.track .meta { flex: 1; min-width: 0; }
+.track .meta b, .track .meta span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track .meta span { color: var(--muted); font-size: 13px; }
+.track .dur { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.icon { border: 0; background: var(--surface2); color: var(--text); width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 16px; flex: none; }
+.icon:disabled { opacity: .3; cursor: default; }
+.icon.add { background: var(--accent); color: #fff; }
+.icon.added { background: var(--ok); color: #fff; }
+.empty { color: var(--muted); text-align: center; padding: 20px 0; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; background: #f2f2f7; color: #111; padding: 10px 18px; border-radius: 20px; font-weight: 600; font-size: 14px; transition: .25s; pointer-events: none; z-index: 10; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; place-items: center; z-index: 20; padding: 16px; }
+.modal.show { display: grid; }
+.modal div { background: var(--surface); border-radius: var(--radius); padding: 20px; width: min(380px, 100%); display: grid; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } .row { flex-wrap: wrap; } }
+.preview { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--pbg, #0b0b10); border: 1px solid var(--line); margin-top: 12px; }
+.preview .art { width: 54px; height: 54px; border-radius: var(--prad, 8px); background: linear-gradient(160deg, #ff5478, #7a40ff); }
+.preview .t b { color: var(--accent); display: block; }
+.preview .t span { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <div class="logo">♫</div>
+  <h1>Aria</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+</div></header>
+
+<main>
+  <section>
+    <h2>Appearance</h2>
+    <p class="sub">Changes reach the iPod within about 30 seconds, or right away when you open Aria.</p>
+    <div class="row"><div class="label"><b>Accent color</b><span>Buttons, highlights, the playing song</span></div>
+      <div class="swatches" id="swatches"></div></div>
+    <div class="row" style="display:block">
+      <div class="label" style="margin-bottom:10px"><b>Theme</b></div>
+      <div class="cards" id="theme"></div>
+      <div class="preview" id="preview"><div class="art"></div><div class="t"><b>Blinding Lights</b><span>The Weeknd · After Hours</span></div></div>
+    </div>
+    <div class="row"><div class="label"><b>Now Playing background</b><span>Blurred album art, or a plain color</span></div>
+      <div class="seg" data-key="nowPlayingBackground" data-options="blur:Blurred art,solid:Solid"></div></div>
+    <div class="row"><div class="label"><b>Artwork corners</b></div>
+      <div class="seg" data-key="artworkStyle" data-options="rounded:Rounded,square:Square"></div></div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Streaming</h2>
+      <p class="sub">How the iPod gets music from YouTube.</p>
+      <div class="cards" id="mode"></div>
+      <div class="row" style="margin-top:8px"><div class="label"><b>Skip non-music parts</b><span>Sponsor reads, "subscribe" bits, intros (SponsorBlock)</span></div>
+        <label class="switch"><input type="checkbox" id="skipNonMusic"><span></span></label></div>
+      <div class="row"><div class="label"><b>Search results</b><span id="searchResultsLabel"></span></div>
+        <input type="range" min="5" max="50" step="5" id="searchResults"></div>
+    </section>
+    <section>
+      <h2>Library</h2>
+      <p class="sub">The music synced to the iPod.</p>
+      <div class="row"><div class="label"><b>Open on</b></div>
+        <div class="seg" data-key="startTab" data-options="library:Library,stream:Stream"></div></div>
+      <div class="row"><div class="label"><b>Sort songs by</b></div>
+        <div class="seg" data-key="librarySort" data-options="title:Title,artist:Artist,album:Album"></div></div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Saved songs</h2>
+    <p class="sub">Shown in the Stream tab on the iPod. Search here instead of on that keyboard.</p>
+    <form class="searchrow" id="searchForm">
+      <input type="search" id="q" placeholder="Search YouTube" autocomplete="off">
+      <button class="btn primary" id="searchBtn">Search</button>
+    </form>
+    <ul class="tracks" id="results"></ul>
+    <h3 style="margin:18px 0 6px;font-size:15px">Saved <span id="savedCount" style="color:var(--muted);font-weight:400"></span></h3>
+    <ul class="tracks" id="saved"></ul>
+  </section>
+
+  <section>
+    <h2>Advanced</h2>
+    <p class="sub">YouTube app profiles the iPod uses in direct mode. When direct mode stops working, update the versions here from
+      yt-dlp's <a href="https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/youtube/_base.py" target="_blank" rel="noopener">_base.py</a>.</p>
+    <textarea id="clients" spellcheck="false"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn" id="saveClients">Save profiles</button>
+      <button class="btn danger" id="reset">Reset all settings</button>
+      <a class="btn" href="/" style="text-decoration:none">Install page</a>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="modal" id="keyModal"><div>
+  <b>Access key</b>
+  <span style="color:var(--muted);font-size:14px">This server was started with --token. Enter the same key.</span>
+  <input type="password" id="keyInput" placeholder="Key">
+  <button class="btn primary" id="keySave">Continue</button>
+</div></div>
+
+<script>
+const ACCENTS = ["#FF3B6B", "#FF9F0A", "#FFD60A", "#30D158", "#64D2FF", "#0A84FF", "#5E5CE6", "#BF5AF2"];
+const THEMES = { dark: ["Dark", "Soft charcoal", "#0b0b10"], black: ["True black", "Pure black background", "#000000"], midnight: ["Midnight", "Deep blue-black", "#0b1020"] };
+const MODES = {
+  auto: ["Auto", "The iPod tries YouTube itself and falls back to this server. Best of both."],
+  direct: ["Direct", "The iPod talks to YouTube itself. Works without this server, but may break when YouTube changes."],
+  proxy: ["Proxy", "Everything goes through this server. Most reliable. Needs the server running."],
+};
+let config = null;
+let key = localStorage.getItem("ariaKey") || "";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (s) => { s = Math.round(s || 0); return s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : ""; };
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t.timer); t.timer = setTimeout(() => t.classList.remove("show"), 1800); }
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", "X-Aria-Key": key, ...(opts.headers || {}) } });
+  if (res.status === 401) { $("keyModal").classList.add("show"); throw new Error("key"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+$("keySave").onclick = () => {
+  key = $("keyInput").value.trim();
+  localStorage.setItem("ariaKey", key);
+  document.cookie = `aria_key=${encodeURIComponent(key)}; path=/; max-age=31536000; SameSite=Strict`;
+  $("keyModal").classList.remove("show");
+  load();
+};
+
+async function setSettings(changes, message = "Saved · the iPod updates in a moment") {
+  try { config = await api("/api/settings", { method: "POST", body: JSON.stringify(changes) }); render(); toast(message); }
+  catch (e) { if (e.message !== "key") toast("Couldn't save: " + e.message); }
+}
+
+async function setSaved(saved) {
+  try { config = await api("/api/saved", { method: "PUT", body: JSON.stringify({ saved, updated: Date.now() / 1000 }) }); renderSaved(); markResults(); }
+  catch (e) { if (e.message !== "key") toast("Couldn't save: " + e.message); }
+}
+
+function render() {
+  const s = config.settings;
+  document.documentElement.style.setProperty("--accent", s.accent);
+  $("swatches").innerHTML = ACCENTS.map((c) => `<button class="swatch ${c === s.accent ? "on" : ""}" style="background:${c}" data-c="${c}" title="${c}"></button>`).join("") +
+    `<input type="color" id="customColor" value="${s.accent.toLowerCase()}" title="Custom color">`;
+  $("swatches").querySelectorAll(".swatch").forEach((b) => b.onclick = () => setSettings({ accent: b.dataset.c }));
+  $("customColor").onchange = (e) => setSettings({ accent: e.target.value.toUpperCase() });
+
+  $("theme").innerHTML = Object.entries(THEMES).map(([k, [n, d, bg]]) =>
+    `<button class="card ${k === s.theme ? "on" : ""}" data-k="${k}" style="background:${bg}"><b>${n}</b><span>${d}</span></button>`).join("");
+  $("theme").querySelectorAll(".card").forEach((b) => b.onclick = () => setSettings({ theme: b.dataset.k }));
+  $("preview").style.setProperty("--pbg", THEMES[s.theme][2]);
+  $("preview").style.setProperty("--prad", s.artworkStyle === "square" ? "2px" : "8px");
+
+  $("mode").innerHTML = Object.entries(MODES).map(([k, [n, d]]) => `<button class="card ${k === s.mode ? "on" : ""}" data-k="${k}"><b>${n}</b><span>${d}</span></button>`).join("");
+  $("mode").querySelectorAll(".card").forEach((b) => b.onclick = () => setSettings({ mode: b.dataset.k }));
+
+  document.querySelectorAll(".seg[data-key]").forEach((el) => {
+    const k = el.dataset.key;
+    el.innerHTML = el.dataset.options.split(",").map((o) => { const [v, l] = o.split(":"); return `<button class="${s[k] === v ? "on" : ""}" data-v="${v}">${l}</button>`; }).join("");
+    el.querySelectorAll("button").forEach((b) => b.onclick = () => setSettings({ [k]: b.dataset.v }));
+  });
+
+  $("skipNonMusic").checked = s.skipNonMusic;
+  $("searchResults").value = s.searchResults;
+  $("searchResultsLabel").textContent = `${s.searchResults} per search`;
+  if (document.activeElement !== $("clients")) $("clients").value = JSON.stringify(s.directClients, null, 2);
+  renderSaved();
+}
+
+$("skipNonMusic").onchange = (e) => setSettings({ skipNonMusic: e.target.checked });
+$("searchResults").oninput = (e) => $("searchResultsLabel").textContent = `${e.target.value} per search`;
+$("searchResults").onchange = (e) => setSettings({ searchResults: Number(e.target.value) });
+$("saveClients").onclick = () => {
+  let clients;
+  try { clients = JSON.parse($("clients").value); } catch (e) { return toast("That isn't valid JSON"); }
+  setSettings({ directClients: clients }, "Profiles saved");
+};
+$("reset").onclick = () => { if (confirm("Reset every setting to its default? Saved songs stay.")) setSettings({ reset: true }, "Settings reset"); };
+
+const thumb = (id) => `/thumb/${id}.jpg?size=small${key ? "&key=" + encodeURIComponent(key) : ""}`;
+const art = (t) => t.artwork ? t.artwork.replace("600x600bb", "200x200bb") : thumb(t.id);
+const trackRow = (t, buttons) => `<li class="track"><img loading="lazy" src="${esc(art(t))}" alt=""><div class="meta"><b>${esc(t.title)}</b><span>${esc(t.artist)}${t.album ? " · " + esc(t.album) : ""}</span></div><span class="dur">${fmt(t.duration)}</span>${buttons}</li>`;
+
+function renderSaved() {
+  const saved = config.saved;
+  $("savedCount").textContent = saved.length ? `· ${saved.length}` : "";
+  $("saved").innerHTML = saved.length ? saved.map((t, i) => trackRow(t,
+    `<button class="icon" data-up="${i}" ${i === 0 ? "disabled" : ""} title="Move up">↑</button>` +
+    `<button class="icon" data-down="${i}" ${i === saved.length - 1 ? "disabled" : ""} title="Move down">↓</button>` +
+    `<button class="icon" data-del="${i}" title="Remove">✕</button>`)).join("") : `<li class="empty">Nothing saved yet. Search above and tap +.</li>`;
+  $("saved").querySelectorAll("[data-up],[data-down],[data-del]").forEach((b) => b.onclick = () => {
+    const list = [...config.saved];
+    if (b.dataset.del !== undefined) list.splice(+b.dataset.del, 1);
+    else { const i = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up !== undefined ? i - 1 : i + 1; [list[i], list[j]] = [list[j], list[i]]; }
+    setSaved(list);
+  });
+}
+
+let results = [];
+function markResults() {
+  const ids = new Set(config.saved.map((t) => t.id));
+  $("results").querySelectorAll("[data-add]").forEach((b) => {
+    const on = ids.has(results[+b.dataset.add].id);
+    b.className = "icon " + (on ? "added" : "add"); b.textContent = on ? "✓" : "+"; b.title = on ? "Remove from Saved" : "Add to Saved";
+  });
+}
+$("searchForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = $("q").value.trim(); if (!q) return;
+  $("searchBtn").disabled = true; $("searchBtn").textContent = "Searching…";
+  try {
+    results = (await api(`/api/search?q=${encodeURIComponent(q)}&limit=${config.settings.searchResults}`)).results;
+    $("results").innerHTML = results.length ? results.map((t, i) => trackRow(t, `<button data-add="${i}"></button>`)).join("") : `<li class="empty">No results</li>`;
+    $("results").querySelectorAll("[data-add]").forEach((b) => b.onclick = () => {
+      const t = results[+b.dataset.add];
+      const has = config.saved.some((s) => s.id === t.id);
+      setSaved(has ? config.saved.filter((s) => s.id !== t.id) : [t, ...config.saved]);
+      toast(has ? "Removed from Saved" : "Saved");
+    });
+    markResults();
+  } catch (err) { if (err.message !== "key") toast("Search failed: " + err.message); }
+  $("searchBtn").disabled = false; $("searchBtn").textContent = "Search";
+};
+
+async function load() {
+  try {
+    config = await api("/api/config");
+    const ping = await api("/api/ping");
+    $("dot").className = "dot ok"; $("statusText").textContent = `Server ${ping.version} · yt-dlp ${ping.ytdlp}`;
+    render();
+  } catch (e) {
+    if (e.message !== "key") { $("dot").className = "dot bad"; $("statusText").textContent = "Server not reachable"; }
+  }
+}
+load();
+setInterval(async () => { try { const c = await api("/api/config"); if (config && c.version !== config.version) { config = c; render(); } } catch (e) {} }, 15000);
+</script>
+</body>
+</html>

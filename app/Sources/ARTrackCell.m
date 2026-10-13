@@ -99,7 +99,7 @@
         _artworkView = [UIImageView new];
         _artworkView.contentMode = UIViewContentModeScaleAspectFill;
         _artworkView.clipsToBounds = YES;
-        _artworkView.layer.cornerRadius = 6;
+        _artworkView.layer.cornerRadius = [ARTheme artworkCornerRadius:6];
         _artworkView.backgroundColor = [ARTheme surface];
         [self.contentView addSubview:_artworkView];
 

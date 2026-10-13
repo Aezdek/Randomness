@@ -3,6 +3,8 @@
 #import "ARProxyClient.h"
 #import "ARArtwork.h"
 #import "ARStore.h"
+#import "ARSettings.h"
+#import "ARYouTube.h"
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <UIKit/UIKit.h>
@@ -21,6 +23,12 @@ static void *ARRateContext = &ARRateContext;
     NSMutableArray<ARTrack *> *_unshuffled;
     BOOL _wantsPlay;
     BOOL _resumeAfterInterruption;
+    NSUInteger _loadToken;     // ignores stream lookups for a track that is no longer current
+    BOOL _resolving;           // looking up the stream URL
+    BOOL _viaProxy;            // the current stream comes through the proxy
+    BOOL _triedProxyFallback;
+    NSTimeInterval _pendingSeek; // where to resume once a reloaded stream is ready...
+    __weak ARTrack *_pendingSeekTrack; // ...for this track only
     UIImage *_artwork;
 }
 
@@ -44,7 +52,6 @@ static void *ARRateContext = &ARRateContext;
             [[NSNotificationCenter defaultCenter] postNotificationName:ARPlayerTimeNotification object:weakSelf];
         }];
 
-        [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"ARSkipNonMusic": @YES}];
         _shuffle = [[NSUserDefaults standardUserDefaults] boolForKey:@"ARShuffle"];
         _repeatMode = [[NSUserDefaults standardUserDefaults] integerForKey:@"ARRepeat"];
 
@@ -74,7 +81,7 @@ static void *ARRateContext = &ARRateContext;
 - (BOOL)isPlaying { return _wantsPlay; }
 
 - (BOOL)isBuffering {
-    return _wantsPlay && _item && _player.rate == 0 && !_errorMessage;
+    return _wantsPlay && !_errorMessage && (_resolving || (_item && _player.rate == 0));
 }
 
 - (NSTimeInterval)currentTime {
@@ -196,38 +203,80 @@ static void *ARRateContext = &ARRateContext;
 
 - (void)loadCurrentAndPlay:(BOOL)play {
     ARTrack *track = self.currentTrack;
+    NSUInteger token = ++_loadToken;
     _errorMessage = nil;
     _artwork = nil;
-    NSURL *url = nil;
-    if (track.source == ARTrackSourceLocal) url = track.assetURL;
-    else if (track) url = [[ARProxyClient shared] streamURLForVideoID:track.identifier];
+    _triedProxyFallback = NO;
+    [self observeItem:nil];
+    [_player replaceCurrentItemWithPlayerItem:nil];
+    _wantsPlay = play && track != nil;
 
-    if (!url) {
-        [self observeItem:nil];
-        [_player replaceCurrentItemWithPlayerItem:nil];
-        _wantsPlay = NO;
-        if (track) _errorMessage = @"Set up the YouTube proxy in Settings.";
+    if (!track) {
+        _resolving = NO;
         [self changed];
         return;
     }
+    if (track.source == ARTrackSourceLocal) {
+        _resolving = NO;
+        [self startTrack:track url:track.assetURL headers:nil play:play];
+        return;
+    }
+    // YouTube: find the stream first (from YouTube itself or the proxy, per the Streaming setting)
+    _resolving = YES;
+    [self changed];
+    [[ARStore shared] addRecent:track];
+    [self fetchInfoForTrack:track];
+    [ARYouTube streamForTrack:track forceProxy:NO completion:^(NSURL *url, NSDictionary *headers, BOOL viaProxy, NSError *error) {
+        if (token != self->_loadToken) return;
+        self->_resolving = NO;
+        if (!url) {
+            self->_errorMessage = error.localizedDescription ?: @"Couldn't find a stream for this song.";
+            self->_wantsPlay = NO;
+            [self changed];
+            return;
+        }
+        self->_viaProxy = viaProxy;
+        [self startTrack:track url:url headers:headers play:self->_wantsPlay];
+    }];
+}
 
-    AVPlayerItem *item = [AVPlayerItem playerItemWithURL:url];
+- (void)startTrack:(ARTrack *)track url:(NSURL *)url headers:(NSDictionary *)headers play:(BOOL)play {
+    // AVURLAssetHTTPHeaderFieldsKey isn't in the public headers, but AVFoundation has honored it since iOS 8.
+    NSDictionary *options = headers.count ? @{@"AVURLAssetHTTPHeaderFieldsKey": headers} : nil;
+    AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:[AVURLAsset URLAssetWithURL:url options:options]];
     [self observeItem:item];
     [_player replaceCurrentItemWithPlayerItem:item];
+    if (_pendingSeekTrack == track && _pendingSeek > 1) [_player seekToTime:CMTimeMakeWithSeconds(_pendingSeek, 600)];
+    _pendingSeek = 0;
+    _pendingSeekTrack = nil;
     _wantsPlay = play;
     if (play) {
         [[AVAudioSession sharedInstance] setActive:YES error:nil];
         [_player play];
     }
-    [[ARStore shared] addRecent:track];
-    if (track.source == ARTrackSourceYouTube) [self fetchInfoForTrack:track];
-
     [ARArtwork loadArtworkForTrack:track size:300 completion:^(UIImage *image) {
         if (self.currentTrack != track) return;
         self->_artwork = image;
         [self updateNowPlayingInfo];
     }];
     [self changed];
+}
+
+/// A direct stream that fails (YouTube refused it, say) gets one retry through the proxy.
+- (BOOL)retryThroughProxy {
+    ARTrack *track = self.currentTrack;
+    if (track.source != ARTrackSourceYouTube || _viaProxy || _triedProxyFallback || ![ARYouTube canFallBackToProxy]) return NO;
+    _triedProxyFallback = YES;
+    NSUInteger token = _loadToken;
+    BOOL play = _wantsPlay;
+    _resolving = YES;
+    [ARYouTube streamForTrack:track forceProxy:YES completion:^(NSURL *url, NSDictionary *headers, BOOL viaProxy, NSError *error) {
+        if (token != self->_loadToken) return;
+        self->_resolving = NO;
+        self->_viaProxy = YES;
+        if (url) [self startTrack:track url:url headers:nil play:play];
+    }];
+    return YES;
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
@@ -237,6 +286,7 @@ static void *ARRateContext = &ARRateContext;
     dispatch_async(dispatch_get_main_queue(), ^{
         if (context == ARItemContext && object != self->_item) return;
         if (self->_item.status == AVPlayerItemStatusFailed) {
+            if ([self retryThroughProxy]) return;
             self->_errorMessage = self->_item.error.localizedDescription ?: @"This track couldn't be played.";
             self->_wantsPlay = NO;
         } else if (self->_wantsPlay && self->_player.rate == 0 && self->_item.playbackLikelyToKeepUp) {
@@ -247,17 +297,12 @@ static void *ARRateContext = &ARRateContext;
     });
 }
 
-- (BOOL)skipsNonMusic {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"ARSkipNonMusic"];
-}
-
-- (void)setSkipsNonMusic:(BOOL)skipsNonMusic {
-    [[NSUserDefaults standardUserDefaults] setBool:skipsNonMusic forKey:@"ARSkipNonMusic"];
-}
+- (BOOL)skipsNonMusic { return [ARSettings shared].skipNonMusic; }
+- (void)setSkipsNonMusic:(BOOL)skipsNonMusic { [ARSettings shared].skipNonMusic = skipsNonMusic; }
 
 /// Asks the proxy for the real song title, artist, album, album art and the parts to skip.
 - (void)fetchInfoForTrack:(ARTrack *)track {
-    [[ARProxyClient shared] trackInfoForVideoID:track.identifier completion:^(NSDictionary *info, NSError *error) {
+    [ARYouTube infoForTrack:track completion:^(NSDictionary *info) {
         if (!info) return; // keep what search gave us
         NSString *title = [info[@"title"] isKindOfClass:[NSString class]] ? info[@"title"] : nil;
         NSString *artist = [info[@"artist"] isKindOfClass:[NSString class]] ? info[@"artist"] : nil;
@@ -270,7 +315,8 @@ static void *ARRateContext = &ARRateContext;
             if ([seg isKindOfClass:[NSArray class]] && seg.count == 2) [segments addObject:@[@([seg[0] doubleValue]), @([seg[1] doubleValue])]];
         }
         track.skipSegments = segments;
-        if ([info[@"artwork"] boolValue]) [ARArtwork forgetArtworkForTrack:track];
+        if ([info[@"artworkURL"] isKindOfClass:[NSString class]]) track.artworkURLString = info[@"artworkURL"];
+        if ([info[@"artwork"] boolValue] || track.artworkURLString.length) [ARArtwork forgetArtworkForTrack:track];
         [[ARStore shared] updateTrack:track];
         if (self.currentTrack != track) return;
         self->_metadataVersion++;
@@ -327,6 +373,7 @@ static void *ARRateContext = &ARRateContext;
     if (note.object != _item) return;
     NSError *error = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.currentTime < 1 && [self retryThroughProxy]) return;
         self->_errorMessage = error.localizedDescription ?: @"Playback stopped unexpectedly.";
         self->_wantsPlay = NO;
         [self changed];
@@ -338,10 +385,11 @@ static void *ARRateContext = &ARRateContext;
 - (void)play {
     if (!self.currentTrack) return;
     if (!_item || _item.status == AVPlayerItemStatusFailed || _errorMessage) {
-        // Retry: the proxy may have been down or the signed URL may have expired.
-        NSTimeInterval resume = self.currentTime;
+        if (_resolving) { _wantsPlay = YES; [self changed]; return; }
+        // Retry: the proxy may have been down or the stream URL may have expired.
+        _pendingSeek = self.currentTime;
+        _pendingSeekTrack = self.currentTrack;
         [self loadCurrentAndPlay:YES];
-        if (resume > 1) [self seekTo:resume];
         return;
     }
     _wantsPlay = YES;

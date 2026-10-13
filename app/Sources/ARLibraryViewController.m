@@ -5,6 +5,7 @@
 #import "ARTrack.h"
 #import "ARTheme.h"
 #import "ARIcons.h"
+#import "ARSettings.h"
 #import <MediaPlayer/MediaPlayer.h>
 
 typedef NS_ENUM(NSInteger, ARLibraryMode) { ARLibrarySongs, ARLibraryAlbums };
@@ -72,6 +73,12 @@ typedef NS_ENUM(NSInteger, ARLibraryMode) { ARLibrarySongs, ARLibraryAlbums };
         MPMediaQuery *albumsQuery = [MPMediaQuery albumsQuery];
         [albumsQuery addFilterPredicate:[MPMediaPropertyPredicate predicateWithValue:@NO forProperty:MPMediaItemPropertyIsCloudItem]];
         NSArray *albums = albumsQuery.collections ?: [NSArray array];
+        NSString *sort = [ARSettings shared].librarySort;
+        NSArray *keys = [sort isEqualToString:@"artist"] ? @[@"artist", @"album", @"title"]
+                      : [sort isEqualToString:@"album"] ? @[@"album", @"title"] : @[@"title", @"artist"];
+        NSMutableArray *descriptors = [NSMutableArray array];
+        for (NSString *k in keys) [descriptors addObject:[NSSortDescriptor sortDescriptorWithKey:k ascending:YES selector:@selector(localizedCaseInsensitiveCompare:)]];
+        [songs sortUsingDescriptors:descriptors];
         dispatch_async(dispatch_get_main_queue(), ^{
             self->_songs = songs;
             self->_albums = albums;

@@ -6,13 +6,22 @@
 > ("every project that is too small to get a repo gets a branch").
 
 A modern music player for a **jailbroken iPod touch 5th gen** (iOS 9.x). It also runs on other jailbroken
-iOS 9+ devices. It plays the music synced to the iPod, and it streams anything from YouTube through a
-small server that runs on your computer.
+iOS 9+ devices. It plays the music synced to the iPod, and it streams anything from YouTube, either
+straight from the iPod or through a small server on your computer or homelab. You change its settings
+and manage your Saved songs from a website, not the iPod's keyboard.
 
 ## Features
 
 - **Library**: every song and album synced with iTunes, with search, Shuffle All, and album pages that have Play and Shuffle buttons.
 - **Stream**: search YouTube, play results right away, and keep tracks with the heart button. Saved and Recently Played appear on the Stream tab.
+- **Three streaming modes** (Settings on the iPod, or the website):
+  - **Auto** (the default): the iPod talks to YouTube itself, and uses the server if that fails.
+  - **Direct**: the iPod only. Needs no server, but can break when YouTube changes something.
+  - **Proxy**: everything through the server. The most reliable.
+- **A website to set it up** (`http://<server>:8765/admin`), from a real keyboard:
+  - Customize the accent color, theme (dark, true black, midnight), Now Playing background, artwork corners, starting tab, library sort and search size.
+  - Search YouTube and manage **Saved** songs.
+  - The iPod picks up changes when Aria opens and every 30 seconds while it's running.
 - **No ads, and clean song info for streams**:
   - Audio comes straight from YouTube's stream, so there are no YouTube ads.
   - Sponsor reads, "subscribe" reminders and non-music intros and outros are skipped automatically using [SponsorBlock](https://sponsor.ajay.app). You can turn this off in Settings.
@@ -28,6 +37,8 @@ small server that runs on your computer.
 - Keeps playing in the background, pauses when headphones are unplugged, and resumes after an interruption.
 
 ---
+
+<p align="center"><img src="docs/website.png" width="720" alt="The settings website"></p>
 
 ## Install
 
@@ -92,12 +103,28 @@ Note **your** address (the `http://192.168.…:8765` part). Leave this window op
 
 ### Step 3: Connect the app to the server
 
+Direct mode doesn't need the server at all. Connect it anyway for the website, the fallback, and the best song info.
+
+
 1. Open **Aria**, then go to the **Settings** tab.
 2. Under **YouTube Proxy**, set **Server** to the same address, for example `http://192.168.1.20:8765`.
 3. Tap **Test Connection**. It should say **Connected · yt-dlp …**.
 4. Go to **Stream** and search for something.
 
 Your synced music is already in the **Library** tab and works without the server.
+
+### Changing settings
+
+Open `http://<server>:8765/admin` on your computer or phone. If the server runs with `--token`, it asks for
+the key once. Changes save as you click, and the iPod applies them within 30 seconds. On the iPod, Settings
+shows only the server, the streaming mode and the skip switch.
+
+Settings and Saved songs are kept in `server/aria-data.json`. Back that file up if you care about them.
+
+**If direct mode stops working**, YouTube has probably retired the app versions Aria pretends to be. Copy the
+newer `ANDROID_VR` or `IOS` client versions from yt-dlp's
+[`_base.py`](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/extractor/youtube/_base.py) into
+**Advanced** on the website. Until then, Auto mode keeps working through the server.
 
 ### Updating and uninstalling
 
@@ -145,6 +172,8 @@ Thumbnails go through the proxy too. Local songs play straight from the iPod.
 | `GET /aria.deb` | The app package |
 | `GET /api/ping` | Server and yt-dlp version |
 | `GET /api/search?q=…` | YouTube search results |
+| `GET /admin` | The settings and Saved songs website |
+| `GET /api/config`, `POST /api/settings`, `PUT /api/saved` | What the website and the app sync |
 | `GET /api/track/<id>` | Clean title, artist and album, whether album art exists, and the segments to skip |
 | `GET /stream/<id>.m4a` | Audio, with Range support |
 | `GET /thumb/<id>.jpg?size=small\|large` | Thumbnails |

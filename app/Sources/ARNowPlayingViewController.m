@@ -6,6 +6,7 @@
 #import "ARTheme.h"
 #import "ARIcons.h"
 #import "ARArtwork.h"
+#import "ARSettings.h"
 #import <MediaPlayer/MediaPlayer.h>
 
 @interface ARScrubber : UISlider
@@ -89,6 +90,10 @@
     _shade = [UIView new];
     _shade.backgroundColor = [UIColor colorWithWhite:0 alpha:0.3];
     [self.view addSubview:_shade];
+    BOOL solid = [ARSettings shared].solidNowPlayingBackground;
+    _backdrop.hidden = solid;
+    _blur.hidden = solid;
+    _shade.hidden = solid;
 
     _closeButton = [self iconButton:ARIconChevronDown size:26 action:@selector(close)];
     _closeButton.tintColor = [UIColor colorWithWhite:1 alpha:0.7];
@@ -102,7 +107,7 @@
     _artwork = [UIImageView new];
     _artwork.contentMode = UIViewContentModeScaleAspectFill;
     _artwork.clipsToBounds = YES;
-    _artwork.layer.cornerRadius = 10;
+    _artwork.layer.cornerRadius = [ARTheme artworkCornerRadius:10];
     [_card addSubview:_artwork];
 
     _titleLabel = [self label:[ARTheme fontOfSize:20 weight:UIFontWeightBold] color:[ARTheme textPrimary]];
@@ -179,7 +184,7 @@
     _card.frame = cardFrame;
     _card.transform = t;
     _artwork.frame = _card.bounds;
-    _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:10].CGPath;
+    _card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_card.bounds cornerRadius:[ARTheme artworkCornerRadius:10]].CGPath;
     y += art + 22;
 
     CGFloat m = 24;

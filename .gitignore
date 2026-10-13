@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 *.deb
 *.deb.part
+aria-data.json
+aria-data.json.tmp

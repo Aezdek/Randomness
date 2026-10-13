@@ -45,9 +45,10 @@
     card.layer.shadowOpacity = 0.45;
     card.layer.shadowRadius = 14;
     card.layer.shadowOffset = CGSizeMake(0, 8);
-    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:8].CGPath;
+    CGFloat radius = [ARTheme artworkCornerRadius:8];
+    card.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:card.bounds cornerRadius:radius].CGPath;
     UIImageView *artwork = [[UIImageView alloc] initWithFrame:card.bounds];
-    artwork.layer.cornerRadius = 8;
+    artwork.layer.cornerRadius = radius;
     artwork.clipsToBounds = YES;
     artwork.contentMode = UIViewContentModeScaleAspectFill;
     artwork.image = [ARTheme placeholderArtworkOfSize:art];

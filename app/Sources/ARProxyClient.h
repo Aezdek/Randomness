@@ -17,6 +17,10 @@
 - (NSURLSessionDataTask *)search:(NSString *)query completion:(void (^)(NSArray<ARTrack *> *results, NSError *error))completion;
 /// Clean title, artist and album, whether album art exists, and the segments to skip.
 - (void)trackInfoForVideoID:(NSString *)videoID completion:(void (^)(NSDictionary *info, NSError *error))completion;
+/// Settings and Saved songs from the website: {version, settings, saved, savedUpdated}.
+- (void)fetchConfig:(void (^)(NSDictionary *config, NSError *error))completion;
+- (void)uploadSettings:(NSDictionary *)settings completion:(void (^)(NSDictionary *config, NSError *error))completion;
+- (void)uploadSaved:(NSArray<NSDictionary *> *)saved updated:(NSTimeInterval)updated completion:(void (^)(NSDictionary *config, NSError *error))completion;
 - (void)pingWithCompletion:(void (^)(NSDictionary *info, NSError *error))completion;
 
 @end

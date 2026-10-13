@@ -18,6 +18,8 @@
 + (UIImage *)circleImageWithColor:(UIColor *)color diameter:(CGFloat)diameter;
 
 + (NSString *)formatTime:(NSTimeInterval)seconds;
+/// The corner radius for artwork of this size: rounded, or nearly square if chosen on the website.
++ (CGFloat)artworkCornerRadius:(CGFloat)rounded;
 + (void)applyAppearance;
 
 @end

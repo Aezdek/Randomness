@@ -1,6 +1,7 @@
 #import "ARArtwork.h"
 #import "ARTrack.h"
 #import "ARProxyClient.h"
+#import "ARSettings.h"
 
 @implementation ARArtwork
 
@@ -85,7 +86,16 @@
         return;
     }
 
-    NSURL *url = [[ARProxyClient shared] thumbnailURLForVideoID:track.identifier large:large];
+    NSURL *url = nil;
+    if (track.artworkURLString.length) {
+        // iTunes album art: ask for the size we need
+        NSString *art = large ? track.artworkURLString : [track.artworkURLString stringByReplacingOccurrencesOfString:@"600x600bb" withString:@"200x200bb"];
+        url = [NSURL URLWithString:art];
+    } else if ([ARSettings shared].mode != ARStreamModeDirect && [ARProxyClient shared].configured) {
+        url = [[ARProxyClient shared] thumbnailURLForVideoID:track.identifier large:large];
+    } else {
+        url = [NSURL URLWithString:[NSString stringWithFormat:@"https://i.ytimg.com/vi/%@/%@.jpg", track.identifier, large ? @"hqdefault" : @"mqdefault"]];
+    }
     if (!url) return completion(nil);
     [[[NSURLSession sharedSession] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         NSInteger status = [response isKindOfClass:[NSHTTPURLResponse class]] ? ((NSHTTPURLResponse *)response).statusCode : 0;

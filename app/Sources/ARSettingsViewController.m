@@ -4,8 +4,9 @@
 #import "ARTheme.h"
 #import "ARIcons.h"
 #import "ARPlayer.h"
+#import "ARSettings.h"
 
-typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, ARSectionAbout };
+typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionStreaming, ARSectionProxy, ARSectionWebsite, ARSectionData, ARSectionAbout, ARSectionCount };
 
 @interface ARSettingsViewController () <UITextFieldDelegate>
 @end
@@ -55,6 +56,11 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
     _keyField.secureTextEntry = YES;
     _keyField.returnKeyType = UIReturnKeyDone;
     _keyField.text = [ARProxyClient shared].accessKey;
+    [[NSNotificationCenter defaultCenter] addObserver:self.tableView selector:@selector(reloadData) name:ARSettingsDidChangeNotification object:nil];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self.tableView];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -66,6 +72,7 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
     if (field == _serverField) {
         [ARProxyClient shared].baseURLString = field.text;
         field.text = [ARProxyClient shared].baseURLString;
+        [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:ARSectionWebsite] withRowAnimation:UITableViewRowAnimationNone];
     } else {
         [ARProxyClient shared].accessKey = field.text;
     }
@@ -107,37 +114,59 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
 }
 
 - (void)skipToggled:(UISwitch *)toggle {
-    [ARPlayer shared].skipsNonMusic = toggle.on;
+    [ARSettings shared].skipNonMusic = toggle.on;
+}
+
+- (void)modeChanged:(UISegmentedControl *)control {
+    [ARSettings shared].mode = (ARStreamMode)control.selectedSegmentIndex;
+    [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:ARSectionStreaming] withRowAnimation:UITableViewRowAnimationNone];
+}
+
+- (NSString *)websiteAddress {
+    NSString *base = [ARProxyClient shared].baseURLString;
+    return base.length ? [base stringByAppendingString:@"/admin"] : nil;
 }
 
 #pragma mark - Table
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return ARSectionCount; }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
+        case ARSectionStreaming: return 2;
         case ARSectionProxy: return 3;
-        case ARSectionData: return 3;
+        case ARSectionData: return 2;
         default: return 1;
     }
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     switch (section) {
+        case ARSectionStreaming: return @"Streaming";
         case ARSectionProxy: return @"YouTube Proxy";
-        case ARSectionData: return @"Stream";
+        case ARSectionWebsite: return @"Website";
+        case ARSectionData: return @"Stream History";
         default: return nil;
     }
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    if (section == ARSectionData) {
-        return @"Skips sponsor segments, \"subscribe\" reminders and non-music intros and outros in YouTube videos, using SponsorBlock.";
+    switch (section) {
+        case ARSectionStreaming:
+            switch ([ARSettings shared].mode) {
+                case ARStreamModeAuto: return @"Aria talks to YouTube itself and uses the proxy if that fails.";
+                case ARStreamModeDirect: return @"Aria talks to YouTube itself. No proxy needed, but it can break when YouTube changes something.";
+                case ARStreamModeProxy: return @"Everything goes through the proxy. The most reliable, but the proxy has to be running.";
+            }
+        case ARSectionProxy:
+            return @"Run aria_proxy.py on a computer on the same Wi-Fi and enter the address it prints.";
+        case ARSectionWebsite:
+            return [self websiteAddress]
+                ? @"Open this address on your computer or phone to change colors, the theme and more, and to manage Saved songs. The iPod picks up changes within 30 seconds."
+                : @"Set the proxy's address above, then change everything from a real keyboard on its website.";
+        default:
+            return nil;
     }
-    if (section == ARSectionProxy) {
-        return @"Run aria_proxy.py on a computer on the same Wi-Fi and enter the address it prints. Music streams through it, so keep it running while you listen.";
-    }
-    return nil;
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
@@ -170,6 +199,29 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (indexPath.section == ARSectionStreaming && indexPath.row == 0) {
+        UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        UISegmentedControl *modes = [[UISegmentedControl alloc] initWithItems:@[@"Auto", @"Direct", @"Proxy"]];
+        modes.tintColor = [ARTheme accent];
+        modes.selectedSegmentIndex = [ARSettings shared].mode;
+        modes.frame = CGRectInset(cell.contentView.bounds, 12, 8);
+        modes.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [modes addTarget:self action:@selector(modeChanged:) forControlEvents:UIControlEventValueChanged];
+        [cell.contentView addSubview:modes];
+        return cell;
+    }
+    if (indexPath.section == ARSectionStreaming) {
+        UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        cell.textLabel.text = @"Skip Non-Music Parts";
+        UISwitch *toggle = [UISwitch new];
+        toggle.onTintColor = [ARTheme accent];
+        toggle.on = [ARSettings shared].skipNonMusic;
+        [toggle addTarget:self action:@selector(skipToggled:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+        return cell;
+    }
     if (indexPath.section == ARSectionProxy) {
         if (indexPath.row == 0) return [self fieldCell:@"Server" field:_serverField];
         if (indexPath.row == 1) return [self fieldCell:@"Key" field:_keyField];
@@ -181,20 +233,18 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
         cell.detailTextLabel.numberOfLines = 2;
         return cell;
     }
-    if (indexPath.section == ARSectionData && indexPath.row == 0) {
+    if (indexPath.section == ARSectionWebsite) {
         UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        cell.textLabel.text = @"Skip Non-Music Parts";
-        UISwitch *toggle = [UISwitch new];
-        toggle.onTintColor = [ARTheme accent];
-        toggle.on = [ARPlayer shared].skipsNonMusic;
-        [toggle addTarget:self action:@selector(skipToggled:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = toggle;
+        cell.textLabel.text = [self websiteAddress] ?: @"No server set";
+        cell.textLabel.textColor = [self websiteAddress] ? [ARTheme textPrimary] : [ARTheme textSecondary];
+        cell.textLabel.adjustsFontSizeToFitWidth = YES;
+        cell.textLabel.minimumScaleFactor = 0.7;
         return cell;
     }
     if (indexPath.section == ARSectionData) {
         UITableViewCell *cell = [self cellWithStyle:UITableViewCellStyleDefault];
-        cell.textLabel.text = indexPath.row == 1 ? @"Clear Recently Played" : @"Clear Saved";
+        cell.textLabel.text = indexPath.row == 0 ? @"Clear Recently Played" : @"Clear Saved";
         cell.textLabel.textColor = [ARTheme accent];
         return cell;
     }
@@ -213,8 +263,8 @@ typedef NS_ENUM(NSInteger, ARSettingsSection) { ARSectionProxy, ARSectionData, A
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     if (indexPath.section == ARSectionProxy && indexPath.row == 2 && !_testing) {
         [self testConnection];
-    } else if (indexPath.section == ARSectionData && indexPath.row > 0) {
-        BOOL recent = indexPath.row == 1;
+    } else if (indexPath.section == ARSectionData) {
+        BOOL recent = indexPath.row == 0;
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:recent ? @"Clear Recently Played?" : @"Clear Saved?"
                                                                        message:nil
                                                                 preferredStyle:UIAlertControllerStyleAlert];

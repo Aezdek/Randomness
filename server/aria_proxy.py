@@ -14,6 +14,9 @@ seeking works.
 Endpoints:
     GET /                             a page for the iPod's Safari with an install link
     GET /aria.deb                     the Aria app package, to install with Filza
+    GET /admin                        website: settings and Saved songs
+    GET /api/config                   settings and Saved songs, for the app to sync
+    POST /api/settings, PUT /api/saved  changes from the website or the app
     GET /api/ping                     server info
     GET /api/search?q=...&limit=25    search results as JSON
     GET /api/track/<id>               song, artist, album, album art and segments to skip
@@ -42,7 +45,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("yt-dlp is missing. Install it with: pip install -r requirements.txt")
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 REPO = "Aezdek/Randomness"
 HERE = os.path.dirname(os.path.abspath(__file__))
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -342,6 +345,125 @@ class TrackInfo:
 TRACKS = TrackInfo()
 
 
+# Settings and Saved songs, edited on the website (/admin) and synced by the app.
+
+DIRECT_CLIENTS = [
+    # YouTube app profiles the iPod uses in direct mode. They return stream URLs that need no
+    # signature solving. YouTube retires versions now and then: update them here (or on the
+    # website) from yt-dlp's yt_dlp/extractor/youtube/_base.py when direct mode stops working.
+    {"name": "ANDROID_VR", "id": 28, "version": "1.65.10",
+     "userAgent": "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+     "extra": {"deviceMake": "Oculus", "deviceModel": "Quest 3", "androidSdkVersion": 32, "osName": "Android", "osVersion": "12L"}},
+    {"name": "IOS", "id": 5, "version": "20.10.4",
+     "userAgent": "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
+     "extra": {"deviceMake": "Apple", "deviceModel": "iPhone16,2", "osName": "iPhone", "osVersion": "18.3.2.22D82"}},
+]
+
+DEFAULT_SETTINGS = {
+    "mode": "auto",                 # auto: the iPod tries YouTube itself, then the proxy. direct | proxy
+    "accent": "#FF3B6B",
+    "theme": "dark",                # dark | black | midnight
+    "nowPlayingBackground": "blur",  # blur | solid
+    "artworkStyle": "rounded",      # rounded | square
+    "startTab": "library",          # library | stream
+    "librarySort": "title",         # title | artist | album
+    "searchResults": 25,
+    "skipNonMusic": True,
+    "directClients": DIRECT_CLIENTS,
+}
+
+CHOICES = {
+    "mode": ("auto", "direct", "proxy"),
+    "theme": ("dark", "black", "midnight"),
+    "nowPlayingBackground": ("blur", "solid"),
+    "artworkStyle": ("rounded", "square"),
+    "startTab": ("library", "stream"),
+    "librarySort": ("title", "artist", "album"),
+}
+
+
+def validate_settings(changes):
+    """Only known keys with sane values get through."""
+    clean = {}
+    for key, value in (changes or {}).items():
+        if key in CHOICES:
+            if value in CHOICES[key]:
+                clean[key] = value
+        elif key == "accent":
+            if isinstance(value, str) and re.match(r"^#[0-9A-Fa-f]{6}$", value):
+                clean[key] = value.upper()
+        elif key == "searchResults":
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                clean[key] = max(5, min(50, int(value)))
+        elif key == "skipNonMusic":
+            if isinstance(value, bool):
+                clean[key] = value
+        elif key == "directClients":
+            if isinstance(value, list) and all(isinstance(c, dict) and c.get("name") and c.get("version") and c.get("userAgent") for c in value):
+                clean[key] = value
+    return clean
+
+
+def validate_saved(items):
+    saved = []
+    for item in items if isinstance(items, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and VIDEO_ID.match(item["id"]):
+            track = {"id": item["id"], "title": str(item.get("title") or "Untitled")[:300],
+                     "artist": str(item.get("artist") or "")[:300],
+                     "duration": item.get("duration") if isinstance(item.get("duration"), (int, float)) else 0}
+            if isinstance(item.get("album"), str) and item["album"]:
+                track["album"] = item["album"][:300]
+            if isinstance(item.get("artwork"), str) and item["artwork"].startswith("https://"):
+                track["artwork"] = item["artwork"][:500]
+            saved.append(track)
+    return saved
+
+
+class Store:
+    """Kept in aria-data.json next to this script."""
+
+    def __init__(self, path):
+        self.path = path
+        self._lock = threading.Lock()
+        self.data = {"settings": {}, "saved": [], "savedUpdated": 0, "version": 0}
+        try:
+            with open(path) as f:
+                self.data.update(json.load(f))
+        except FileNotFoundError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"Couldn't read {path} ({exc}), starting with defaults")
+
+    def config(self):
+        with self._lock:
+            settings = dict(DEFAULT_SETTINGS)
+            settings.update(self.data["settings"])
+            return {"version": self.data["version"], "settings": settings,
+                    "saved": list(self.data["saved"]), "savedUpdated": self.data["savedUpdated"]}
+
+    def _save(self):
+        self.data["version"] += 1
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(self.data, f, indent=1)
+        os.replace(tmp, self.path)
+
+    def update_settings(self, changes):
+        with self._lock:
+            if changes.pop("reset", False):
+                self.data["settings"] = {}
+            self.data["settings"].update(changes)
+            self._save()
+
+    def set_saved(self, saved, updated=None):
+        with self._lock:
+            self.data["saved"] = saved
+            self.data["savedUpdated"] = updated or time.time()
+            self._save()
+
+
+STORE = None  # created in main(), once the data path is known
+
 def search(query, limit):
     opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -410,16 +532,59 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
+    def authorized(self, query):
+        if not self.token:
+            return True
+        cookies = dict(c.strip().split("=", 1) for c in (self.headers.get("Cookie") or "").split(";") if "=" in c)
+        given = query.get("key", [""])[0] or self.headers.get("X-Aria-Key") or urllib.parse.unquote(cookies.get("aria_key", ""))
+        return given == self.token
+
+    def read_json(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > 2_000_000:
+            raise ValueError("request too large")
+        return json.loads(self.rfile.read(length) or b"null")
+
+    def do_POST(self):
+        self.handle_write()
+
+    def do_PUT(self):
+        self.handle_write()
+
+    def handle_write(self):
+        parsed = urllib.parse.urlsplit(self.path)
+        if not self.authorized(urllib.parse.parse_qs(parsed.query)):
+            return self.error_json(401, "Wrong or missing access key")
+        try:
+            body = self.read_json()
+        except ValueError as exc:
+            return self.error_json(400, f"Bad JSON: {exc}")
+        if parsed.path == "/api/settings" and isinstance(body, dict):
+            changes = validate_settings(body)
+            if body.get("reset") is True:
+                changes["reset"] = True
+            STORE.update_settings(changes)
+            return self.send_json(200, STORE.config())
+        if parsed.path == "/api/saved" and isinstance(body, dict):
+            updated = body.get("updated") if isinstance(body.get("updated"), (int, float)) else None
+            STORE.set_saved(validate_saved(body.get("saved")), updated)
+            return self.send_json(200, STORE.config())
+        return self.error_json(404, "Not found")
+
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(parsed.query)
-        public = parsed.path in ("/", "/index.html", "/aria.deb")
-        if self.token and not public and query.get("key", [""])[0] != self.token:
+        public = parsed.path in ("/", "/index.html", "/aria.deb", "/admin")
+        if not public and not self.authorized(query):
             return self.error_json(401, "Wrong or missing access key")
         path = parsed.path
         try:
             if path in ("/", "/index.html"):
                 return self.handle_home()
+            if path == "/admin":
+                return self.handle_admin()
+            if path == "/api/config":
+                return self.send_json(200, STORE.config())
             if path == "/aria.deb":
                 return self.handle_deb()
             if path == "/api/ping":
@@ -461,10 +626,22 @@ class Handler(BaseHTTPRequestHandler):
 h1{{font-size:34px;margin:0 0 6px}}p{{color:#8e8e9a;line-height:1.4}}code{{color:#ff3b6b;font-size:18px}}
 .button{{display:block;background:#ff3b6b;color:#fff;text-decoration:none;font-weight:600;font-size:18px;padding:14px;border-radius:12px;margin:28px 0 8px}}</style>
 </head><body><h1>Aria</h1><p>The proxy is running.</p>{install}
-<p>Then open Aria &rarr; Settings and set Server to</p><code>http://{html.escape(host)}</code></body></html>""".encode()
+<p>Then open Aria &rarr; Settings and set Server to</p><code>http://{html.escape(host)}</code>
+<p><a href="/admin" style="color:#ff3b6b">Settings &amp; Saved songs &rarr;</a></p></body></html>""".encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def handle_admin(self):
+        with open(os.path.join(HERE, "admin.html"), "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -639,12 +816,15 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", help="require this access key (the app's Key setting)")
     parser.add_argument("--deb", help="the Aria .deb to offer for install (found or downloaded automatically)")
+    parser.add_argument("--data", default=os.path.join(HERE, "aria-data.json"), help="where settings and Saved songs are kept")
     args = parser.parse_args()
 
     # yt-dlp needs a JavaScript runtime (deno) for YouTube. pip installs it next to Python.
     os.environ["PATH"] = os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", "")
 
     Handler.token = args.token
+    global STORE
+    STORE = Store(args.data)
     try:
         server = Server((args.host, args.port), Handler)
     except OSError as exc:
@@ -657,6 +837,7 @@ def main():
     address = f"http://{primary}:{args.port}"
     log(f"On the iPod, open {address} in Safari to install Aria")
     log(f"In the app, set Server to: {address}")
+    log(f"Edit settings and Saved songs at {address}/admin")
     others = [f"{a} ({i})" if i else a for a, i in interface_addresses() if a != primary]
     if others:
         log(f"If the iPod can't open that, try this computer's other addresses: {', '.join(others)} (same port)")
