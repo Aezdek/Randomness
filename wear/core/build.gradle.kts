@@ -6,7 +6,7 @@ plugins {
 android {
     namespace = "xyz.aezdek.aria.core"
     compileSdk = 35
-    defaultConfig { minSdk = 30 }
+    defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
