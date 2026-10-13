@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.wear.compose.navigation)
     implementation(libs.wear.input)
     implementation(libs.activity.compose)
+    implementation(libs.fragment)
     implementation(libs.lifecycle.runtime)
     implementation(libs.core.ktx)
     implementation(libs.media3.exoplayer)
