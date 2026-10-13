@@ -3,7 +3,16 @@
 Aria on the **Galaxy Watch** (built for the Watch8 Classic, and works on any Wear OS 3+ watch), with a
 companion **Android phone app**. Part of [Aria](../README.md), next to the iPod app and the server.
 
-<!-- screenshots -->
+<p align="center">
+<img src="docs/watch-1-home.png" width="200"> <img src="docs/watch-2-player.png" width="200"> <img src="docs/watch-4-saved.png" width="200"><br>
+<img src="docs/watch-5-search.png" width="200"> <img src="docs/watch-6-song.png" width="200"> <img src="docs/watch-7-settings.png" width="200">
+</p>
+
+<p align="center">
+<img src="docs/phone-1-search.png" width="260"> <img src="docs/phone-2-saved.png" width="260"> <img src="docs/phone-3-settings.png" width="260">
+</p>
+
+<sub>Drawn by CI from the real app code with example songs (<code>recordRoborazziDebug</code>). Album art is placeholder gradients.</sub>
 
 ## What it does
 
