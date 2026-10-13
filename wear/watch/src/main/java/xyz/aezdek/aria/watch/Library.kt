@@ -48,7 +48,7 @@ object Library {
     @Synchronized
     fun removeAll() = _tracks.value.map { it.id }.forEach(::remove)
 
-    fun bytesUsed(): Long = (File(dir, "music").listFiles().orEmpty() + File(dir, "art").listFiles().orEmpty()).sumOf { it.length() }
+    fun bytesUsed(): Long = listOf("music", "art").sumOf { sub -> File(dir, sub).listFiles().orEmpty().sumOf { it.length() } }
 
     fun setProgress(id: String, value: Float?) {
         progress.value = if (value == null) progress.value - id else progress.value + (id to value)
