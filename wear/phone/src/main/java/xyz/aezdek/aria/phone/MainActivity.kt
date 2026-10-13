@@ -125,10 +125,10 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Where a song is on its way to the watch. */
-internal data class SendState(val label: String, val progress: Float?, val done: Boolean = false, val failed: Boolean = false)
+data class SendState(val label: String, val progress: Float?, val done: Boolean = false, val failed: Boolean = false)
 
 @Composable
-internal fun sendStates(): Map<String, SendState> {
+fun sendStates(): Map<String, SendState> {
     val context = LocalContext.current
     val infos by remember { WorkManager.getInstance(context).getWorkInfosByTagFlow(SendWorker.TAG) }.collectAsState(initial = emptyList())
     val changes by PhonePrefs.changes.collectAsState()
@@ -170,7 +170,7 @@ fun PhoneUi(startTab: Int = 0, content: (@Composable (Int) -> Unit)? = null) {
 }
 
 @Composable
-internal fun TrackRow(track: Track, state: SendState?, onSend: () -> Unit) {
+fun TrackRow(track: Track, state: SendState?, onSend: () -> Unit) {
     ListItem(
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
