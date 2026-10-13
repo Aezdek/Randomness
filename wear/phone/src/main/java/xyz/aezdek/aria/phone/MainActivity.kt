@@ -61,6 +61,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +84,14 @@ import xyz.aezdek.aria.core.formatTime
 
 private val Accent = Color(0xFFFF3B6B)
 
+/** Artwork for screenshots, which can't load images from the network. */
+val LocalArtworkPreview = staticCompositionLocalOf<((Track) -> Painter)?> { null }
+
+@Composable
+fun AriaPhoneTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = darkColorScheme(primary = Accent, secondary = Accent, background = Color(0xFF0B0B10), surface = Color(0xFF0B0B10)), content = content)
+}
+
 class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -89,11 +100,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         handleShare(intent)
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Accent, secondary = Accent, background = Color(0xFF0B0B10), surface = Color(0xFF0B0B10))) {
-                PhoneUi()
-            }
-        }
+        setContent { AriaPhoneTheme { PhoneUi() } }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -117,10 +124,10 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Where a song is on its way to the watch. */
-private data class SendState(val label: String, val progress: Float?, val done: Boolean = false, val failed: Boolean = false)
+internal data class SendState(val label: String, val progress: Float?, val done: Boolean = false, val failed: Boolean = false)
 
 @Composable
-private fun sendStates(): Map<String, SendState> {
+internal fun sendStates(): Map<String, SendState> {
     val context = LocalContext.current
     val infos by remember { WorkManager.getInstance(context).getWorkInfosByTagFlow(SendWorker.TAG) }.collectAsState(initial = emptyList())
     val changes by PhonePrefs.changes.collectAsState()
@@ -139,8 +146,8 @@ private fun sendStates(): Map<String, SendState> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneUi() {
-    var tab by remember { mutableIntStateOf(0) }
+fun PhoneUi(startTab: Int = 0, content: (@Composable (Int) -> Unit)? = null) {
+    var tab by remember { mutableIntStateOf(startTab) }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Aria", fontWeight = FontWeight.Bold) }) },
         bottomBar = {
@@ -152,7 +159,7 @@ fun PhoneUi() {
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tab) {
+            if (content != null) content(tab) else when (tab) {
                 0 -> SearchTab()
                 1 -> SavedTab()
                 else -> SettingsTab()
@@ -162,7 +169,7 @@ fun PhoneUi() {
 }
 
 @Composable
-private fun TrackRow(track: Track, state: SendState?, onSend: () -> Unit) {
+internal fun TrackRow(track: Track, state: SendState?, onSend: () -> Unit) {
     ListItem(
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -173,12 +180,18 @@ private fun TrackRow(track: Track, state: SendState?, onSend: () -> Unit) {
             }
         },
         leadingContent = {
-            AsyncImage(
-                model = PhonePrefs.server.takeIf { it.configured }?.artworkUrl(track, large = false) ?: "https://i.ytimg.com/vi/${track.id}/mqdefault.jpg",
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F1F2A)),
-            )
+            val shape = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1F1F2A))
+            val preview = LocalArtworkPreview.current
+            if (preview != null) {
+                Image(preview(track), contentDescription = null, contentScale = ContentScale.Crop, modifier = shape)
+            } else {
+                AsyncImage(
+                    model = PhonePrefs.server.takeIf { it.configured }?.artworkUrl(track, large = false) ?: "https://i.ytimg.com/vi/${track.id}/mqdefault.jpg",
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = shape,
+                )
+            }
         },
         trailingContent = {
             when {
@@ -198,14 +211,13 @@ private fun Hint(text: String) {
 }
 
 @Composable
-fun SearchTab() {
+fun SearchTab(initialQuery: String = "", initialResults: List<Track> = emptyList(), states: Map<String, SendState> = sendStates()) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Track>>(emptyList()) }
+    var query by remember { mutableStateOf(initialQuery) }
+    var results by remember { mutableStateOf(initialResults) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val states = sendStates()
     fun search() {
         val q = query.trim()
         if (q.isEmpty()) return
@@ -243,14 +255,13 @@ fun SearchTab() {
 }
 
 @Composable
-fun SavedTab() {
+fun SavedTab(initialSaved: List<Track>? = null, states: Map<String, SendState> = sendStates()) {
     val context = LocalContext.current
-    var saved by remember { mutableStateOf<List<Track>?>(null) }
+    var saved by remember { mutableStateOf(initialSaved) }
     var error by remember { mutableStateOf<String?>(null) }
-    val states = sendStates()
     val server = PhonePrefs.server
     LaunchedEffect(Unit) {
-        if (server.configured) runCatching { server.config() }
+        if (server.configured && initialSaved == null) runCatching { server.config() }
             .onSuccess { saved = Track.listFromJson(it.optJSONArray("saved")) }
             .onFailure { error = it.message }
     }
@@ -282,17 +293,17 @@ fun SavedTab() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsTab() {
+fun SettingsTab(initialWatchStatus: String? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var serverUrl by remember { mutableStateOf(PhonePrefs.serverUrl) }
     var key by remember { mutableStateOf(PhonePrefs.key) }
     var usePhone by remember { mutableStateOf(PhonePrefs.usePhone) }
     var serverStatus by remember { mutableStateOf<String?>(null) }
-    var watchStatus by remember { mutableStateOf("Looking for your watch…") }
+    var watchStatus by remember { mutableStateOf(initialWatchStatus ?: "Looking for your watch…") }
     var updating by remember { mutableStateOf(false) }
     val ytdlp by YtDlp.status.collectAsState()
-    LaunchedEffect(Unit) {
+    if (initialWatchStatus == null) LaunchedEffect(Unit) {
         watchStatus = WatchLink.findWatch(context)?.let { "Connected to ${it.displayName}" }
             ?: "No watch with Aria found. Install the watch app and keep the watch paired."
     }

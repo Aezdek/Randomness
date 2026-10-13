@@ -52,6 +52,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -118,11 +121,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Artwork for screenshots, which can't load images from the network. */
+val LocalArtworkPreview = staticCompositionLocalOf<((Track) -> Painter)?> { null }
+
 @Composable
-fun AriaWatch(openPlayer: Boolean) {
+fun AriaWatchTheme(content: @Composable () -> Unit) {
     val changes by Prefs.changes.collectAsState()
     val accent = remember(changes) { Prefs.accentColor }
-    MaterialTheme(colors = Colors(primary = accent, secondary = accent, onPrimary = Color.White)) {
+    MaterialTheme(colors = Colors(primary = accent, secondary = accent, onPrimary = Color.White), content = content)
+}
+
+@Composable
+fun AriaWatch(openPlayer: Boolean) {
+    AriaWatchTheme {
         val nav = rememberSwipeDismissableNavController()
         LaunchedEffect(openPlayer) { if (openPlayer) nav.navigate("player") }
         SwipeDismissableNavHost(navController = nav, startDestination = "home") {
@@ -160,6 +171,11 @@ private fun MenuChip(label: String, icon: ImageVector, secondary: String? = null
 
 @Composable
 private fun Artwork(track: Track, size: Int, modifier: Modifier = Modifier) {
+    val shaped = modifier.size(size.dp).clip(RoundedCornerShape((size / 6).dp)).background(Color(0xFF26262E))
+    LocalArtworkPreview.current?.let { preview ->
+        Image(preview(track), contentDescription = null, contentScale = ContentScale.Crop, modifier = shaped)
+        return
+    }
     val local = Library.artFile(track.id).takeIf { it.exists() }
     AsyncImage(
         model = local ?: Prefs.server.artworkUrl(track, large = size > 60),
@@ -255,10 +271,10 @@ fun SavedScreen(onTrack: (Track) -> Unit) {
 }
 
 @Composable
-fun SearchScreen(onTrack: (Track) -> Unit) {
+fun SearchScreen(onTrack: (Track) -> Unit, initialQuery: String = "", initialResults: List<Track> = emptyList()) {
     val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Track>>(emptyList()) }
+    var query by remember { mutableStateOf(initialQuery) }
+    var results by remember { mutableStateOf(initialResults) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val progress by Library.progress.collectAsState()
@@ -347,68 +363,91 @@ fun PlayerScreen() {
     tick.let { } // read so the screen refreshes twice a second
 
     val track = Items.track(controller?.currentMediaItem)
-    val playing = controller?.isPlaying == true
-    val buffering = controller?.playbackState == Player.STATE_BUFFERING
-    val duration = controller?.duration?.takeIf { it > 0 } ?: ((track?.duration ?: 0.0) * 1000).toLong()
-    val position = controller?.currentPosition ?: 0
     val audio = remember { context.getSystemService(AudioManager::class.java) }
     var volume by remember { mutableFloatStateOf(0f) }
     var volumeShownAt by remember { mutableStateOf(0L) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
+    PlayerContent(
+        track = track,
+        playing = controller?.isPlaying == true,
+        buffering = controller?.playbackState == Player.STATE_BUFFERING,
+        positionMs = controller?.currentPosition ?: 0,
+        durationMs = controller?.duration?.takeIf { it > 0 } ?: ((track?.duration ?: 0.0) * 1000).toLong(),
+        volume = volume.takeIf { System.currentTimeMillis() - volumeShownAt < 1500 },
+        hasHeadphones = hasHeadphones(context),
+        onPrevious = { controller?.seekToPrevious() },
+        onToggle = { controller?.run { if (isPlaying) pause() else play() } },
+        onNext = { controller?.seekToNext() },
+        onEarbuds = { connectHeadphones(context) },
+        modifier = Modifier
+            // The bezel (or crown) changes the volume.
+            .onRotaryScrollEvent { e ->
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (e.verticalScrollPixels > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER, 0)
+                volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                volumeShownAt = System.currentTimeMillis()
+                true
+            }
+            .focusRequester(focus)
+            .focusable(),
+    )
+}
+
+/** The player's look, separate from the live player so screenshots can show it. [volume] is shown while set. */
+@Composable
+fun PlayerContent(
+    track: Track?,
+    playing: Boolean,
+    buffering: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    volume: Float?,
+    hasHeadphones: Boolean,
+    onPrevious: () -> Unit,
+    onToggle: () -> Unit,
+    onNext: () -> Unit,
+    onEarbuds: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Scaffold(timeText = { TimeText() }) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                // The bezel (or crown) changes the volume.
-                .onRotaryScrollEvent { e ->
-                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, if (e.verticalScrollPixels > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER, 0)
-                    volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                    volumeShownAt = System.currentTimeMillis()
-                    true
-                }
-                .focusRequester(focus)
-                .focusable(),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (track != null) {
                 Box(Modifier.fillMaxSize().alpha(0.35f)) { Artwork(track, 240, Modifier.fillMaxSize()) }
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
             }
-            val showVolume = System.currentTimeMillis() - volumeShownAt < 1500
             CircularProgressIndicator(
-                progress = if (showVolume) volume else if (duration > 0) position.toFloat() / duration else 0f,
+                progress = volume ?: if (durationMs > 0) positionMs.toFloat() / durationMs else 0f,
                 modifier = Modifier.fillMaxSize().padding(2.dp),
                 startAngle = 0f,
                 endAngle = 360f,
                 strokeWidth = 4.dp,
-                indicatorColor = if (showVolume) Color.White else MaterialTheme.colors.primary,
+                indicatorColor = if (volume != null) Color.White else MaterialTheme.colors.primary,
                 trackColor = Color.White.copy(alpha = 0.15f),
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 28.dp)) {
                 Text(track?.title ?: "Nothing playing", fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(track?.artist.orEmpty(), style = MaterialTheme.typography.caption2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    if (showVolume) "Volume ${(volume * 100).toInt()}%" else "${formatTime(position / 1000.0)} / ${formatTime(duration / 1000.0)}",
+                    if (volume != null) "Volume ${(volume * 100).toInt()}%" else "${formatTime(positionMs / 1000.0)} / ${formatTime(durationMs / 1000.0)}",
                     style = MaterialTheme.typography.caption3, color = Color.White.copy(alpha = 0.7f),
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { controller?.seekToPrevious() }, colors = ButtonDefaults.iconButtonColors(), modifier = Modifier.size(40.dp)) {
+                    Button(onClick = onPrevious, colors = ButtonDefaults.iconButtonColors(), modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Rounded.SkipPrevious, "Previous")
                     }
-                    Button(onClick = { controller?.run { if (isPlaying) pause() else play() } }, modifier = Modifier.size(56.dp)) {
+                    Button(onClick = onToggle, modifier = Modifier.size(56.dp)) {
                         if (buffering) CircularProgressIndicator(modifier = Modifier.size(28.dp), indicatorColor = Color.White)
                         else Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", modifier = Modifier.size(30.dp))
                     }
-                    Button(onClick = { controller?.seekToNext() }, colors = ButtonDefaults.iconButtonColors(), modifier = Modifier.size(40.dp)) {
+                    Button(onClick = onNext, colors = ButtonDefaults.iconButtonColors(), modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Rounded.SkipNext, "Next")
                     }
                 }
-                if (!hasHeadphones(context)) {
+                if (!hasHeadphones) {
                     Spacer(Modifier.height(4.dp))
-                    CompactChip(label = { Text("Earbuds", fontSize = 11.sp) }, icon = { Icon(Icons.Rounded.Headphones, null) }, onClick = { connectHeadphones(context) })
+                    CompactChip(label = { Text("Earbuds", fontSize = 11.sp) }, icon = { Icon(Icons.Rounded.Headphones, null) }, onClick = onEarbuds)
                 }
             }
         }

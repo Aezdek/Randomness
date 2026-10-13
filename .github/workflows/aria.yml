@@ -115,6 +115,19 @@ jobs:
           ls -la out
           echo "version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' watch/build.gradle.kts)" >> "$GITHUB_OUTPUT"
 
+      - name: Screenshots
+        id: screenshots
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon --continue :watch:recordRoborazziDebug :phone:recordRoborazziDebug
+          mkdir -p shots && cp watch/build/screenshots/*.png phone/build/screenshots/*.png shots/ && ls -la shots
+
+      - uses: actions/upload-artifact@v4
+        if: steps.screenshots.outcome == 'success'
+        with:
+          name: aria-wear-screenshots
+          path: wear/shots/*.png
+
       - uses: actions/upload-artifact@v4
         with:
           name: aria-wear-apks
@@ -139,4 +152,17 @@ jobs:
             Guide: https://github.com/${{ github.repository }}/tree/aria/wear#readme
           files: wear/out/*.apk
           overwrite_files: true
+          make_latest: false
+
+      - name: Publish screenshots
+        if: github.event_name == 'push' && github.ref == 'refs/heads/aria' && steps.screenshots.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: aria-wear-screenshots
+          target_commitish: ${{ github.sha }}
+          name: Aria for Wear OS screenshots
+          body: Screenshots of the watch and phone apps, drawn by CI from the current code.
+          files: wear/shots/*.png
+          overwrite_files: true
+          prerelease: true
           make_latest: false

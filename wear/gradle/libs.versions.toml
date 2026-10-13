@@ -6,6 +6,7 @@ wearCompose = "1.4.1"
 media3 = "1.6.1"
 lifecycle = "2.8.7"
 work = "2.10.1"
+roborazzi = "1.43.1"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -36,9 +37,17 @@ coil-compose = { module = "io.coil-kt:coil-compose", version = "2.7.0" }
 youtubedl = { module = "io.github.junkfood02.youtubedl-android:library", version = "0.18.1" }
 junit = { module = "junit:junit", version = "4.13.2" }
 json = { module = "org.json:json", version = "20250107" }
+# Screenshots: Robolectric draws the real Compose screens on the JVM, Roborazzi saves them.
+robolectric = { module = "org.robolectric:robolectric", version = "4.14.1" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+androidx-test-junit = { module = "androidx.test.ext:junit", version = "1.2.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
