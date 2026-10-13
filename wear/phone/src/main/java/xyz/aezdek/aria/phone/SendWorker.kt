@@ -27,7 +27,7 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             .build()
 
     private suspend fun stage(track: Track, stage: String, progress: Float) {
-        setProgress(workDataOf("id" to track.id, "stage" to stage, "progress" to progress))
+        setProgress(workDataOf("id" to track.id, "title" to track.title, "stage" to stage, "progress" to progress))
         runCatching {
             setForeground(ForegroundInfo(id.hashCode(), notification(track.title, stage, (progress * 100).toInt()), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC))
         }
@@ -48,8 +48,8 @@ class SendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val audio = File(outbox, "${track.id}.m4a")
             val viaPhone = PhonePrefs.usePhone
             try {
-                if (viaPhone) YtDlp.download(track.id, outbox) { p -> setProgressAsync(workDataOf("id" to track.id, "stage" to "Downloading", "progress" to p)) }
-                else server.download(track.id, audio) { done, total -> if (total > 0) setProgressAsync(workDataOf("id" to track.id, "stage" to "Downloading", "progress" to done.toFloat() / total)) }
+                if (viaPhone) YtDlp.download(track.id, outbox) { p -> setProgressAsync(workDataOf("id" to track.id, "title" to track.title, "stage" to "Downloading", "progress" to p)) }
+                else server.download(track.id, audio) { done, total -> if (total > 0) setProgressAsync(workDataOf("id" to track.id, "title" to track.title, "stage" to "Downloading", "progress" to done.toFloat() / total)) }
             } catch (e: Exception) {
                 // yt-dlp on the phone failed; the server's yt-dlp is often newer and has Deno for YouTube.
                 if (!viaPhone || !server.configured) throw e

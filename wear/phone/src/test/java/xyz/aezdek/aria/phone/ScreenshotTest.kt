@@ -43,7 +43,7 @@ class ScreenshotTest {
 
     private val states = mapOf(
         songs[0].id to SendState("On your watch", 1f, done = true),
-        songs[1].id to SendState("Downloading", 0.45f),
+        songs[1].id to SendState("Downloading", 0.45f, title = songs[1].title),
         songs[2].id to SendState("Sending to watch", 1f),
     )
 
@@ -67,7 +67,7 @@ class ScreenshotTest {
     private fun shot(name: String, tab: Int, content: @Composable () -> Unit) {
         compose.setContent {
             CompositionLocalProvider(LocalArtworkPreview provides ::art) {
-                AriaPhoneTheme { PhoneUi(startTab = tab) { content() } }
+                AriaPhoneTheme { PhoneUi(startTab = tab, states = states) { content() } }
             }
         }
         compose.onRoot().captureRoboImage("build/screenshots/phone-$name.png")
