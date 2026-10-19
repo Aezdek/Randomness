@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Capview
+GenericName=HDMI Capture Viewer
+Comment=Low-latency preview for USB HDMI capture cards
+Exec=capview
+Icon=camera-video
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=hdmi;capture;ms2109;macrosilicon;v4l2;
+StartupWMClass=io.github.aezdek.Capview
+StartupNotify=true
