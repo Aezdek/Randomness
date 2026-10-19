@@ -12,8 +12,11 @@ and Bluetooth through `bluetoothctl`, each run as a subprocess.
 
 ```sh
 sudo dnf install python3-gobject gtk4 libadwaita \
-    mpv ffmpeg-free v4l-utils pulseaudio-utils bluez util-linux-core pipx
+    mpv v4l-utils pulseaudio-utils bluez util-linux-core pipx
 ```
+
+`ffplay` (the optional second player) comes from `ffmpeg`. If you already have RPM Fusion's `ffmpeg`,
+you're set. Otherwise add `ffmpeg-free`, which conflicts with the RPM Fusion package, so install only one.
 
 Optional, for VA-API MJPEG decode: `libva-utils` (`vainfo` should list `VAProfileJPEGBaseline`) and your
 GPU's VA driver. Intel uses `intel-media-driver`. AMD uses `mesa-va-drivers-freeworld` from RPM Fusion.
