@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="icon_background">#0B5D45</color>
+    <color name="icon_crescent">#F2C14E</color>
+    <!-- Matches the Compose background, so there is no flash before the first frame. -->
+    <color name="window_background">#F5FBF5</color>
+</resources>

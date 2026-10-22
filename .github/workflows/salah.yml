@@ -1,0 +1,108 @@
+name: Salah
+
+# This workflow only exists on the Salah branch, so it runs for pushes to that branch (whatever it is called).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: salah-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Test and build signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit and UI tests (JVM + Robolectric)
+        run: ./gradlew --continue :core:test :app:testDebugUnitTest
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+
+      - name: Restore signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SALAH_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/salah-release.jks"
+          echo "SALAH_KEYSTORE_PATH=$RUNNER_TEMP/salah-release.jks" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        env:
+          SALAH_KEYSTORE_PASSWORD: ${{ secrets.SALAH_KEYSTORE_PASSWORD }}
+        run: ./gradlew :app:assembleRelease
+
+      # Without the key the APK would be unsigned (or signed with a throwaway key that can't update the app),
+      # so the run stops here instead of publishing it.
+      - name: Require the Salah signing key
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          echo "::error title=Signing key missing::Add the SALAH_KEYSTORE_BASE64 and SALAH_KEYSTORE_PASSWORD repository secrets (see README, 'Signing'), then re-run this workflow. The tests passed and the app built; only signing is missing."
+          exit 1
+
+      - name: Verify signature and collect APK
+        id: apk
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1)
+          if [ -z "$APK" ]; then echo "::error::No signed APK was produced"; exit 1; fi
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)apksigner
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee signature.txt
+          if grep -q "CN=Android Debug" signature.txt; then echo "::error::The APK is signed with a debug key"; exit 1; fi
+          VERSION="1.0.${GITHUB_RUN_NUMBER}"
+          mkdir -p out
+          cp "$APK" "out/Salah-$VERSION.apk"
+          cp "$APK" out/salah.apk
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "cert=$(grep -m1 'certificate SHA-256 digest' signature.txt | awk '{print $NF}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Salah-${{ steps.apk.outputs.version }}
+          path: |
+            out/Salah-${{ steps.apk.outputs.version }}.apk
+            signature.txt
+
+      # Every push replaces the APK on the salah-latest release, so one link always has the newest build:
+      # https://github.com/<owner>/<repo>/releases/download/salah-latest/salah.apk
+      - name: Publish to the salah-latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.apk.outputs.version }}
+          CERT: ${{ steps.apk.outputs.cert }}
+        run: |
+          NOTES="Salah $VERSION, built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}.
+
+          Download **salah.apk** on your phone and open it to install or update. Every build is signed with the same release key (certificate SHA-256 \`$CERT\`), so new versions install over the old one and keep your log."
+          if gh release view salah-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit salah-latest --repo "$GITHUB_REPOSITORY" --title "Salah $VERSION" --notes "$NOTES"
+          else
+            gh release create salah-latest --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+              --title "Salah $VERSION" --notes "$NOTES"
+          fi
+          gh release upload salah-latest out/salah.apk --clobber --repo "$GITHUB_REPOSITORY"
