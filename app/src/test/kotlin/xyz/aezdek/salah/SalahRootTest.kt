@@ -133,7 +133,7 @@ class SalahRootTest {
         compose.waitForIdle()
         assertEquals(PrayerStatus.PRAYED, data.statusOf(LocalDate.of(2026, 10, 20), Prayer.MAGHRIB))
 
-        compose.onNodeWithText("Back to today").performClick()
+        compose.onNodeWithText("Back to today").performScrollTo().performClick()
         compose.onNodeWithText("Friday, 23 October 2026").assertExists()
         compose.onNodeWithTag("next-day").assertIsNotEnabled()
     }
