@@ -6,6 +6,7 @@ Everything lives in `/opt/hl/aezgram`:
 compose.yml   .env (0600: port, pinned image, TURN key, rclone remote)
 update.sh  backup.sh  restore.sh  lib.sh  RUNBOOK.md
 data/aezgram.db  data/blobs/  data/snapshots/  data/backup-status.json  data/first-invite.txt
+data/signing/ (the Android signing key)  data/apk/ (the signed APK the app updates from)
 ```
 
 The container listens on `127.0.0.1:<AEZGRAM_HOST_PORT>` only. `cloudflared` publishes it as `gram.aezdek.xyz`
@@ -22,7 +23,7 @@ The container listens on `127.0.0.1:<AEZGRAM_HOST_PORT>` only. `cloudflared` pub
 | Logs | `docker compose -f /opt/hl/aezgram/compose.yml logs -f` |
 | Restart | `docker compose -f /opt/hl/aezgram/compose.yml restart` |
 | Back up now | `sudo systemctl start aezgram-backup` then `cat /opt/hl/aezgram/data/backup-status.json` |
-| New invite code | in the app: Settings → Admin → New invite |
+| New invite code | in the app: Settings → Server and invites → New invite |
 
 There is no Watchtower: the running image only changes when you approve `update.sh`. The image is pinned in
 `.env` (`AEZGRAM_IMAGE_ID`), and `update.sh` refuses to start an image whose digest doesn't match.
@@ -33,7 +34,7 @@ All of AezGram's data is ciphertext, so it goes straight to the encrypted rclone
 `.env`, normally `gdrive-crypt:`), never to the external HDD:
 
 - 03:00 the server writes `data/snapshots/aezgram-DATE.db` (a consistent `VACUUM INTO` copy; 7 kept locally);
-- 03:30 `aezgram-backup.timer` uploads the snapshots, syncs `data/blobs`, and copies `.env`;
+- 03:30 `aezgram-backup.timer` uploads the snapshots, syncs `data/blobs`, and copies `.env` and `data/signing/`;
 - deleted media goes to `aezgram/deleted/DATE` and, like snapshots, is kept 30 days remotely.
 
 If the remote doesn't exist yet (backups show as off in the app's admin screen):
@@ -57,6 +58,19 @@ sudo bash install.sh                   # starts it on the restored data
 ```
 
 Media deleted after the snapshot's night is brought back from `aezgram/deleted/`, so the snapshot is complete.
+
+## The Android signing key
+
+The APK comes out of CI unsigned. When a new image starts, its entrypoint signs the APK with the key in
+`data/signing/` (made on the very first start) and puts the result in `data/apk/`, where the app's update screen
+and `https://gram.aezdek.xyz/download/aezgram.apk` find it. GitHub never holds the key.
+
+Phones only accept an update signed with the key they installed with, so **`data/signing/` must survive**:
+backup.sh uploads it and restore.sh brings it back. If it's ever lost, the server makes a new one on the next start
+and every phone has to uninstall and reinstall the app once (nothing is lost: all data is on the server).
+
+If the logs say `data/signing is incomplete`, the server refused to replace a damaged key: restore it with
+`restore.sh`, or, if there's no copy, `sudo rm -r /opt/hl/aezgram/data/signing` and restart to start a new key.
 
 ## If something is wrong
 

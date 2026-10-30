@@ -76,6 +76,17 @@ object Graph {
         else -> e.message ?: "Something went wrong"
     }
 
+    /** Screenshot tests: what the screens read, without the Keystore, WebRTC or the background service. */
+    @androidx.annotation.VisibleForTesting
+    internal fun initForTest(context: android.content.Context, client: AezClient) {
+        prefs = Prefs(context)
+        http = OkHttpClient()
+        this.client = client
+        media = MediaCache(client)
+        notifier = Notifier(context)
+        booted.value = true
+    }
+
     fun init(app: AezGramApp) {
         this.app = app
         prefs = Prefs(app)

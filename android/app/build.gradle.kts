@@ -45,6 +45,8 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // Screenshot tests write PNGs to build/screenshots (CI uploads them for review); nothing is compared.
+        unitTests.all { it.systemProperty("roborazzi.test.record", "true") }
     }
 
     lint {
@@ -102,6 +104,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 
 tasks.withType<Test>().configureEach {

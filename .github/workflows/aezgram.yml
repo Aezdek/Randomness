@@ -138,6 +138,13 @@ jobs:
           name: android-reports
           path: android/app/build/reports/
           if-no-files-found: ignore
+      # Screenshots of the main screens (ScreenshotTest), for reviewing the UI without a device.
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: android-screenshots
+          path: android/app/build/screenshots/
+          if-no-files-found: ignore
       # The APK leaves CI unsigned. Resolute signs it with a key that never leaves the server (deploy/entrypoint.sh),
       # using the apksigner from this SDK, so no signing secret exists on GitHub to steal.
       - name: Bundle the unsigned APK with apksigner
@@ -156,6 +163,33 @@ jobs:
           name: aezgram-apk
           path: apk/
           retention-days: 7
+
+  # Artifacts live on blob storage that review tooling can't always reach; a release asset can be fetched anywhere.
+  screenshots:
+    name: Publish Android screenshots
+    needs: android
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/aezgram'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          name: android-screenshots
+          path: shots
+      - name: Upload to the aezgram-screenshots pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$(ls shots 2>/dev/null)" ] || { echo "No screenshots in this run"; exit 0; }
+          (cd shots && zip -qr ../android-screenshots.zip .)
+          if ! gh release view aezgram-screenshots --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create aezgram-screenshots --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "AezGram screenshots" --notes "Android UI screenshots from CI, for review. Not a release."
+          fi
+          gh release upload aezgram-screenshots android-screenshots.zip --clobber --repo "$GITHUB_REPOSITORY"
 
   image:
     name: Image and release
