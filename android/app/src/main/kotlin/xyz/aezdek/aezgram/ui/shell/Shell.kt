@@ -117,15 +117,10 @@ object Routes {
                 CreateKind.REEL -> xyz.aezdek.aezgram.ui.create.CreateReel()
                 CreateKind.NOTE -> xyz.aezdek.aezgram.ui.create.CreateNote()
             }
-            else -> Placeholder(screen.toString())
+            is Screen.Settings -> xyz.aezdek.aezgram.ui.settings.Settings(screen.section)
+            is Screen.Verify -> xyz.aezdek.aezgram.ui.settings.Verify(screen.userId)
+            Screen.Readiness -> xyz.aezdek.aezgram.ui.settings.Readiness()
         }
-    }
-}
-
-@Composable
-fun Placeholder(title: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(title, color = Aez.colors.text2)
     }
 }
 

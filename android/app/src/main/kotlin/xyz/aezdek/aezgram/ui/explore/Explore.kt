@@ -165,7 +165,7 @@ fun Activity() {
         var current = e
         while (true) current = current.dto.parentId?.let { state.entities[it] } ?: return current
     }
-    val items = buildList {
+    val events = buildList {
         for (e in state.entities.values) {
             val dto = e.dto
             if (dto.authorId == me.id) continue
@@ -211,8 +211,8 @@ fun Activity() {
                 }
             }
             val groups = listOf(
-                "New" to items.filter { it.at > lastSeen },
-                "Earlier" to items.filter { it.at <= lastSeen },
+                "New" to events.filter { it.at > lastSeen },
+                "Earlier" to events.filter { it.at <= lastSeen },
             )
             for ((title, list) in groups) {
                 if (list.isEmpty()) continue
@@ -242,7 +242,7 @@ fun Activity() {
                     }
                 }
             }
-            if (items.isEmpty() && state.followRequests.isEmpty() && followsYou.isEmpty()) {
+            if (events.isEmpty() && state.followRequests.isEmpty() && followsYou.isEmpty()) {
                 item { Empty(Icons.Outlined.FavoriteBorder, "Activity on your posts", "When someone likes or comments on your posts, you'll see it here.") }
             }
             item { Spacer(Modifier.navigationBarsPadding()) }

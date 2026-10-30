@@ -158,7 +158,7 @@ fun CreatePost() {
     val context = LocalContext.current
     val state by Graph.client.state.collectAsState()
     val index by Graph.client.index.collectAsState()
-    val items = remember { mutableStateListOf<Picked>() }
+    val picked = remember { mutableStateListOf<Picked>() }
     var step by remember { mutableStateOf(0) }
     var aspect by remember { mutableStateOf(Aspect.PORTRAIT) }
     var filter by remember { mutableStateOf(0) }
@@ -171,19 +171,19 @@ fun CreatePost() {
     var progress by remember { mutableStateOf<Pair<String, Float>?>(null) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
-        if (uris.isEmpty() && items.isEmpty()) nav.back()
-        items.addAll(uris.map { Picked(it, MediaPrep.isVideo(context, it)) })
+        if (uris.isEmpty() && picked.isEmpty()) nav.back()
+        picked.addAll(uris.map { Picked(it, MediaPrep.isVideo(context, it)) })
     }
-    LaunchedEffect(Unit) { if (items.isEmpty()) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    LaunchedEffect(Unit) { if (picked.isEmpty()) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
 
     fun share() {
         scope.launch {
             val refs = ArrayList<MediaRef>()
             val ok = Graph.attempt {
-                items.forEachIndexed { i, item ->
-                    val n = "${i + 1} of ${items.size}"
-                    val base = i.toFloat() / items.size
-                    val span = 1f / items.size
+                picked.forEachIndexed { i, item ->
+                    val n = "${i + 1} of ${picked.size}"
+                    val base = i.toFloat() / picked.size
+                    val span = 1f / picked.size
                     val prepared = if (item.video) {
                         progress = "Optimising video $n" to base
                         MediaPrep.prepareVideo(context, item.uri, MediaKind.POST) { f -> progress = "Optimising video $n" to base + f * span * 0.6f }
@@ -214,16 +214,16 @@ fun CreatePost() {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             TopBar(if (step == 0) "New post" else "Details", actions = {
-                if (items.isNotEmpty()) {
+                if (picked.isNotEmpty()) {
                     Text(if (step == 0) "Next" else "Share", color = Aez.colors.link, fontWeight = FontWeight.Bold, fontSize = 16.sp,
                         modifier = Modifier.clickable { if (step == 0) step = 1 else share() }.padding(14.dp))
                 }
             })
             if (step == 0) {
-                if (items.isNotEmpty()) {
-                    val pager = rememberPagerState { items.size }
+                if (picked.isNotEmpty()) {
+                    val pager = rememberPagerState { picked.size }
                     Box(Modifier.fillMaxWidth().aspectRatio(aspect.ratio ?: 1f).background(Color.Black)) {
-                        HorizontalPager(pager, Modifier.fillMaxSize()) { page -> Preview(items[page], if (items[page].video) null else Filters.all[filter]) }
+                        HorizontalPager(pager, Modifier.fillMaxSize()) { page -> Preview(picked[page], if (picked[page].video) null else Filters.all[filter]) }
                     }
                     Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         for (a in Aspect.entries) Chip(a.label, selected = aspect == a) { aspect = a }
@@ -237,7 +237,7 @@ fun CreatePost() {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { filter = i }) {
                                 Box(Modifier.size(78.dp).clip(RoundedCornerShape(12.dp))
                                     .then(if (filter == i) Modifier.border(2.dp, Aez.colors.text, RoundedCornerShape(12.dp)) else Modifier)) {
-                                    items.firstOrNull { !it.video }?.let { Preview(it, f, maxEdge = 240) }
+                                    picked.firstOrNull { !it.video }?.let { Preview(it, f, maxEdge = 240) }
                                 }
                                 Text(f.name, fontSize = 12.sp, color = if (filter == i) Aez.colors.text else Aez.colors.text2, modifier = Modifier.padding(top = 4.dp))
                             }

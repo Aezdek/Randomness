@@ -37,6 +37,9 @@ object Graph {
         private set
     lateinit var media: MediaCache
         private set
+    /** Shared HTTP client: the API, media and the in-app update download. */
+    lateinit var http: OkHttpClient
+        private set
     lateinit var calls: CallManager
         private set
     lateinit var notifier: Notifier
@@ -76,7 +79,7 @@ object Graph {
     fun init(app: AezGramApp) {
         this.app = app
         prefs = Prefs(app)
-        val http = OkHttpClient.Builder()
+        http = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)

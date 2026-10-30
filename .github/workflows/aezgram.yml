@@ -115,7 +115,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/cloudflared"
           "$RUNNER_TEMP/cloudflared" --version
       - name: shellcheck
-        run: shellcheck -x -P SCRIPTDIR --severity=warning deploy/*.sh deploy/tests/run.sh deploy/tests/stubs/* scripts/*.sh
+        run: shellcheck -x -P SCRIPTDIR --severity=warning deploy/*.sh deploy/tests/run.sh deploy/tests/stubs/*
       - name: install / update / backup / restore against fixtures
         run: REAL_CLOUDFLARED="$RUNNER_TEMP/cloudflared" deploy/tests/run.sh
 

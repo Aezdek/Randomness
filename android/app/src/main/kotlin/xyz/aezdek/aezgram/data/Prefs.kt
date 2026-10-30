@@ -35,6 +35,11 @@ class Prefs(context: Context) {
 
     fun setVanish(threadId: String, on: Boolean) = prefs.edit().putBoolean("vanish.$threadId", on).apply()
 
+    /** Samsung's "Never sleeping apps" can't be read back, so the readiness checklist remembers the user's tick. */
+    var samsungNeverSleeping: Boolean
+        get() = prefs.getBoolean("samsungNeverSleeping", false)
+        set(value) = prefs.edit().putBoolean("samsungNeverSleeping", value).apply()
+
     var notifiedUpTo: Long
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()
