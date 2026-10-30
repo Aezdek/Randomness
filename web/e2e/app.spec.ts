@@ -66,7 +66,8 @@ async function editProfile(p: Person, displayName: string, bio: string) {
 async function newInvite(admin: Person): Promise<string> {
   await admin.page.goto('/settings/admin');
   await admin.page.getByRole('button', { name: 'New invite' }).click();
-  const code = admin.page.locator('.settings-card .setting-line b.tabular').first();
+  // The list also shows invites already used; wait for the fresh one rather than reading whatever is first.
+  const code = admin.page.locator('.settings-card .setting-line').filter({ hasNotText: 'Used' }).locator('b.tabular').first();
   await expect(code).toHaveText(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/);
   return (await code.textContent())!.trim();
 }

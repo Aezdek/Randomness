@@ -3,11 +3,11 @@
 # the real binary; only `tunnel route dns` (which needs a Cloudflare login) is faked.
 echo "cloudflared $*" >>"${STUB_STATE:?}/cloudflared.log"
 if [ "$2" = route ]; then echo "Added CNAME $4 which will route to this tunnel"; exit 0; fi
+if [ -n "${STUB_VALIDATE_FAIL:-}" ] && [ "$4 $5" = "ingress validate" ]; then echo "Validation failed: stub says no" >&2; exit 1; fi
 if [ -n "${REAL_CLOUDFLARED:-}" ]; then exec "$REAL_CLOUDFLARED" "$@"; fi
 config=$3
 case "$4 $5" in
   "ingress validate")
-    [ -n "${STUB_VALIDATE_FAIL:-}" ] && { echo "Validation failed: stub says no" >&2; exit 1; }
     tail -n5 "$config" | grep -q 'http_status:404' || grep -q 'http_status:404' "$config" || { echo "no catch-all" >&2; exit 1; }
     echo "OK"
     ;;
