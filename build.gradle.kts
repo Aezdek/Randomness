@@ -3,8 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
 }
 
-// Coordinates the android/ build substitutes these projects by (xyz.aezdek.aezgram:crypto, …).
+// Coordinates the android/ build substitutes these projects by (xyz.aezdek.hush:crypto, …).
 subprojects {
-    group = "xyz.aezdek.aezgram"
+    group = "xyz.aezdek.hush"
     version = "1.0"
 }

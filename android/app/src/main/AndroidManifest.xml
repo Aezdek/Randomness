@@ -23,7 +23,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
-        android:name=".AezGramApp"
+        android:name=".HushApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
@@ -32,7 +32,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AezGram.Starting"
+        android:theme="@style/Theme.Hush.Starting"
         tools:targetApi="34">
 
         <activity
@@ -55,7 +55,7 @@
             android:excludeFromRecents="true"
             android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
-            android:theme="@style/Theme.AezGram" />
+            android:theme="@style/Theme.Hush" />
 
         <service
             android:name=".service.ConnectionService"

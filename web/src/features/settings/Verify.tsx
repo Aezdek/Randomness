@@ -80,7 +80,7 @@ export function Verify() {
   const onScan = (text: string) => {
     setScanning(false);
     const parsed = parseQr(text);
-    if (!parsed || parsed.userId !== userId) return toast('That isn’t their AezGram code', 'error');
+    if (!parsed || parsed.userId !== userId) return toast('That isn’t their Hush code', 'error');
     if (b64(parsed.signPk) !== user.signPk) return toast('Keys don’t match! Don’t trust this account until you find out why.', 'error');
     void engine.acknowledgeKeyChange(userId, true);
     toast(`${user.username} is verified`, 'success');

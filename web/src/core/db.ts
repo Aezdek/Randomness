@@ -28,7 +28,7 @@ export class LocalDb {
   private constructor(private readonly db: IDBPDatabase<AccountDb>) {}
 
   static async open(userId: string): Promise<LocalDb> {
-    const db = await openDB<AccountDb>(`aezgram-${userId}`, 1, {
+    const db = await openDB<AccountDb>(`hush-${userId}`, 1, {
       upgrade(database) {
         database.createObjectStore('kv');
         database.createObjectStore('objects', { keyPath: 'id' });
@@ -42,7 +42,7 @@ export class LocalDb {
 
   static async destroy(userId: string) {
     const { deleteDB } = await import('idb');
-    await deleteDB(`aezgram-${userId}`);
+    await deleteDB(`hush-${userId}`);
   }
 
   get<T>(key: string): Promise<T | undefined> {

@@ -2,7 +2,7 @@
 import sodium from 'libsodium-wrappers-sumo';
 
 /**
- * AezGram's service worker:
+ * Hush's service worker:
  * - decrypts streaming video on the fly (`/media/<blobId>`), with Range support, using keys the page hands over in
  *   memory only (never stored);
  * - shows push notifications. Pushes carry no content, only who did what kind of thing.
@@ -140,11 +140,11 @@ function describe(data: PushData): { title: string; body: string; url: string; u
     case 'follow_accepted':
       return { title: 'Request accepted', body: `${who} accepted your follow request`, url: '/activity' };
     case 'call':
-      return { title: `${who} is calling`, body: 'Tap to answer in AezGram', url: data.fromId ? `/direct?call=${data.fromId}` : '/direct', urgent: true };
+      return { title: `${who} is calling`, body: 'Tap to answer in Hush', url: data.fromId ? `/direct?call=${data.fromId}` : '/direct', urgent: true };
     case 'ring_test':
       return { title: 'Test ring', body: 'Notifications reach this device.', url: '/settings/notifications', urgent: true };
     default:
-      return { title: 'AezGram', body: 'Something new', url: '/' };
+      return { title: 'Hush', body: 'Something new', url: '/' };
   }
 }
 
@@ -165,7 +165,7 @@ self.addEventListener('push', (event) => {
         body: info.body,
         icon: '/icon-192.png',
         badge: '/badge-72.png',
-        tag: data.type === 'call' ? `call-${data.ref}` : `aezgram-${data.type}`,
+        tag: data.type === 'call' ? `call-${data.ref}` : `hush-${data.type}`,
         requireInteraction: !!info.urgent,
         data: { url: info.url },
       });

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# AezGram server image: the Ktor server, the web client and (when CI built it) the unsigned Android APK, so one
+# Hush server image: the Ktor server, the web client and (when CI built it) the unsigned Android APK, so one
 # pinned digest describes everything a phone or browser receives. The entrypoint signs the APK with a key that
-# exists only on the server (deploy/entrypoint.sh). Built by .github/workflows/aezgram.yml.
+# exists only on the server (deploy/entrypoint.sh). Built by .github/workflows/hush.yml.
 
 FROM eclipse-temurin:21-jdk AS server
 WORKDIR /src
@@ -19,20 +19,20 @@ COPY web ./
 RUN npm run build
 
 FROM eclipse-temurin:21-jre
-ARG AEZGRAM_VERSION=dev
-ENV AEZGRAM_VERSION=$AEZGRAM_VERSION \
-    AEZGRAM_DATA_DIR=/data \
-    AEZGRAM_WEB_DIR=/app/web \
-    AEZGRAM_APK_DIR=/data/apk
-RUN useradd --system --uid 10001 --home-dir /data --shell /usr/sbin/nologin aezgram \
- && mkdir -p /data && chown aezgram:aezgram /data
+ARG HUSH_VERSION=dev
+ENV HUSH_VERSION=$HUSH_VERSION \
+    HUSH_DATA_DIR=/data \
+    HUSH_WEB_DIR=/app/web \
+    HUSH_APK_DIR=/data/apk
+RUN useradd --system --uid 10001 --home-dir /data --shell /usr/sbin/nologin hush \
+ && mkdir -p /data && chown hush:hush /data
 COPY --from=server /src/server/build/install/server /app/server
 COPY --from=web /src/web/dist /app/web
-# CI drops aezgram-unsigned.apk, apksigner.jar and build.env here before building; locally it's empty and the
+# CI drops hush-unsigned.apk, apksigner.jar and build.env here before building; locally it's empty and the
 # download link says so.
 COPY deploy/apk/ /app/apk/
 COPY deploy/entrypoint.sh /app/entrypoint.sh
-USER aezgram
+USER hush
 EXPOSE 8080
 VOLUME /data
 ENTRYPOINT ["/app/entrypoint.sh"]

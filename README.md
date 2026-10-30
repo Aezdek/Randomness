@@ -1,4 +1,4 @@
-# AezGram
+# Hush
 
 A private Instagram for a handful of people (built for 2, capped at 10), where everything is end-to-end encrypted
 and lives on your own server. There's an Android app and a web app. Video calls are peer to peer.
@@ -26,7 +26,7 @@ You do four things. Everything else is automatic.
 1. **On Resolute, install it once:**
 
    ```bash
-   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/aezgram-latest/install.sh
+   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/hush-latest/install.sh
    ```
 
    ```bash
@@ -34,10 +34,10 @@ You do four things. Everything else is automatic.
    ```
 
    It does the following:
-   - lays out `/opt/hl/aezgram`;
+   - lays out `/opt/hl/hush`;
    - picks a port that `PORTS.md` doesn't use;
    - starts the newest image CI built;
-   - adds `gram.aezdek.xyz` to the cloudflared config: backup first, insert above the catch-all, validate,
+   - adds `hush.aezdek.xyz` to the cloudflared config: backup first, insert above the catch-all, validate,
      check that lucifer and print still answer, and roll back if anything got worse;
    - installs the nightly backup.
 
@@ -50,10 +50,10 @@ You do four things. Everything else is automatic.
 
 2. **Backups, once:** if the `gdrive-crypt:` rclone remote doesn't exist yet, run `sudo rclone config` (Google
    needs a browser to sign in). Then re-run `install.sh`. The steps are in [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md).
-3. **Phones:** open `https://gram.aezdek.xyz/download/aezgram.apk` on each phone and install it. Then open
+3. **Phones:** open `https://hush.aezdek.xyz/download/hush.apk` on each phone and install it. Then open
    **Settings → Calls and ringing** and tick every item. On a Samsung that includes "Never sleeping apps". Finish
    with a test ring while the phone is locked.
-4. **Updates:** when you want a new version, run `sudo /opt/hl/aezgram/update.sh`. It shows what changed, asks
+4. **Updates:** when you want a new version, run `sudo /opt/hl/hush/update.sh`. It shows what changed, asks
    y/N, health-checks the new version, and rolls back if that fails. The apps then pick it up: the web app on its
    next load, and Android from **Settings → App updates**.
 
@@ -62,8 +62,8 @@ Invite the others from **Settings → Server and invites**.
 ## How it fits together
 
 ```
- Android app (Kotlin/Compose) ─┐ HTTPS + WSS                      ┌─ SQLite  /opt/hl/aezgram/data/aezgram.db
- Web app (React PWA) ──────────┼─► gram.aezdek.xyz ─► Ktor server ─┼─ blobs   /opt/hl/aezgram/data/blobs
+ Android app (Kotlin/Compose) ─┐ HTTPS + WSS                      ┌─ SQLite  /opt/hl/hush/data/hush.db
+ Web app (React PWA) ──────────┼─► hush.aezdek.xyz ─► Ktor server ─┼─ blobs   /opt/hl/hush/data/blobs
                                │   (cloudflared on Resolute)       └─ Web Push, TURN credentials
  Peer ◄── WebRTC (P2P, or relayed by Cloudflare TURN: ciphertext only) ──► Peer
  Nightly: SQLite snapshot + blobs + signing key ── rclone ──► encrypted Google Drive remote
@@ -100,10 +100,10 @@ bash deploy/tests/run.sh
 ./gradlew -p android :app:testDebugUnitTest :app:assembleDebug
 ```
 
-On every push to `aezgram`, CI runs all of the above, plus the photo and video pipeline on an Android emulator. It
+On every push to the `aezgram` branch, CI runs all of the above, plus the photo and video pipeline on an Android emulator. It
 renders the Android screens to screenshots for review, and builds the image (server, web app and unsigned APK) and
 smoke-tests it, including signing the APK and checking it the way a phone would. Then it publishes everything to
-the rolling `aezgram-latest` release that `install.sh` and `update.sh` read.
+the rolling `hush-latest` release that `install.sh` and `update.sh` read.
 
 ## Security and trade-offs
 

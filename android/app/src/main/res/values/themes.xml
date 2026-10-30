@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AezGram" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Hush" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
-    <style name="Theme.AezGram.Starting" parent="Theme.SplashScreen">
+    <style name="Theme.Hush.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="postSplashScreenTheme">@style/Theme.AezGram</item>
+        <item name="postSplashScreenTheme">@style/Theme.Hush</item>
     </style>
 </resources>

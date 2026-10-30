@@ -16,7 +16,7 @@ interface StoredSession {
   deviceKey: CryptoKey;
 }
 
-const DB = 'aezgram-session';
+const DB = 'hush-session';
 
 async function store() {
   return openDB(DB, 1, {

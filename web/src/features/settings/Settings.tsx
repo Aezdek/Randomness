@@ -349,7 +349,7 @@ function DataSection() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `aezgram-${me!.username}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `hush-${me!.username}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -376,10 +376,10 @@ function AdminSection() {
   const backupStale = backupAge === null || backupAge > 48 * 3_600_000 || status.lastBackupOk === false;
   return (
     <>
-      {backupStale && <div className="key-warning"><HardDrive size={18} /> {status.lastBackupAt ? 'The last successful backup is more than 48 hours old.' : 'No backup has run yet.'} Check aezgram-backup.timer on the server.</div>}
+      {backupStale && <div className="key-warning"><HardDrive size={18} /> {status.lastBackupAt ? 'The last successful backup is more than 48 hours old.' : 'No backup has run yet.'} Check hush-backup.timer on the server.</div>}
       <Card title="Server">
         <Row title="Members" sub={`${status.users} of ${status.maxUsers}`}><Users size={18} /></Row>
-        <Row title="Free disk" sub={`${bytesLabel(status.diskFreeBytes)} free · AezGram uses ${bytesLabel(status.dataBytes)}`}>{status.uploadsBlocked && <span className="chip warn">Uploads paused</span>}</Row>
+        <Row title="Free disk" sub={`${bytesLabel(status.diskFreeBytes)} free · Hush uses ${bytesLabel(status.dataBytes)}`}>{status.uploadsBlocked && <span className="chip warn">Uploads paused</span>}</Row>
         <Row title="Last backup" sub={status.lastBackupAt ? `${new Date(status.lastBackupAt).toLocaleString()}${status.backupMessage ? ' · ' + status.backupMessage : ''}` : 'Never'}>
           <span className={`chip ${backupStale ? 'warn' : 'ok'}`}>{backupStale ? 'Attention' : 'OK'}</span>
         </Row>
@@ -441,7 +441,7 @@ export function Settings() {
           <LogOut size={20} /> Log out
         </button>
         <p className="settings-foot faint">
-          <Moon size={12} /> AezGram · end-to-end encrypted
+          <Moon size={12} /> Hush · end-to-end encrypted
         </p>
       </nav>
       <section className="settings-body">

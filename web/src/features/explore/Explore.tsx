@@ -72,7 +72,7 @@ export function Explore({ mode = 'explore' }: { mode?: 'explore' | 'search' }) {
       </div>
       {q || mode === 'search' ? (
         <div className="search-results">
-          {!q && people.length > 0 && <h3 className="section-label">Everyone on AezGram</h3>}
+          {!q && people.length > 0 && <h3 className="section-label">Everyone on Hush</h3>}
           {tags.map(([t, n]) => (
             <button key={t} className="user-row result" onClick={() => navigate(`/explore/tags/${encodeURIComponent(t)}`)}>
               <span className="tag-glyph small">
@@ -105,7 +105,7 @@ export function Explore({ mode = 'explore' }: { mode?: 'explore' | 'search' }) {
         <PostGrid posts={explore} />
       ) : (
         <Empty icon={<Compass size={36} />} title="Nothing to explore yet">
-          Public posts from everyone on AezGram will show up here.
+          Public posts from everyone on Hush will show up here.
         </Empty>
       )}
     </div>

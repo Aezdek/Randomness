@@ -1,20 +1,20 @@
-# AezGram on Resolute. The image is pinned in .env (AEZGRAM_IMAGE + AEZGRAM_IMAGE_ID, set by update.sh), never
+# Hush on Resolute. The image is pinned in .env (HUSH_IMAGE + HUSH_IMAGE_ID, set by update.sh), never
 # pulled: there is no registry to pull from and no Watchtower, so nothing changes until you run update.sh.
-name: aezgram
+name: hush
 
 services:
-  aezgram:
-    image: ${AEZGRAM_IMAGE:?run update.sh to install an image}
+  hush:
+    image: ${HUSH_IMAGE:?run update.sh to install an image}
     pull_policy: never
     restart: unless-stopped
     env_file: .env
     environment:
-      AEZGRAM_DATA_DIR: /data
-      AEZGRAM_HOST: 0.0.0.0
-      AEZGRAM_PORT: "8080"
+      HUSH_DATA_DIR: /data
+      HUSH_HOST: 0.0.0.0
+      HUSH_PORT: "8080"
     # Only cloudflared on this machine talks to it.
     ports:
-      - "127.0.0.1:${AEZGRAM_HOST_PORT:?}:8080"
+      - "127.0.0.1:${HUSH_HOST_PORT:?}:8080"
     volumes:
       - ./data:/data
     # Shares 6.7 GB with Immich, Jellyfin, Ollama and openGym: the JVM heap is capped at 384 MB inside this.

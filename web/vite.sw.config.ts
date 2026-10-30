@@ -11,7 +11,7 @@ export default defineConfig({
     lib: {
       entry: 'src/sw/sw.ts',
       formats: ['iife'],
-      name: 'aezgramSw',
+      name: 'hushSw',
       fileName: () => 'sw.js',
     },
   },

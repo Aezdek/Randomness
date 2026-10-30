@@ -22,7 +22,7 @@ interface Item {
   link?: string;
 }
 
-const SEEN_KEY = 'aezgram.activitySeen';
+const SEEN_KEY = 'hush.activitySeen';
 const seenAt = () => Number(localStorage.getItem(SEEN_KEY) ?? 0);
 
 function rootOf(entities: Record<string, Entity>, entity: Entity): Entity {

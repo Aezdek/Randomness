@@ -21,7 +21,7 @@ import { ThreadInfo } from './ThreadInfo';
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 function useVanish(threadId: string) {
-  const key = `aezgram.vanish.${threadId}`;
+  const key = `hush.vanish.${threadId}`;
   const [on, setOn] = useState(() => localStorage.getItem(key) === '1');
   return [on, (v: boolean) => (localStorage.setItem(key, v ? '1' : '0'), setOn(v))] as const;
 }

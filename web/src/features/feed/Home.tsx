@@ -21,7 +21,7 @@ function Members() {
     <section className="side-section">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <span className="muted" style={{ fontWeight: 650, fontSize: 14 }}>
-          On AezGram
+          On Hush
         </span>
       </div>
       {suggested.slice(0, 9).map((u) => (
@@ -79,7 +79,7 @@ function Welcome() {
     <div className="welcome-card">
       <div className="welcome-glow" aria-hidden />
       <Sparkles size={28} className="grad-icon" />
-      <h2>Welcome to AezGram</h2>
+      <h2>Welcome to Hush</h2>
       <p className="muted">Follow the people you know and share your first moment. Only the people you choose can ever see it.</p>
       {others.length > 0 && (
         <div className="welcome-people">

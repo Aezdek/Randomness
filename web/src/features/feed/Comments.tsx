@@ -59,7 +59,7 @@ export function Comments({ parent, header }: { parent: Entity; header?: React.Re
     <div className="comments">
       {header}
       {top.map((c) => (
-        <CommentRow key={c.dto.id} entity={c} onReply={(target) => window.dispatchEvent(new CustomEvent('aezgram:reply', { detail: target }))} />
+        <CommentRow key={c.dto.id} entity={c} onReply={(target) => window.dispatchEvent(new CustomEvent('hush:reply', { detail: target }))} />
       ))}
       {!top.length && !header && <p className="faint" style={{ textAlign: 'center', padding: 32 }}>No comments yet. Start the conversation.</p>}
     </div>
@@ -80,8 +80,8 @@ export function CommentComposer({ parent }: { parent: Entity }) {
       setText(`@${name} `);
       document.getElementById('comment-input')?.focus();
     };
-    window.addEventListener('aezgram:reply', onReply);
-    return () => window.removeEventListener('aezgram:reply', onReply);
+    window.addEventListener('hush:reply', onReply);
+    return () => window.removeEventListener('hush:reply', onReply);
   }, [users, me]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

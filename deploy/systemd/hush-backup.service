@@ -1,0 +1,11 @@
+[Unit]
+Description=Hush off-site backup (ciphertext only, to the encrypted rclone remote)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@ROOT@/backup.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=6h

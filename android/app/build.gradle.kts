@@ -10,17 +10,17 @@ plugins {
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
-    namespace = "xyz.aezdek.aezgram"
+    namespace = "xyz.aezdek.hush"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "xyz.aezdek.aezgram"
+        applicationId = "xyz.aezdek.hush"
         minSdk = 29
         targetSdk = 36
         versionCode = runNumber
         versionName = "1.0.$runNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "SERVER_URL", "\"${System.getenv("AEZGRAM_SERVER_URL") ?: "https://gram.aezdek.xyz"}\"")
+        buildConfigField("String", "SERVER_URL", "\"${System.getenv("HUSH_SERVER_URL") ?: "https://hush.aezdek.xyz"}\"")
     }
 
     buildTypes {
@@ -78,7 +78,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(libs.aezgram.client)
+    implementation(libs.hush.client)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

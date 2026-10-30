@@ -11,7 +11,7 @@ interface UiState {
 
 function initialTheme(): UiState['theme'] {
   try {
-    return (localStorage.getItem('aezgram.theme') as UiState['theme']) || 'system';
+    return (localStorage.getItem('hush.theme') as UiState['theme']) || 'system';
   } catch {
     return 'system';
   }
@@ -23,7 +23,7 @@ export function applyTheme(theme: UiState['theme']) {
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
   try {
-    localStorage.setItem('aezgram.theme', theme);
+    localStorage.setItem('hush.theme', theme);
   } catch {
     /* private mode */
   }

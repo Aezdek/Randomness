@@ -4,14 +4,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Three people use AezGram end to end against a real server: sign up with invites, profiles, follow requests,
+ * Three people use Hush end to end against a real server: sign up with invites, profiles, follow requests,
  * posts with photos (encrypted media), likes and comments, a story, Direct messages and a real WebRTC video call
  * (Chromium's fake camera). At the end, nothing written to the server's disk contains plaintext.
  *
- * Needs AEZGRAM_DATA_DIR (to read the first invite and scan for plaintext). SHOTS_DIR saves screenshots.
+ * Needs HUSH_DATA_DIR (to read the first invite and scan for plaintext). SHOTS_DIR saves screenshots.
  */
 
-const DATA_DIR = process.env.AEZGRAM_DATA_DIR ?? '';
+const DATA_DIR = process.env.HUSH_DATA_DIR ?? '';
 const SHOTS = process.env.SHOTS_DIR;
 const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const MARK = 'zebra-quartz-7731';
@@ -100,8 +100,8 @@ function scanForPlaintext(dir: string, needle: string): string[] {
   return hits;
 }
 
-test('three people use AezGram end to end', async ({ browser }) => {
-  expect(DATA_DIR, 'set AEZGRAM_DATA_DIR').not.toBe('');
+test('three people use Hush end to end', async ({ browser }) => {
+  expect(DATA_DIR, 'set HUSH_DATA_DIR').not.toBe('');
   const firstInvite = readFileSync(join(DATA_DIR, 'first-invite.txt'), 'utf8').trim();
 
   // ------------------------------------------------------------------------------------------- accounts

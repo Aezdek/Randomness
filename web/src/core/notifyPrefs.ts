@@ -29,7 +29,7 @@ export function usePushPrefsMirror() {
   const me = useApp((s) => s.me?.id);
   const key = JSON.stringify(pushPrefsOf(settings));
   useEffect(() => {
-    const slot = `aezgram.pushPrefs.${me}`;
+    const slot = `hush.pushPrefs.${me}`;
     if (!me || sessionStorage.getItem(slot) === key) return;
     api
       .put('/push/prefs', JSON.parse(key))

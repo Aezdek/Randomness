@@ -8,6 +8,6 @@ ingress:
     service: http://127.0.0.1:8090
     originRequest:
       connectTimeout: 30s
-  - hostname: gram.aezdek.xyz
+  - hostname: hush.aezdek.xyz
     service: http://127.0.0.1:8472
   - service: http_status:404

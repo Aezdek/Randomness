@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Helpers shared by the AezGram deploy scripts. Sourced, never run on its own.
+# Helpers shared by the Hush deploy scripts. Sourced, never run on its own.
 #
 # Everything that touches the host (cloudflared, PORTS.md, disks) lives here as small functions so
 # deploy/tests/run.sh can exercise each one against fixtures without root or a real tunnel.
@@ -124,7 +124,7 @@ ports_add_row() {
       [ -s "$file" ] && echo
       echo "| Port | Service | Notes |"
       echo "| --- | --- | --- |"
-      echo "| $port | aezgram | $notes |"
+      echo "| $port | hush | $notes |"
     } >>"$file"
     return 0
   fi
@@ -134,10 +134,10 @@ ports_add_row() {
       n = tolower(name)
       gsub(/^[ \t]+|[ \t]+$/, "", n)
       if (n ~ /port/) return port
-      if (n ~ /^(service|app|name|stack|container|what|project)/) return "aezgram"
-      if (n ~ /(path|dir|folder|location|compose)/) return "/opt/hl/aezgram"
+      if (n ~ /^(service|app|name|stack|container|what|project)/) return "hush"
+      if (n ~ /(path|dir|folder|location|compose)/) return "/opt/hl/hush"
       if (n ~ /(bind|interface|listen|address|host$)/) return "127.0.0.1"
-      if (n ~ /(url|domain|hostname|public|route)/) return "gram.aezdek.xyz"
+      if (n ~ /(url|domain|hostname|public|route)/) return "hush.aezdek.xyz"
       if (n ~ /(note|desc|purpose|comment|use|what)/) return notes
       return "-"
     }
@@ -160,7 +160,7 @@ ports_add_row() {
 
 # ------------------------------------------------------------------------------------------------ disks
 
-# disk_problem DIR: prints why DIR must not hold AezGram's data (USB, removable, the external HDD), or nothing.
+# disk_problem DIR: prints why DIR must not hold Hush's data (USB, removable, the external HDD), or nothing.
 disk_problem() {
   local dir=$1 real source disk TRAN RM HOTPLUG
   real=$(realpath -m "$dir")

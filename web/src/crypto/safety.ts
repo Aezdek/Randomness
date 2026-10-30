@@ -18,11 +18,11 @@ export function safetyPair(a: Uint8Array, b: Uint8Array): string {
 
 export const groupDigits = (digits: string): string[] => digits.match(/.{1,5}/g) ?? [];
 
-export const qrPayload = (userId: string, signPk: Uint8Array): string => `aezgram:verify:${userId}:${b64(signPk)}`;
+export const qrPayload = (userId: string, signPk: Uint8Array): string => `hush:verify:${userId}:${b64(signPk)}`;
 
 export function parseQr(payload: string): { userId: string; signPk: Uint8Array } | null {
   const parts = payload.split(':');
-  if (parts.length !== 4 || parts[0] !== 'aezgram' || parts[1] !== 'verify') return null;
+  if (parts.length !== 4 || parts[0] !== 'hush' || parts[1] !== 'verify') return null;
   try {
     const signPk = unb64(parts[3]);
     return signPk.length === 32 ? { userId: parts[2], signPk } : null;

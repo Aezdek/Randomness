@@ -118,7 +118,7 @@ media3-effect = { module = "androidx.media3:media3-effect", version.ref = "media
 media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 webrtc = { module = "io.getstream:stream-webrtc-android", version.ref = "webrtc" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
-aezgram-client = { module = "xyz.aezdek.aezgram:client", version = "1.0" }
+hush-client = { module = "xyz.aezdek.hush:client", version = "1.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

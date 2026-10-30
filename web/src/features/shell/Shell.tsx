@@ -89,7 +89,7 @@ function SideNav() {
   const activity = useActivityBadge();
   return (
     <nav className="sidenav" aria-label="Main">
-      <Link to="/" className="brand" aria-label="AezGram home">
+      <Link to="/" className="brand" aria-label="Hush home">
         <Wordmark className="word" />
         <span className="mark">
           <BrandMark size={28} />

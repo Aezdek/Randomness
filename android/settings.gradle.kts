@@ -24,8 +24,8 @@ dependencyResolutionManagement {
 }
 
 // The Android app. The shared protocol, crypto and client logic come from the JVM build one level up, where they
-// are tested against the real server; Gradle substitutes xyz.aezdek.aezgram:* with those projects.
-rootProject.name = "AezGramAndroid"
+// are tested against the real server; Gradle substitutes xyz.aezdek.hush:* with those projects.
+rootProject.name = "HushAndroid"
 
 includeBuild("..")
 include(":app")

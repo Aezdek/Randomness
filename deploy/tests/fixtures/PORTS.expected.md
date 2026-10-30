@@ -10,7 +10,7 @@ Everything binds to 127.0.0.1 unless noted.
 | 8096 | Jellyfin | 0.0.0.0 | /opt/hl/jellyfin | media |
 | 8470 | openGym | 127.0.0.1 | /opt/hl/opengym | |
 | 11434 | Ollama | 127.0.0.1 | - | LLMs |
-| 8472 | aezgram | 127.0.0.1 | /opt/hl/aezgram | AezGram (gram.aezdek.xyz), 127.0.0.1 only, /opt/hl/aezgram |
+| 8472 | hush | 127.0.0.1 | /opt/hl/hush | Hush (hush.aezdek.xyz), 127.0.0.1 only, /opt/hl/hush |
 
 ## Reserved
 

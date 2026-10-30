@@ -11,7 +11,7 @@ DEPLOY=$(dirname "$TESTS")
 FIX=$TESTS/fixtures
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-export AEZGRAM_TEST=1 HEALTH_POLL_SECONDS=0.1 HEALTH_SECONDS=2 RESTART_SETTLE_SECONDS=1
+export HUSH_TEST=1 HEALTH_POLL_SECONDS=0.1 HEALTH_SECONDS=2 RESTART_SETTLE_SECONDS=1
 export PATH="$TESTS/stubs:$PATH"
 # shellcheck source=deploy/lib.sh
 . "$DEPLOY/lib.sh"
@@ -35,7 +35,7 @@ check() { # check NAME COMMAND...
 }
 same() { diff -u "$1" "$2"; }
 
-# A fresh fake Resolute: tunnel config, PORTS.md, a published release, empty /opt/hl/aezgram.
+# A fresh fake Resolute: tunnel config, PORTS.md, a published release, empty /opt/hl/hush.
 sandbox() {
   local box=$WORK/$1 config=${2:-two-space.yml}
   rm -rf "$box"
@@ -43,54 +43,54 @@ sandbox() {
   cp "$FIX/$config" "$box/etc/cloudflared/config.yml"
   cp "$FIX/PORTS.md" "$box/opt/hl/PORTS.md"
   export STUB_STATE=$box/state
-  export AEZGRAM_ROOT=$box/opt/hl/aezgram CLOUDFLARED_CONFIG=$box/etc/cloudflared/config.yml
-  export PORTS_MD=$box/opt/hl/PORTS.md SYSTEMD_DIR=$box/systemd AEZGRAM_RELEASE_BASE=file://$box/release
+  export HUSH_ROOT=$box/opt/hl/hush CLOUDFLARED_CONFIG=$box/etc/cloudflared/config.yml
+  export PORTS_MD=$box/opt/hl/PORTS.md SYSTEMD_DIR=$box/systemd HUSH_RELEASE_BASE=file://$box/release
   export RCLONE_REMOTE=$box/remote STUB_BOUND_PORTS="8471"
   unset STUB_BREAK_AFTER_RESTART STUB_VALIDATE_FAIL STUB_BROKEN_VERSION
   publish "$box" 1.0.1 1111111111111111111111111111111111111111
   BOX=$box
 }
 
-# publish BOX VERSION COMMIT: what CI uploads to the aezgram-latest release.
+# publish BOX VERSION COMMIT: what CI uploads to the hush-latest release.
 publish() {
   local release=$1/release
-  head -c 4096 /dev/urandom | gzip >"$release/aezgram-image.tar.gz"
-  cat >"$release/aezgram-release.env" <<EOF
-AEZGRAM_COMMIT=$3
-AEZGRAM_VERSION=$2
-AEZGRAM_IMAGE_TAG=aezgram:${3:0:12}
-AEZGRAM_IMAGE_SHA256=$(sha256sum "$release/aezgram-image.tar.gz" | cut -c1-64)
-AEZGRAM_BUILT_AT=2026-10-30T10:00:00Z
+  head -c 4096 /dev/urandom | gzip >"$release/hush-image.tar.gz"
+  cat >"$release/hush-release.env" <<EOF
+HUSH_COMMIT=$3
+HUSH_VERSION=$2
+HUSH_IMAGE_TAG=hush:${3:0:12}
+HUSH_IMAGE_SHA256=$(sha256sum "$release/hush-image.tar.gz" | cut -c1-64)
+HUSH_BUILT_AT=2026-10-30T10:00:00Z
 EOF
-  echo "aezgram:${3:0:12}" >"$1/state/next-tag"
+  echo "hush:${3:0:12}" >"$1/state/next-tag"
 }
 
 echo "cloudflared ingress"
 for name in two-space flush-comments four-space; do
-  ingress_insert "$FIX/$name.yml" "$WORK/$name.out" gram.aezdek.xyz http://127.0.0.1:8472
+  ingress_insert "$FIX/$name.yml" "$WORK/$name.out" hush.aezdek.xyz http://127.0.0.1:8472
   check "$name: rule goes right above the catch-all, nothing else changes" same "$FIX/$name.expected.yml" "$WORK/$name.out"
   if [ -n "${REAL_CLOUDFLARED:-}" ]; then
     check "$name: cloudflared accepts the result" "$REAL_CLOUDFLARED" tunnel --config "$WORK/$name.out" ingress validate
-    check "$name: gram routes to AezGram" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://gram.aezdek.xyz | grep -q 127.0.0.1:8472"
+    check "$name: gram routes to Hush" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://hush.aezdek.xyz | grep -q 127.0.0.1:8472"
     check "$name: lucifer still routes where it did" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://lucifer.aezdek.xyz | grep -Eq 'localhost:8080|127.0.0.1:8080'"
   fi
 done
-ingress_insert "$FIX/no-catchall.yml" "$WORK/none.out" gram.aezdek.xyz http://127.0.0.1:8472
+ingress_insert "$FIX/no-catchall.yml" "$WORK/none.out" hush.aezdek.xyz http://127.0.0.1:8472
 check "a config without a catch-all is refused" test $? -eq 3
 check "hostnames are read with quotes and comments" bash -c "[ \"\$(. '$DEPLOY/lib.sh'; ingress_hosts '$FIX/flush-comments.yml' | tr '\n' ' ')\" = 'lucifer.aezdek.xyz print.aezdek.xyz ' ]"
 
 echo "PORTS.md"
 cp "$FIX/PORTS.md" "$WORK/PORTS.md"
 STUB_BOUND_PORTS=8471 check "the first port neither listed nor bound is 8472" test "$(STUB_BOUND_PORTS=8471 pick_port "$WORK/PORTS.md" 8470 8499)" = 8472
-ports_add_row "$WORK/PORTS.md" 8472 "AezGram (gram.aezdek.xyz), 127.0.0.1 only, /opt/hl/aezgram"
+ports_add_row "$WORK/PORTS.md" 8472 "Hush (hush.aezdek.xyz), 127.0.0.1 only, /opt/hl/hush"
 check "the row matches the table's own columns" same "$FIX/PORTS.expected.md" "$WORK/PORTS.md"
-check "a recorded port is found again" test "$(ports_port_of "$WORK/PORTS.md" aezgram)" = 8472
+check "a recorded port is found again" test "$(ports_port_of "$WORK/PORTS.md" hush)" = 8472
 rm -f "$WORK/fresh.md"
-ports_add_row "$WORK/fresh.md" 8472 "AezGram"
-check "a missing PORTS.md gets a table" grep -q '^| 8472 | aezgram | AezGram |$' "$WORK/fresh.md"
+ports_add_row "$WORK/fresh.md" 8472 "Hush"
+check "a missing PORTS.md gets a table" grep -q '^| 8472 | hush | Hush |$' "$WORK/fresh.md"
 
 echo "disks"
-check "the external HDD is refused" test -n "$(EXTERNAL_HDD_MOUNT=/mnt/hdd disk_problem /mnt/hdd/aezgram/data)"
+check "the external HDD is refused" test -n "$(EXTERNAL_HDD_MOUNT=/mnt/hdd disk_problem /mnt/hdd/hush/data)"
 check "a path elsewhere is not" test -z "$(EXTERNAL_HDD_MOUNT=/mnt/hdd disk_problem "$WORK")"
 
 echo "install.sh"
@@ -101,13 +101,13 @@ status=$?
 check "a fresh install succeeds" test $status -eq 0
 [ $status -eq 0 ] || echo "$out" | sed 's/^/      /'
 check "gram is routed through the tunnel above the catch-all" \
-  bash -c "grep -B0 -A2 'hostname: gram.aezdek.xyz' '$BOX/etc/cloudflared/config.yml' | grep -q 'service: http://127.0.0.1:8472' && tail -n1 '$BOX/etc/cloudflared/config.yml' | grep -q http_status:404"
+  bash -c "grep -B0 -A2 'hostname: hush.aezdek.xyz' '$BOX/etc/cloudflared/config.yml' | grep -q 'service: http://127.0.0.1:8472' && tail -n1 '$BOX/etc/cloudflared/config.yml' | grep -q http_status:404"
 check "the original tunnel config was backed up first" bash -c "ls '$BOX'/etc/cloudflared/config.yml.bak-* | head -n1 | xargs sha256sum | cut -d' ' -f1 | grep -q '${original%% *}'"
 check "cloudflared validated the edit before the restart" bash -c "grep -n 'ingress validate' '$STUB_STATE/cloudflared.log' >/dev/null && grep -q 'restart cloudflared' '$STUB_STATE/systemctl.log'"
-check "the port is recorded in PORTS.md" grep -q '^| 8472 | aezgram |' "$BOX/opt/hl/PORTS.md"
-check ".env pins the image by digest and is private" bash -c "grep -q '^AEZGRAM_IMAGE_ID=sha256:' '$AEZGRAM_ROOT/.env' && [ \$(stat -c %a '$AEZGRAM_ROOT/.env') = 600 ]"
+check "the port is recorded in PORTS.md" grep -q '^| 8472 | hush |' "$BOX/opt/hl/PORTS.md"
+check ".env pins the image by digest and is private" bash -c "grep -q '^HUSH_IMAGE_ID=sha256:' '$HUSH_ROOT/.env' && [ \$(stat -c %a '$HUSH_ROOT/.env') = 600 ]"
 check "the server runs the published version" test "$(cat "$STUB_STATE/running")" = 1.0.1
-check "the backup timer is installed for this root" bash -c "grep -q 'ExecStart=$AEZGRAM_ROOT/backup.sh' '$BOX/systemd/aezgram-backup.service' && grep -q 'enable --now aezgram-backup.timer' '$STUB_STATE/systemctl.log'"
+check "the backup timer is installed for this root" bash -c "grep -q 'ExecStart=$HUSH_ROOT/backup.sh' '$BOX/systemd/hush-backup.service' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
 check "the summary shows the first invite" grep -q 'ABCDE-FGHJK' <<<"$out"
 
 edited=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
@@ -115,7 +115,7 @@ backups=$(ls "$BOX"/etc/cloudflared/config.yml.bak-* | wc -l)
 out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "re-running is safe" test $? -eq 0
 check "re-running leaves the tunnel config alone" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$edited"
-check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c aezgram '$BOX/opt/hl/PORTS.md') = 1 ]"
+check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c hush '$BOX/opt/hl/PORTS.md') = 1 ]"
 
 sandbox regress flush-comments.yml
 original=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
@@ -131,7 +131,7 @@ export STUB_VALIDATE_FAIL=1
 out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "if cloudflared rejects the edit, install fails" test $? -ne 0
 check "... without touching the config or restarting the tunnel" \
-  bash -c "[ \"\$(sha256sum <'$BOX/etc/cloudflared/config.yml')\" = '$original' ] && ! grep -q 'restart cloudflared' '$STUB_STATE/systemctl.log' && ! ls '$BOX'/etc/cloudflared/.config.aezgram.* 2>/dev/null"
+  bash -c "[ \"\$(sha256sum <'$BOX/etc/cloudflared/config.yml')\" = '$original' ] && ! grep -q 'restart cloudflared' '$STUB_STATE/systemctl.log' && ! ls '$BOX'/etc/cloudflared/.config.hush.* 2>/dev/null"
 
 sandbox nocatch no-catchall.yml
 out=$(bash "$DEPLOY/install.sh" 2>&1)
@@ -150,46 +150,46 @@ check "answering no changes nothing" test "$(cat "$STUB_STATE/running")" = 1.0.1
 out=$(echo y | bash "$DEPLOY/update.sh" 2>&1)
 check "answering yes installs it" test "$(cat "$STUB_STATE/running")" = 1.0.2
 
-touch "$AEZGRAM_ROOT/data/aezgram.db"
+touch "$HUSH_ROOT/data/hush.db"
 publish "$BOX" 1.0.3 3333333333333333333333333333333333333333
 export STUB_BROKEN_VERSION=1.0.3
 out=$(bash "$DEPLOY/update.sh" --yes 2>&1)
-check "a build that fails its health check is rolled back" bash -c "[ $? -ne 0 ] && [ \$(cat '$STUB_STATE/running') = 1.0.2 ] && grep -q '^AEZGRAM_VERSION=1.0.2' '$AEZGRAM_ROOT/.env'"
-check "... after copying the database" test -f "$AEZGRAM_ROOT/data/snapshots/pre-update-222222222222.db"
+check "a build that fails its health check is rolled back" bash -c "[ $? -ne 0 ] && [ \$(cat '$STUB_STATE/running') = 1.0.2 ] && grep -q '^HUSH_VERSION=1.0.2' '$HUSH_ROOT/.env'"
+check "... after copying the database" test -f "$HUSH_ROOT/data/snapshots/pre-update-222222222222.db"
 unset STUB_BROKEN_VERSION
 
 publish "$BOX" 1.0.4 4444444444444444444444444444444444444444
-head -c 100 /dev/urandom >>"$BOX/release/aezgram-image.tar.gz"
+head -c 100 /dev/urandom >>"$BOX/release/hush-image.tar.gz"
 out=$(bash "$DEPLOY/update.sh" --yes 2>&1)
 check "a download that doesn't match the published digest is refused" bash -c "[ $? -ne 0 ] && [ \$(cat '$STUB_STATE/running') = 1.0.2 ]"
 
-echo "image$RANDOM" >"$STUB_STATE/images/aezgram:222222222222"
+echo "image$RANDOM" >"$STUB_STATE/images/hush:222222222222"
 out=$(bash "$DEPLOY/update.sh" --rollback 2>&1)
 check "an image whose digest no longer matches .env is not started" bash -c "[ $? -ne 0 ] || grep -q 'no longer matches' <<<'$out'"
 
 echo "backup.sh / restore.sh"
 if command -v rclone >/dev/null; then
   sandbox backup
-  data=$AEZGRAM_ROOT/data
+  data=$HUSH_ROOT/data
   mkdir -p "$data/snapshots" "$data/blobs/ab"
-  install -m 600 /dev/null "$AEZGRAM_ROOT/.env"
+  install -m 600 /dev/null "$HUSH_ROOT/.env"
   today=$(date +%F)
-  echo "database of $today" >"$data/snapshots/aezgram-$today.db"
+  echo "database of $today" >"$data/snapshots/hush-$today.db"
   echo "ciphertext one" >"$data/blobs/ab/one"
   echo "ciphertext two" >"$data/blobs/ab/two"
-  mkdir -p "$data/signing" && echo "the key" >"$data/signing/aezgram.p12" && echo "pw" >"$data/signing/password"
+  mkdir -p "$data/signing" && echo "the key" >"$data/signing/hush.p12" && echo "pw" >"$data/signing/password"
   out=$(bash "$DEPLOY/backup.sh" 2>&1)
   check "a backup succeeds" test $? -eq 0
   check "... and says so in backup-status.json" grep -q '"ok":true' "$data/backup-status.json"
   rm "$data/blobs/ab/two"
   out=$(bash "$DEPLOY/backup.sh" 2>&1)
-  check "media deleted since is kept under deleted/DATE" test -f "$RCLONE_REMOTE/aezgram/deleted/$today/ab/two"
+  check "media deleted since is kept under deleted/DATE" test -f "$RCLONE_REMOTE/hush/deleted/$today/ab/two"
   restore_root=$WORK/restored
   out=$(bash "$DEPLOY/restore.sh" --to "$restore_root" --remote "$RCLONE_REMOTE" 2>&1)
   check "a restore succeeds" test $? -eq 0
   check "... with the database and every blob the snapshot can reference" \
-    bash -c "grep -q 'database of $today' '$restore_root/data/aezgram.db' && [ -f '$restore_root/data/blobs/ab/one' ] && [ -f '$restore_root/data/blobs/ab/two' ]"
-  check "... and the Android signing key" grep -q 'the key' "$restore_root/data/signing/aezgram.p12"
+    bash -c "grep -q 'database of $today' '$restore_root/data/hush.db' && [ -f '$restore_root/data/blobs/ab/one' ] && [ -f '$restore_root/data/blobs/ab/two' ]"
+  check "... and the Android signing key" grep -q 'the key' "$restore_root/data/signing/hush.p12"
   out=$(bash "$DEPLOY/restore.sh" --to "$restore_root" --remote "$RCLONE_REMOTE" 2>&1)
   check "restoring over existing data needs --force" test $? -ne 0
   RCLONE_REMOTE=nosuchremote: bash "$DEPLOY/backup.sh" >/dev/null 2>&1

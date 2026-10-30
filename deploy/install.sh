@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Sets AezGram up on Resolute, once. Safe to re-run: each step checks before it changes anything.
+# Sets Hush up on Resolute, once. Safe to re-run: each step checks before it changes anything.
 #
-#   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/aezgram-latest/install.sh
+#   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/hush-latest/install.sh
 #   sudo bash install.sh
 #
 # Optional, for TURN relays (calls on networks that block peer-to-peer):
@@ -9,24 +9,24 @@
 #
 # What it does:
 #   1. checks Docker, cloudflared and the tools it needs; refuses to put data on a USB/removable disk
-#   2. lays out /opt/hl/aezgram like the other /opt/hl stacks and picks a port PORTS.md doesn't list
+#   2. lays out /opt/hl/hush like the other /opt/hl stacks and picks a port PORTS.md doesn't list
 #   3. installs and starts the newest image CI published (pinned by digest, see update.sh)
-#   4. adds gram.aezdek.xyz to /etc/cloudflared/config.yml *carefully*: backup, insert above the catch-all,
+#   4. adds hush.aezdek.xyz to /etc/cloudflared/config.yml *carefully*: backup, insert above the catch-all,
 #      `cloudflared tunnel ingress validate`, restart, re-check lucifer/print and every other hostname, and
 #      restore the backup if anything got worse
 #   5. installs the nightly backup timer (to the encrypted Google Drive remote)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT=${AEZGRAM_ROOT:-/opt/hl/aezgram}
-HOST=${AEZGRAM_HOSTNAME:-gram.aezdek.xyz}
-REPO=${AEZGRAM_REPO:-Aezdek/Randomness}
-RELEASE_BASE=${AEZGRAM_RELEASE_BASE:-https://github.com/$REPO/releases/download/aezgram-latest}
+ROOT=${HUSH_ROOT:-/opt/hl/hush}
+HOST=${HUSH_HOSTNAME:-hush.aezdek.xyz}
+REPO=${HUSH_REPO:-Aezdek/Randomness}
+RELEASE_BASE=${HUSH_RELEASE_BASE:-https://github.com/$REPO/releases/download/hush-latest}
 CF_CONFIG=${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}
 CF_SERVICE=${CLOUDFLARED_SERVICE:-cloudflared}
 PORTS_MD=${PORTS_MD:-/opt/hl/PORTS.md}
 SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
-PORT_RANGE=${AEZGRAM_PORT_RANGE:-8470-8499}
+PORT_RANGE=${HUSH_PORT_RANGE:-8470-8499}
 RESTART_SETTLE_SECONDS=${RESTART_SETTLE_SECONDS:-60}
 
 # The deploy files: next to this script in a checkout, otherwise from the same release as the image.
@@ -35,13 +35,13 @@ if [ -f "$HERE/lib.sh" ] && [ -f "$HERE/compose.yml" ]; then
 else
   SRC=$(mktemp -d)
   trap 'rm -rf "$SRC"' EXIT
-  curl -fsSL --retry 3 "$RELEASE_BASE/aezgram-deploy.tar.gz" | tar -xz -C "$SRC" ||
+  curl -fsSL --retry 3 "$RELEASE_BASE/hush-deploy.tar.gz" | tar -xz -C "$SRC" ||
     { echo "error: could not download the deploy files from $RELEASE_BASE" >&2; exit 1; }
 fi
 # shellcheck source=deploy/lib.sh
 . "$SRC/lib.sh"
 
-[ "$(id -u)" = 0 ] || [ -n "${AEZGRAM_TEST:-}" ] || die "run with sudo"
+[ "$(id -u)" = 0 ] || [ -n "${HUSH_TEST:-}" ] || die "run with sudo"
 
 # ------------------------------------------------------------------------------------------- 1. preflight
 log "Checking this machine"
@@ -49,14 +49,14 @@ missing=()
 for tool in docker curl flock ss findmnt lsblk sha256sum awk sed tar; do command -v "$tool" >/dev/null || missing+=("$tool"); done
 [ ${#missing[@]} -eq 0 ] || die "missing: ${missing[*]}"
 docker compose version >/dev/null 2>&1 || die "the Docker compose plugin is missing (apt install docker-compose-plugin)"
-command -v cloudflared >/dev/null || die "cloudflared is not installed; AezGram is served through the existing tunnel"
+command -v cloudflared >/dev/null || die "cloudflared is not installed; Hush is served through the existing tunnel"
 [ -f "$CF_CONFIG" ] || die "$CF_CONFIG not found (set CLOUDFLARED_CONFIG=... if it lives elsewhere)"
 grep -q '^ingress:' "$CF_CONFIG" || die "$CF_CONFIG has no ingress: section"
 
 mkdir -p "$ROOT/data/blobs" "$ROOT/data/snapshots"
 problem=$(disk_problem "$ROOT/data")
 if [ -n "$problem" ]; then
-  [ -n "${ALLOW_EXTERNAL_DISK:-}" ] || die "$problem. AezGram's data must live on the internal disk (set ALLOW_EXTERNAL_DISK=1 to override)."
+  [ -n "${ALLOW_EXTERNAL_DISK:-}" ] || die "$problem. Hush's data must live on the internal disk (set ALLOW_EXTERNAL_DISK=1 to override)."
   warn "$problem (allowed by ALLOW_EXTERNAL_DISK)"
 fi
 note "Data: $ROOT/data ($(df -h --output=avail "$ROOT/data" | tail -n1 | tr -d ' ') free)"
@@ -68,13 +68,13 @@ for file in compose.yml update.sh backup.sh restore.sh lib.sh RUNBOOK.md; do
 done
 
 ENV_FILE=$ROOT/.env
-port=$(env_get "$ENV_FILE" AEZGRAM_HOST_PORT)
+port=$(env_get "$ENV_FILE" HUSH_HOST_PORT)
 if [ -z "$port" ]; then
-  port=$(ports_port_of "$PORTS_MD" aezgram)
+  port=$(ports_port_of "$PORTS_MD" hush)
   if [ -z "$port" ]; then
     port=$(pick_port "$PORTS_MD" "${PORT_RANGE%-*}" "${PORT_RANGE#*-}") || die "no free port in $PORT_RANGE"
     if [ -f "$PORTS_MD" ] || [ -d "$(dirname "$PORTS_MD")" ]; then
-      ports_add_row "$PORTS_MD" "$port" "AezGram ($HOST), 127.0.0.1 only, $ROOT"
+      ports_add_row "$PORTS_MD" "$port" "Hush ($HOST), 127.0.0.1 only, $ROOT"
       note "Port $port recorded in $PORTS_MD"
     fi
   fi
@@ -86,20 +86,20 @@ note "Port: 127.0.0.1:$port"
 if [ ! -f "$ENV_FILE" ]; then
   install -m 600 /dev/null "$ENV_FILE"
   {
-    echo "# AezGram settings. update.sh manages the AEZGRAM_IMAGE* / COMMIT / VERSION lines."
-    echo "AEZGRAM_REPO=$REPO"
-    echo "AEZGRAM_VAPID_SUBJECT=mailto:admin@${HOST#*.}"
-    echo "AEZGRAM_MIN_FREE_GB=10"
+    echo "# Hush settings. update.sh manages the HUSH_IMAGE* / COMMIT / VERSION lines."
+    echo "HUSH_REPO=$REPO"
+    echo "HUSH_VAPID_SUBJECT=mailto:admin@${HOST#*.}"
+    echo "HUSH_MIN_FREE_GB=10"
     echo "TZ=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo UTC)"
   } >>"$ENV_FILE"
 fi
-env_set "$ENV_FILE" AEZGRAM_HOST_PORT "$port"
+env_set "$ENV_FILE" HUSH_HOST_PORT "$port"
 
 # TURN: only with a Cloudflare API token, and only once.
 if [ -z "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
   log "Creating a Cloudflare TURN key"
   answer=$(curl -fsS -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/calls/turn_keys" \
-    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data '{"name":"aezgram"}') ||
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data '{"name":"hush"}') ||
     die "Cloudflare refused to create a TURN key (the token needs Calls: Edit)"
   key_id=$(sed -n 's/.*"uid":[[:space:]]*"\([^"]*\)".*/\1/p' <<<"$answer")
   key=$(sed -n 's/.*"key":[[:space:]]*"\([^"]*\)".*/\1/p' <<<"$answer")
@@ -129,8 +129,8 @@ fi
 [ -n "$rclone_config" ] && env_set "$ENV_FILE" RCLONE_CONFIG "$rclone_config"
 
 # ------------------------------------------------------------------------------------------- 3. image
-chown -R 10001:10001 "$ROOT/data" 2>/dev/null || [ -n "${AEZGRAM_TEST:-}" ] || die "could not hand $ROOT/data to the container user"
-AEZGRAM_ROOT=$ROOT AEZGRAM_RELEASE_BASE=$RELEASE_BASE "$ROOT/update.sh" --yes
+chown -R 10001:10001 "$ROOT/data" 2>/dev/null || [ -n "${HUSH_TEST:-}" ] || die "could not hand $ROOT/data to the container user"
+HUSH_ROOT=$ROOT HUSH_RELEASE_BASE=$RELEASE_BASE "$ROOT/update.sh" --yes
 
 # ------------------------------------------------------------------------------------------- 4. tunnel
 configure_tunnel() {
@@ -149,7 +149,7 @@ configure_tunnel() {
   backup="$CF_CONFIG.bak-$stamp"
   cp -p "$CF_CONFIG" "$backup"
   note "Backup: $backup"
-  candidate=$(mktemp "$(dirname "$CF_CONFIG")/.config.aezgram.XXXXXX")
+  candidate=$(mktemp "$(dirname "$CF_CONFIG")/.config.hush.XXXXXX")
   ingress_insert "$CF_CONFIG" "$candidate" "$HOST" "$service" || {
     rm -f "$candidate"
     die "could not find the catch-all rule (- service: http_status:404) in $CF_CONFIG; nothing changed"
@@ -165,7 +165,7 @@ configure_tunnel() {
   if ! grep -q "$HOST" <<<"$rule" || ! grep -q "127.0.0.1:$port" <<<"$rule"; then
     echo "$rule" >&2
     rm -f "$candidate" "$candidate.err"
-    die "https://$HOST would not reach AezGram with the edited config; $CF_CONFIG is unchanged"
+    die "https://$HOST would not reach Hush with the edited config; $CF_CONFIG is unchanged"
   fi
   rm -f "$candidate.err"
 
@@ -197,7 +197,7 @@ configure_tunnel() {
     warn "after the restart these got worse: ${worse[*]}"
     cp -p "$backup" "$CF_CONFIG"
     systemctl restart "$CF_SERVICE" || true
-    die "restored $backup and restarted $CF_SERVICE; AezGram is running locally but not published"
+    die "restored $backup and restarted $CF_SERVICE; Hush is running locally but not published"
   fi
   note "Tunnel restarted; ${#before[@]} existing hostname(s) still answer"
 
@@ -226,32 +226,32 @@ configure_tunnel
 
 # ------------------------------------------------------------------------------------------- 5. backups
 log "Backups"
-sed "s#@ROOT@#$ROOT#g" "$SRC/systemd/aezgram-backup.service" >"$SYSTEMD_DIR/aezgram-backup.service"
-install -m 644 "$SRC/systemd/aezgram-backup.timer" "$SYSTEMD_DIR/aezgram-backup.timer"
+sed "s#@ROOT@#$ROOT#g" "$SRC/systemd/hush-backup.service" >"$SYSTEMD_DIR/hush-backup.service"
+install -m 644 "$SRC/systemd/hush-backup.timer" "$SYSTEMD_DIR/hush-backup.timer"
 systemctl daemon-reload
 backups_ready=false
 if [ -n "$remote" ] && command -v rclone >/dev/null; then
-  systemctl enable --now aezgram-backup.timer >/dev/null
+  systemctl enable --now hush-backup.timer >/dev/null
   backups_ready=true
-  note "Nightly at 03:30 to $remote/aezgram (status in data/backup-status.json and the admin screen)"
+  note "Nightly at 03:30 to $remote/hush (status in data/backup-status.json and the admin screen)"
 else
-  systemctl disable --now aezgram-backup.timer >/dev/null 2>&1 || true
+  systemctl disable --now hush-backup.timer >/dev/null 2>&1 || true
   printf '{"ok":false,"lastRunAt":%s,"lastSuccessAt":null,"message":"Backups are not set up yet: see RUNBOOK.md"}\n' "$(date +%s)" \
     >"$ROOT/data/backup-status.json"
 fi
 
 # ------------------------------------------------------------------------------------------- summary
 echo
-log "AezGram is installed."
+log "Hush is installed."
 note "Open:           https://$HOST"
 invite=$(cat "$ROOT/data/first-invite.txt" 2>/dev/null || true)
 [ -n "$invite" ] && note "First invite:   $invite   (whoever uses it becomes the admin)"
-note "Android app:    https://$HOST/download/aezgram.apk"
+note "Android app:    https://$HOST/download/hush.apk"
 note "Update later:   sudo $ROOT/update.sh"
 [ -n "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] || note "Calls:          STUN only. For TURN, re-run with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
 if ! $backups_ready; then
   echo
   warn "backups are OFF until an encrypted rclone remote exists. Once, as root:"
-  note "  rclone config     # n) new remote 'gdrive' (Google Drive), then n) new remote 'gdrive-crypt' (crypt, remote gdrive:aezgram-crypt)"
+  note "  rclone config     # n) new remote 'gdrive' (Google Drive), then n) new remote 'gdrive-crypt' (crypt, remote gdrive:hush-crypt)"
   note "  then: sudo bash install.sh   (re-running is safe; it enables the timer)"
 fi

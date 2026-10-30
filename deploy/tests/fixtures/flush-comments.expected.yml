@@ -9,7 +9,7 @@ ingress:
   service: http://localhost:8080
 - hostname: 'print.aezdek.xyz'
   service: http://localhost:8090
-- hostname: gram.aezdek.xyz
+- hostname: hush.aezdek.xyz
   service: http://127.0.0.1:8472
 # Everything else gets a 404.
 # Keep this last.

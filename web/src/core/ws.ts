@@ -65,7 +65,7 @@ class Realtime {
     this.socket?.close();
     useApp.setState({ connection: 'connecting' });
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${scheme}://${location.host}/api/v1/ws`, ['aezgram.v1', `auth.${token}`]);
+    const socket = new WebSocket(`${scheme}://${location.host}/api/v1/ws`, ['hush.v1', `auth.${token}`]);
     this.socket = socket;
     socket.onopen = () => {
       this.retry = 0;

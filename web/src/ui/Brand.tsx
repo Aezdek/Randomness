@@ -17,5 +17,5 @@ export function BrandMark({ size = 28 }: { size?: number }) {
 }
 
 export function Wordmark({ className = '' }: { className?: string }) {
-  return <span className={`wordmark ${className}`}>AezGram</span>;
+  return <span className={`wordmark ${className}`}>Hush</span>;
 }

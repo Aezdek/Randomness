@@ -8,7 +8,7 @@ ingress:
         service: http_status:404
     -   hostname: print.aezdek.xyz
         service: http://127.0.0.1:8090
-    -   hostname: gram.aezdek.xyz
+    -   hostname: hush.aezdek.xyz
         service: http://127.0.0.1:8472
     -   service: http_status:404
 warp-routing:

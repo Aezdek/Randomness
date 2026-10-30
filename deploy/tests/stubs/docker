@@ -20,9 +20,9 @@ case "${1:-}" in
     case "${1:-}" in
       version) echo "Docker Compose version v2.40.0" ;;
       up)
-        version=$(env_of "$env_file" AEZGRAM_VERSION)
+        version=$(env_of "$env_file" HUSH_VERSION)
         if [ -n "${STUB_BROKEN_VERSION:-}" ] && [ "$version" = "$STUB_BROKEN_VERSION" ]; then echo broken >"$state/running"; else echo "$version" >"$state/running"; fi
-        port=$(env_of "$env_file" AEZGRAM_HOST_PORT)
+        port=$(env_of "$env_file" HUSH_HOST_PORT)
         echo "$port" >"$state/port"
         [ -f "$root/data/first-invite.txt" ] || echo "ABCDE-FGHJK" >"$root/data/first-invite.txt"
         ;;
