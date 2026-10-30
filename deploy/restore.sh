@@ -71,6 +71,14 @@ rclone copy "$SRC/blobs" "$DATA/blobs" --transfers 8
   rclone copy "$SRC/deleted/$day" "$DATA/blobs" --ignore-existing
 done
 
+if [ ! -e "$DATA/signing" ]; then
+  log "Android signing key"
+  if ! rclone copy "$SRC/signing" "$DATA/signing" 2>/dev/null || [ ! -s "$DATA/signing/aezgram.p12" ]; then
+    rm -rf "$DATA/signing"
+    warn "no signing key in the backup: the server makes a new one, and every phone must reinstall the app once"
+  fi
+fi
+
 if [ ! -f "$ROOT/.env" ]; then
   log "Settings (.env)"
   rclone copyto "$SRC/env/.env" "$ROOT/.env" 2>/dev/null && chmod 600 "$ROOT/.env" || warn "no .env in the backup; install.sh will create one"

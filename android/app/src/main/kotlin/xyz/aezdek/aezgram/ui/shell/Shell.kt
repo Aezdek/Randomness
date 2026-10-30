@@ -102,6 +102,21 @@ object Routes {
             is Screen.Chat -> xyz.aezdek.aezgram.ui.messages.Chat(screen.threadId)
             Screen.NewChat -> xyz.aezdek.aezgram.ui.messages.NewChat()
             is Screen.ThreadInfo -> xyz.aezdek.aezgram.ui.messages.ThreadInfo(screen.threadId)
+            is Screen.Explore -> xyz.aezdek.aezgram.ui.explore.Explore()
+            is Screen.Hashtag -> xyz.aezdek.aezgram.ui.explore.Hashtag(screen.tag)
+            Screen.Activity -> xyz.aezdek.aezgram.ui.explore.Activity()
+            is Screen.Reels -> xyz.aezdek.aezgram.ui.reels.Reels(screen.startId)
+            is Screen.Profile -> xyz.aezdek.aezgram.ui.profile.Profile(screen.userId)
+            Screen.EditProfile -> xyz.aezdek.aezgram.ui.profile.EditProfile()
+            is Screen.FollowList -> xyz.aezdek.aezgram.ui.profile.FollowList(screen.userId, screen.followers)
+            is Screen.Stories -> xyz.aezdek.aezgram.ui.stories.StoryViewer(screen.userIds, screen.start)
+            is Screen.Highlight -> xyz.aezdek.aezgram.ui.stories.HighlightViewer(screen.highlightId)
+            is Screen.Create -> when (screen.kind) {
+                CreateKind.POST -> xyz.aezdek.aezgram.ui.create.CreatePost()
+                CreateKind.STORY -> xyz.aezdek.aezgram.ui.create.CreateStory()
+                CreateKind.REEL -> xyz.aezdek.aezgram.ui.create.CreateReel()
+                CreateKind.NOTE -> xyz.aezdek.aezgram.ui.create.CreateNote()
+            }
             else -> Placeholder(screen.toString())
         }
     }

@@ -111,7 +111,7 @@ jobs:
       - name: Tools (shellcheck, rclone, the real cloudflared)
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q shellcheck rclone
-          curl -fsSL -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x "$RUNNER_TEMP/cloudflared"
           "$RUNNER_TEMP/cloudflared" --version
       - name: shellcheck
@@ -120,7 +120,7 @@ jobs:
         run: REAL_CLOUDFLARED="$RUNNER_TEMP/cloudflared" deploy/tests/run.sh
 
   android:
-    name: Android (unit tests, signed APK)
+    name: Android (unit tests, release APK)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -130,20 +130,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      - name: Restore the signing key (AEZGRAM_* secrets, else AezPrint's)
-        id: signing
-        env:
-          KEYSTORE_BASE64: ${{ secrets.AEZGRAM_KEYSTORE_BASE64 || secrets.AEZPRINT_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then echo "available=false" >> "$GITHUB_OUTPUT"; exit 0; fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
-          echo "AEZGRAM_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          echo "available=true" >> "$GITHUB_OUTPUT"
       - name: Unit tests and release build
-        env:
-          AEZGRAM_KEYSTORE_PASSWORD: ${{ secrets.AEZGRAM_KEYSTORE_PASSWORD || secrets.AEZPRINT_KEYSTORE_PASSWORD }}
-          AEZGRAM_KEY_ALIAS: ${{ secrets.AEZGRAM_KEY_ALIAS || secrets.AEZPRINT_KEY_ALIAS }}
-          AEZGRAM_KEY_PASSWORD: ${{ secrets.AEZGRAM_KEY_PASSWORD || secrets.AEZPRINT_KEY_PASSWORD }}
         run: ./gradlew -p android --continue :app:testDebugUnitTest :app:assembleRelease
       - uses: actions/upload-artifact@v5
         if: failure()
@@ -151,24 +138,19 @@ jobs:
           name: android-reports
           path: android/app/build/reports/
           if-no-files-found: ignore
-      - name: Require a signing key
-        if: steps.signing.outputs.available != 'true'
+      # The APK leaves CI unsigned. Resolute signs it with a key that never leaves the server (deploy/entrypoint.sh),
+      # using the apksigner from this SDK, so no signing secret exists on GitHub to steal.
+      - name: Bundle the unsigned APK with apksigner
         run: |
-          echo "::error title=Signing key missing::Add AEZGRAM_KEYSTORE_BASE64, AEZGRAM_KEYSTORE_PASSWORD, AEZGRAM_KEY_ALIAS and AEZGRAM_KEY_PASSWORD (scripts/create-signing-key.sh aezgram), or keep AezPrint's AEZPRINT_* secrets. The code built and the tests passed; only signing is missing."
-          exit 1
-      - name: Verify the signature and describe the APK
-        run: |
-          APK=$(ls android/app/build/outputs/apk/release/*.apk | grep -v unsigned | head -n1)
-          [ -n "$APK" ] || { echo "::error::No signed APK was produced"; exit 1; }
-          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)apksigner
-          "$APKSIGNER" verify --print-certs "$APK" | tee signature.txt
-          mkdir -p apk && cp "$APK" apk/aezgram.apk
-          SHA=$(sha256sum apk/aezgram.apk | cut -c1-64)
-          SIZE=$(stat -c %s apk/aezgram.apk)
-          printf '{"versionCode":%s,"versionName":"%s","sha256":"%s","size":%s,"url":"/download/aezgram.apk"}\n' \
-            "$GITHUB_RUN_NUMBER" "$VERSION" "$SHA" "$SIZE" > apk/version.json
-          cat apk/version.json
-          echo "### Android $VERSION: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          APK=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          [ -f "$APK" ] || { echo "::error::No release APK was produced"; ls -R android/app/build/outputs/apk; exit 1; }
+          TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
+          mkdir -p apk
+          cp "$APK" apk/aezgram-unsigned.apk
+          cp "${TOOLS}lib/apksigner.jar" apk/apksigner.jar
+          printf 'VERSION_CODE=%s\nVERSION_NAME=%s\n' "$GITHUB_RUN_NUMBER" "$VERSION" > apk/build.env
+          ls -la apk
+          echo "### Android $VERSION: $(du -h apk/aezgram-unsigned.apk | cut -f1), apksigner from $(basename "$TOOLS")" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v5
         with:
           name: aezgram-apk
@@ -187,7 +169,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The signed Android APK
+      - name: The Android build
         uses: actions/download-artifact@v5
         with:
           name: aezgram-apk
@@ -200,14 +182,31 @@ jobs:
       - name: Smoke test the image
         run: |
           mkdir -p "$RUNNER_TEMP/data" && sudo chown 10001:10001 "$RUNNER_TEMP/data"
-          docker run -d --name smoke --read-only --tmpfs /tmp:exec --memory 512m -p 127.0.0.1:18080:8080 -v "$RUNNER_TEMP/data:/data" "$TAG"
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:18080/healthz | grep -q "\"version\":\"$VERSION\""; then
-              curl -fsS http://127.0.0.1:18080/ | grep -q '<title>' && docker rm -f smoke && exit 0
-            fi
-            sleep 1
-          done
-          docker logs smoke; exit 1
+          start() {
+            docker run -d --name smoke --read-only --tmpfs /tmp:exec --memory 512m -p 127.0.0.1:18080:8080 -v "$RUNNER_TEMP/data:/data" "$TAG" >/dev/null
+            for i in $(seq 1 90); do
+              curl -fsS http://127.0.0.1:18080/healthz 2>/dev/null | grep -q "\"version\":\"$VERSION\"" && return 0
+              sleep 1
+            done
+            docker logs smoke; return 1
+          }
+          start
+          curl -fsS http://127.0.0.1:18080/ | grep -q '<title>'
+          # The entrypoint made a key in /data/signing and signed the APK: check the download the way a phone would.
+          curl -fsS -o signed.apk http://127.0.0.1:18080/download/aezgram.apk
+          sudo cat "$RUNNER_TEMP/data/apk/version.json" | tee version.json
+          [ "$(sha256sum signed.apk | cut -c1-64)" = "$(jq -r .sha256 version.json)" ]
+          [ "$(jq -r .versionName version.json)" = "$VERSION" ]
+          TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
+          "${TOOLS}apksigner" verify --min-sdk-version 29 --print-certs signed.apk | tee signature.txt
+          # 16 KB alignment of the native libraries (WebRTC, libsodium), which Android 15+ devices need.
+          "${TOOLS}zipalign" -c -P 16 -v 4 signed.apk > /dev/null
+          # A restart keeps the key and does not sign the same build again.
+          docker rm -f smoke >/dev/null && start
+          curl -fsS -o again.apk http://127.0.0.1:18080/download/aezgram.apk
+          cmp signed.apk again.apk
+          docker logs smoke 2>&1 | grep -q 'signing the Android app' && { echo "::error::re-signed an unchanged build"; exit 1; }
+          docker rm -f smoke
       - name: Package the release
         run: |
           mkdir -p out
@@ -228,7 +227,7 @@ jobs:
             echo "### AezGram $VERSION"
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Image: \`$TAG\`, archive sha256 \`$SHA\` ($(du -h out/aezgram-image.tar.gz | cut -f1))"
-            echo "- APK: $([ -f deploy/apk/aezgram.apk ] && echo included || echo 'not in this build')"
+            echo "- APK: $([ -f deploy/apk/aezgram-unsigned.apk ] && echo 'included, signed on Resolute at start' || echo 'not in this build')"
             echo "- On Resolute: \`sudo /opt/hl/aezgram/update.sh\`"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to the aezgram-latest release

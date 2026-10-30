@@ -9,7 +9,7 @@ data class ServerConfig(
     val port: Int = 8080,
     /** Built web client (index.html + assets). Missing in tests and local API-only runs. */
     val webDir: File? = null,
-    /** Holds aezgram.apk and version.json when the image was built with the Android app. */
+    /** Holds aezgram.apk and version.json, signed on this server by the image's entrypoint. */
     val apkDir: File? = null,
     /** Contact for VAPID (`sub` claim). */
     val vapidSubject: String = "mailto:admin@aezdek.xyz",
@@ -32,17 +32,20 @@ data class ServerConfig(
     val firstInviteFile get() = File(dataDir, "first-invite.txt")
 
     companion object {
-        fun fromEnv(env: Map<String, String> = System.getenv()): ServerConfig = ServerConfig(
-            dataDir = File(env["AEZGRAM_DATA_DIR"] ?: "/data"),
-            host = env["AEZGRAM_HOST"] ?: "0.0.0.0",
-            port = env["AEZGRAM_PORT"]?.toInt() ?: 8080,
-            webDir = (env["AEZGRAM_WEB_DIR"] ?: "/app/web").let(::File).takeIf { it.isDirectory },
-            apkDir = (env["AEZGRAM_APK_DIR"] ?: "/app/apk").let(::File).takeIf { it.isDirectory },
-            vapidSubject = env["AEZGRAM_VAPID_SUBJECT"] ?: "mailto:admin@aezdek.xyz",
-            cfTurnKeyId = env["CF_TURN_KEY_ID"]?.takeIf { it.isNotBlank() },
-            cfTurnApiToken = env["CF_TURN_API_TOKEN"]?.takeIf { it.isNotBlank() },
-            minFreeBytes = (env["AEZGRAM_MIN_FREE_GB"]?.toLong() ?: 10L) * 1024 * 1024 * 1024,
-            version = env["AEZGRAM_VERSION"] ?: "dev",
-        )
+        fun fromEnv(env: Map<String, String> = System.getenv()): ServerConfig {
+            val dataDir = File(env["AEZGRAM_DATA_DIR"] ?: "/data")
+            return ServerConfig(
+                dataDir = dataDir,
+                host = env["AEZGRAM_HOST"] ?: "0.0.0.0",
+                port = env["AEZGRAM_PORT"]?.toInt() ?: 8080,
+                webDir = (env["AEZGRAM_WEB_DIR"] ?: "/app/web").let(::File).takeIf { it.isDirectory },
+                apkDir = (env["AEZGRAM_APK_DIR"]?.let(::File) ?: File(dataDir, "apk")).takeIf { it.isDirectory },
+                vapidSubject = env["AEZGRAM_VAPID_SUBJECT"] ?: "mailto:admin@aezdek.xyz",
+                cfTurnKeyId = env["CF_TURN_KEY_ID"]?.takeIf { it.isNotBlank() },
+                cfTurnApiToken = env["CF_TURN_API_TOKEN"]?.takeIf { it.isNotBlank() },
+                minFreeBytes = (env["AEZGRAM_MIN_FREE_GB"]?.toLong() ?: 10L) * 1024 * 1024 * 1024,
+                version = env["AEZGRAM_VERSION"] ?: "dev",
+            )
+        }
     }
 }

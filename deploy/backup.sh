@@ -6,6 +6,7 @@
 #   <remote>/aezgram/blobs/       media, synced incrementally (blobs never change once written)
 #   <remote>/aezgram/deleted/DATE blobs deleted that day, kept 30 days so a restore from any snapshot is complete
 #   <remote>/aezgram/env/.env     settings and secrets
+#   <remote>/aezgram/signing/     the Android signing key: phones only accept updates signed by the key they have
 #
 # Every run writes data/backup-status.json; admins see a banner in the app when the last success is over 48 h old.
 set -euo pipefail
@@ -72,6 +73,9 @@ rclone sync "$DATA/blobs" "$DEST/blobs" --backup-dir "$DEST/deleted/$today" "${F
 
 if [ -f "$ENV_FILE" ]; then
   rclone copyto "$ENV_FILE" "$DEST/env/.env" "${FLAGS[@]}" || fail "uploading .env failed"
+fi
+if [ -d "$DATA/signing" ]; then
+  rclone copy "$DATA/signing" "$DEST/signing" "${FLAGS[@]}" || fail "uploading the app signing key failed"
 fi
 
 log "Pruning anything older than $RETENTION_DAYS days"

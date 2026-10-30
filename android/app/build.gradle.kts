@@ -6,13 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Release signing comes from CI secrets so every build installs as an update over the previous one. CI passes the
-// AEZGRAM_* secrets when they exist and AezPrint's otherwise (see README, "Signing").
-val signingKeystore: String? = System.getenv("AEZGRAM_KEYSTORE_PATH")
-val signingStorePassword: String? = System.getenv("AEZGRAM_KEYSTORE_PASSWORD")
-val signingKeyAlias: String? = System.getenv("AEZGRAM_KEY_ALIAS")
-val signingKeyPassword: String? = System.getenv("AEZGRAM_KEY_PASSWORD")
-val hasReleaseSigning = listOf(signingKeystore, signingStorePassword, signingKeyAlias, signingKeyPassword).all { !it.isNullOrBlank() }
+// Release builds come out unsigned: the server signs them with a key that only it holds (deploy/entrypoint.sh).
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
@@ -28,23 +22,11 @@ android {
         buildConfigField("String", "SERVER_URL", "\"${System.getenv("AEZGRAM_SERVER_URL") ?: "https://gram.aezdek.xyz"}\"")
     }
 
-    signingConfigs {
-        if (hasReleaseSigning) {
-            create("release") {
-                storeFile = file(signingKeystore!!)
-                storePassword = signingStorePassword
-                keyAlias = signingKeyAlias
-                keyPassword = signingKeyPassword
-            }
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"

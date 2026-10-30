@@ -177,6 +177,7 @@ if command -v rclone >/dev/null; then
   echo "database of $today" >"$data/snapshots/aezgram-$today.db"
   echo "ciphertext one" >"$data/blobs/ab/one"
   echo "ciphertext two" >"$data/blobs/ab/two"
+  mkdir -p "$data/signing" && echo "the key" >"$data/signing/aezgram.p12" && echo "pw" >"$data/signing/password"
   out=$(bash "$DEPLOY/backup.sh" 2>&1)
   check "a backup succeeds" test $? -eq 0
   check "... and says so in backup-status.json" grep -q '"ok":true' "$data/backup-status.json"
@@ -188,6 +189,7 @@ if command -v rclone >/dev/null; then
   check "a restore succeeds" test $? -eq 0
   check "... with the database and every blob the snapshot can reference" \
     bash -c "grep -q 'database of $today' '$restore_root/data/aezgram.db' && [ -f '$restore_root/data/blobs/ab/one' ] && [ -f '$restore_root/data/blobs/ab/two' ]"
+  check "... and the Android signing key" grep -q 'the key' "$restore_root/data/signing/aezgram.p12"
   out=$(bash "$DEPLOY/restore.sh" --to "$restore_root" --remote "$RCLONE_REMOTE" 2>&1)
   check "restoring over existing data needs --force" test $? -ne 0
   RCLONE_REMOTE=nosuchremote: bash "$DEPLOY/backup.sh" >/dev/null 2>&1
