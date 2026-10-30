@@ -1,7 +1,7 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal, Send, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../core/api';
 import { toggleSaved } from '../../core/compose';
 import { messageOf } from '../../core/errors';
@@ -17,6 +17,29 @@ import { Carousel } from './Carousel';
 import { CommentComposer, Comments } from './Comments';
 import { AuthorLine, LikeButton, mediaOfPost, useLikeToggle } from './PostCard';
 import { PostMenu } from './PostMenu';
+
+/** The caption reads as the first comment, with the author's name in front, as on Instagram. */
+function Caption({ entity, text }: { entity: Entity; text: string }) {
+  const me = useApp((s) => s.me!);
+  const user = useApp((s) => s.users[entity.dto.authorId]);
+  const username = entity.dto.authorId === me.id ? me.username : user?.username;
+  return (
+    <div className="comment">
+      <Avatar userId={entity.dto.authorId} size={34} />
+      <div className="comment-body">
+        <p>
+          <Link to={`/u/${username}`} className="author-name">
+            {username}
+          </Link>{' '}
+          <RichText text={text} />
+        </p>
+        <div className="comment-meta">
+          <Ago at={entity.dto.createdAt} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function usePost(id: string | undefined): { entity: Entity | undefined; missing: boolean } {
   const entity = useApp((s) => (id ? s.entities[id] : undefined));
@@ -67,19 +90,7 @@ function Details({ entity, onClose }: { entity: Entity; onClose?: () => void }) 
           <Comments
             parent={entity}
             header={
-              payload.caption ? (
-                <div className="comment">
-                  <Avatar userId={entity.dto.authorId} size={34} />
-                  <div className="comment-body">
-                    <p>
-                      <RichText text={payload.caption} />
-                    </p>
-                    <div className="comment-meta">
-                      <Ago at={entity.dto.createdAt} />
-                    </div>
-                  </div>
-                </div>
-              ) : undefined
+              payload.caption ? <Caption entity={entity} text={payload.caption} /> : undefined
             }
           />
         </div>

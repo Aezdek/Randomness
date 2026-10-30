@@ -307,6 +307,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             }
             exec("DELETE FROM wrap_tasks WHERE author_id = ? OR recipient_id = ?", session.userId, session.userId)
             exec("DELETE FROM push_subscriptions WHERE user_id = ?", session.userId)
+            exec("DELETE FROM push_prefs WHERE user_id = ?", session.userId)
             val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", session.userId)
             exec("DELETE FROM sessions WHERE user_id = ?", session.userId)
             exec(

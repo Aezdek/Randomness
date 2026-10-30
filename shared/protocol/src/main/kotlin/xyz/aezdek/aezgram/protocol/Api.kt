@@ -336,6 +336,13 @@ data class VapidKey(val publicKey: String)
 @Serializable
 data class PushSubscriptionRequest(val endpoint: String, val p256dh: String, val auth: String)
 
+/**
+ * Which pushes a user doesn't want. The real switches live in the encrypted settings object, so each client mirrors
+ * them here: Web Push has to show every push it receives, so muted ones must not be sent at all.
+ */
+@Serializable
+data class PushPrefs(val mutedTypes: List<String> = emptyList(), val mutedThreads: List<String> = emptyList())
+
 @Serializable
 data class TestRingRequest(val delaySeconds: Int = 20)
 

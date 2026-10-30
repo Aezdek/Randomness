@@ -812,6 +812,10 @@
   .profile-info {
     gap: 12px;
   }
+  /* The phone top bar already carries the username. */
+  .profile-title h1 {
+    display: none;
+  }
   .profile-stats {
     gap: 18px;
     font-size: 14px;
@@ -2364,12 +2368,31 @@ input[type='range'] {
 }
 @media (max-width: 767px) {
   .explore-search {
-    margin: 0 12px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    max-width: none;
+    margin: -12px 0 12px;
+    padding: calc(10px + var(--safe-t)) 12px 10px;
+    background: var(--glass);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+  .explore-search > svg {
+    left: 26px;
+  }
+  .explore-search .clear {
+    right: 18px;
   }
 }
 .search-results {
   max-width: 560px;
   margin: 0 auto;
+}
+.search-results .section-label {
+  margin: 4px 12px 8px;
+  font-size: 15px;
+  font-weight: 700;
 }
 .tag-head {
   display: flex;
@@ -2474,14 +2497,21 @@ input[type='range'] {
 }
 @media (max-width: 767px) {
   .direct {
-    height: calc(100dvh - var(--bottom-h) - var(--safe-b) - var(--top-h));
+    height: calc(100dvh - var(--bottom-h) - var(--safe-b) - var(--safe-t));
   }
   .direct-list {
     width: 100%;
     border-right: 0;
   }
   .direct-head {
-    padding: 16px 16px 8px;
+    justify-content: flex-start;
+    gap: 2px;
+    min-height: var(--top-h);
+    padding: 0 8px 0 2px;
+    font-size: 19px;
+  }
+  .direct-head b {
+    flex: 1;
   }
 }
 .notes-row {

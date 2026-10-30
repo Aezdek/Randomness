@@ -11,8 +11,11 @@ import { PostGrid } from '../profile/PostGrid';
 
 const captionOf = (payload: unknown) => ((payload as PostPayload).caption ?? (payload as ReelPayload).caption ?? '').toLowerCase();
 
-/** Search runs on this device: hashtags and captions are encrypted, so only your own copy can be searched. */
-export function Explore() {
+/**
+ * Search runs on this device: hashtags and captions are encrypted, so only your own copy can be searched.
+ * `/explore` leads with the grid; `/search` (the sidebar's Search) leads with people.
+ */
+export function Explore({ mode = 'explore' }: { mode?: 'explore' | 'search' }) {
   const { tag } = useParams();
   const index = useIndex();
   const users = useApp((s) => s.users);
@@ -60,15 +63,16 @@ export function Explore() {
     <div className="page explore">
       <div className="search explore-search">
         <Search size={17} />
-        <input className="input" placeholder="Search people and hashtags" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="input" placeholder="Search people and hashtags" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus={mode === 'search'} />
         {query && (
           <button className="icon-btn sm clear" onClick={() => setQuery('')} aria-label="Clear">
             <X size={16} />
           </button>
         )}
       </div>
-      {q ? (
+      {q || mode === 'search' ? (
         <div className="search-results">
+          {!q && people.length > 0 && <h3 className="section-label">Everyone on AezGram</h3>}
           {tags.map(([t, n]) => (
             <button key={t} className="user-row result" onClick={() => navigate(`/explore/tags/${encodeURIComponent(t)}`)}>
               <span className="tag-glyph small">
@@ -95,7 +99,7 @@ export function Explore() {
               <FollowButton user={u} compact />
             </div>
           ))}
-          {!people.length && !tags.length && <p className="faint" style={{ padding: 24, textAlign: 'center' }}>No results for “{query}”.</p>}
+          {q && !people.length && !tags.length && <p className="faint" style={{ padding: 24, textAlign: 'center' }}>No results for “{query}”.</p>}
         </div>
       ) : explore.length ? (
         <PostGrid posts={explore} />

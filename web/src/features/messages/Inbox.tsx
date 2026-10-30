@@ -1,4 +1,4 @@
-import { Edit, MessageCircle, Plus, Search } from 'lucide-react';
+import { ChevronLeft, Edit, MessageCircle, Plus, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -130,6 +130,9 @@ export function Inbox() {
     <div className="direct">
       <aside className="direct-list">
         <header className="direct-head">
+          <button className="icon-btn only-mobile back" onClick={() => navigate('/')} aria-label="Back">
+            <ChevronLeft size={28} strokeWidth={1.8} />
+          </button>
           <b>{me.username}</b>
           <button className="icon-btn" onClick={() => setNewChat(true)} aria-label="New message">
             <Edit size={22} />

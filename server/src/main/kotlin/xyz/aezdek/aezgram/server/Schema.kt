@@ -166,6 +166,14 @@ object Schema {
             value TEXT NOT NULL
         );
         """.trimIndent(),
+        // 2: per-user push filters (see PushPrefs).
+        """
+        CREATE TABLE push_prefs (
+            user_id TEXT PRIMARY KEY,
+            muted_types TEXT NOT NULL,
+            muted_threads TEXT NOT NULL
+        );
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

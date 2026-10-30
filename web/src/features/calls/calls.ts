@@ -20,6 +20,9 @@ export interface Peer {
   stream: MediaStream | null;
 }
 
+/** The host uploads one stream per viewer, so Live stays small: the host plus 9 is the same mesh size as a call. */
+const MAX_LIVE_VIEWERS = 9;
+
 export interface LiveComment {
   id: string;
   from: string;
@@ -179,6 +182,10 @@ class CallManager {
         return;
       case 'accept':
         if (!sameCall) return;
+        if (state.live?.role === 'host' && !(from in state.peers && state.peers[from].state !== 'left')) {
+          const watching = Object.values(state.peers).filter((p) => p.state !== 'left' && p.state !== 'declined').length;
+          if (watching >= MAX_LIVE_VIEWERS) return this.send(from, { type: 'busy', callId: s.callId });
+        }
         this.ring.stop();
         if (state.status === 'outgoing') set({ status: 'active', startedAt: Date.now() });
         set((x) => ({ peers: { ...x.peers, [from]: { userId: from, state: 'connecting', stream: x.peers[from]?.stream ?? null } } }));
@@ -192,6 +199,10 @@ class CallManager {
       case 'decline':
       case 'busy':
         if (!sameCall) return;
+        if (state.live?.role === 'viewer' && from === state.live.hostId) {
+          toast(`This live video is full (${MAX_LIVE_VIEWERS} viewers)`);
+          return this.reset();
+        }
         set((x) => ({ peers: { ...x.peers, [from]: { userId: from, state: 'declined', stream: null } } }));
         if (s.type === 'busy') toast(`${getState().users[from]?.username} is on another call`);
         this.maybeEnd();

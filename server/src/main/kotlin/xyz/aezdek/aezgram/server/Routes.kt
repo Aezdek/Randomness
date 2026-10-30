@@ -37,6 +37,7 @@ import xyz.aezdek.aezgram.protocol.MAX_MEMBERS
 import xyz.aezdek.aezgram.protocol.ObjectUpload
 import xyz.aezdek.aezgram.protocol.OkResponse
 import xyz.aezdek.aezgram.protocol.PreloginRequest
+import xyz.aezdek.aezgram.protocol.PushPrefs
 import xyz.aezdek.aezgram.protocol.PushSubscriptionRequest
 import xyz.aezdek.aezgram.protocol.ReadRequest
 import xyz.aezdek.aezgram.protocol.ResetKeysRequest
@@ -389,6 +390,16 @@ fun Route.api(s: Services) = route("/api/v1") {
         val session = call.session(s)
         val req = call.receive<PushSubscriptionRequest>()
         blocking { s.push.subscribe(session, req) }
+        call.respond(OkResponse())
+    }
+    get("/push/prefs") {
+        val session = call.session(s)
+        call.respond(blocking { s.push.prefs(session.userId) })
+    }
+    put("/push/prefs") {
+        val session = call.session(s)
+        val req = call.receive<PushPrefs>()
+        blocking { s.push.setPrefs(session, req) }
         call.respond(OkResponse())
     }
     post("/push/unsubscribe") {

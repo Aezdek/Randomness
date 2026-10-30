@@ -1,6 +1,7 @@
-import { Clapperboard, Compass, Heart, Home, Menu, MessageCircle, PlusSquare, Search, WifiOff } from 'lucide-react';
+import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, PlusSquare, Search, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom';
+import { usePushPrefsMirror } from '../../core/notifyPrefs';
 import { unreadCount, useIndex } from '../../core/selectors';
 import { useApp } from '../../core/store';
 import { engine } from '../../core/sync';
@@ -95,8 +96,8 @@ function SideNav() {
         </span>
       </Link>
       <NavItem to="/" end label="Home" icon={(a) => <Home size={26} strokeWidth={stroke(a)} />} />
-      <NavItem to="/explore" label="Search" icon={(a) => <Search size={26} strokeWidth={stroke(a)} />} />
-      <NavItem to="/explore?tab=grid" label="Explore" icon={(a) => <Compass size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/search" label="Search" icon={(a) => <Search size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/explore" label="Explore" icon={(a) => <Compass size={26} strokeWidth={stroke(a)} />} />
       <NavItem to="/reels" label="Reels" icon={(a) => <Clapperboard size={26} strokeWidth={stroke(a)} />} />
       <NavItem to="/direct" label="Messages" badge={unread} icon={(a) => <MessageCircle size={26} strokeWidth={stroke(a)} />} />
       <NavItem to="/activity" label="Notifications" badge={activity} icon={(a) => <Heart size={26} strokeWidth={stroke(a)} fill={a ? 'currentColor' : 'none'} />} />
@@ -111,26 +112,75 @@ function SideNav() {
   );
 }
 
-function TopBar() {
+/** Pages that draw their own phone header (or none): the shell shows no top bar there. */
+const OWN_HEADER = [/^\/direct(\/|$)/, /^\/stories\//, /^\/explore$/, /^\/search$/];
+
+function topBarTitle(pathname: string, myName: string | undefined): { title: string; back: boolean } {
+  if (pathname === `/u/${myName}` || pathname.startsWith(`/u/${myName}/`)) return { title: myName!, back: false };
+  if (pathname.startsWith('/u/')) return { title: decodeURIComponent(pathname.split('/')[2]), back: true };
+  if (pathname.startsWith('/reels')) return { title: 'Reels', back: false };
+  if (pathname.startsWith('/explore/tags/')) return { title: `#${decodeURIComponent(pathname.split('/')[3])}`, back: true };
+  if (pathname === '/activity') return { title: 'Notifications', back: true };
+  if (pathname.startsWith('/settings')) return { title: 'Settings', back: true };
+  if (pathname.startsWith('/verify/')) return { title: 'Security code', back: true };
+  if (pathname.startsWith('/p/')) return { title: 'Post', back: true };
+  return { title: '', back: true };
+}
+
+export function hasTopBar(pathname: string) {
+  return !OWN_HEADER.some((r) => r.test(pathname));
+}
+
+function TopBar({ pathname }: { pathname: string }) {
   const unread = useUnreadMessages();
   const activity = useActivityBadge();
-  const { pathname } = useLocation();
-  if (pathname !== '/') return null;
+  const me = useApp((s) => s.me);
+  const navigate = useNavigate();
+  if (!hasTopBar(pathname)) return null;
+  if (pathname === '/') {
+    return (
+      <header className="topbar only-mobile">
+        <Wordmark className="title" />
+        <Link to="/activity" className="icon-btn" aria-label="Notifications" style={{ position: 'relative' }}>
+          <Heart size={25} strokeWidth={1.8} />
+          {!!activity && <span className="dot" style={{ position: 'absolute', top: 8, right: 8 }} />}
+        </Link>
+        <Link to="/direct" className="icon-btn" aria-label="Messages" style={{ position: 'relative' }}>
+          <MessageCircle size={25} strokeWidth={1.8} />
+          {!!unread && (
+            <span className="badge" style={{ position: 'absolute', top: 2, right: 0 }}>
+              {unread}
+            </span>
+          )}
+        </Link>
+      </header>
+    );
+  }
+  const { title, back } = topBarTitle(pathname, me?.username);
+  const mine = !!me && (pathname === `/u/${me.username}` || pathname.startsWith(`/u/${me.username}/`));
   return (
-    <header className="topbar only-mobile">
-      <Wordmark className="title" />
-      <Link to="/activity" className="icon-btn" aria-label="Notifications" style={{ position: 'relative' }}>
-        <Heart size={25} strokeWidth={1.8} />
-        {!!activity && <span className="dot" style={{ position: 'absolute', top: 8, right: 8 }} />}
-      </Link>
-      <Link to="/direct" className="icon-btn" aria-label="Messages" style={{ position: 'relative' }}>
-        <MessageCircle size={25} strokeWidth={1.8} />
-        {!!unread && (
-          <span className="badge" style={{ position: 'absolute', top: 2, right: 0 }}>
-            {unread}
-          </span>
-        )}
-      </Link>
+    <header className={`topbar only-mobile ${back ? 'with-back' : ''}`}>
+      {back && (
+        <button className="icon-btn" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} aria-label="Back">
+          <ChevronLeft size={28} strokeWidth={1.8} />
+        </button>
+      )}
+      <h1 className="title truncate">{title}</h1>
+      {mine && (
+        <>
+          <button className="icon-btn" onClick={() => useUi.setState({ createMenu: true })} aria-label="Create">
+            <PlusSquare size={25} strokeWidth={1.8} />
+          </button>
+          <Link to="/settings" className="icon-btn" aria-label="Settings">
+            <Menu size={25} strokeWidth={1.8} />
+          </Link>
+        </>
+      )}
+      {pathname.startsWith('/reels') && (
+        <button className="icon-btn" onClick={() => useUi.setState({ createMenu: true })} aria-label="Create">
+          <Camera size={25} strokeWidth={1.8} />
+        </button>
+      )}
     </header>
   );
 }
@@ -174,16 +224,19 @@ function ConnectionBanner() {
 
 export function Shell() {
   useRealtimeWiring();
+  usePushPrefsMirror();
   const location = useLocation();
   const background = (location.state as { background?: Location } | null)?.background;
+  const page = (background ?? location).pathname;
   return (
-    <div className="shell">
+    <div className={`shell ${hasTopBar(page) ? '' : 'no-topbar'}`}>
       <SideNav />
-      <TopBar />
+      <TopBar pathname={page} />
       <main className="main">
         <Routes location={background ?? location}>
           <Route path="/" element={<HomePage />} />
           <Route path="/explore" element={<Explore />} />
+          <Route path="/search" element={<Explore mode="search" />} />
           <Route path="/explore/tags/:tag" element={<Explore />} />
           <Route path="/reels" element={<Reels />} />
           <Route path="/reels/:id" element={<Reels />} />

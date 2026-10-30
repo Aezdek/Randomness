@@ -143,11 +143,11 @@ export function Profile() {
           </div>
           <ul className="profile-stats">
             <li>
-              <b>{compact(visiblePosts.length)}</b> posts
+              <b>{compact(visiblePosts.length)}</b> {visiblePosts.length === 1 ? 'post' : 'posts'}
             </li>
             <li>
               <button onClick={() => canSee && setList('followers')}>
-                <b>{counts ? compact(counts.followers) : '–'}</b> followers
+                <b>{counts ? compact(counts.followers) : '–'}</b> {counts?.followers === 1 ? 'follower' : 'followers'}
               </button>
             </li>
             <li>

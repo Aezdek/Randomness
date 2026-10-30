@@ -2,8 +2,10 @@ package xyz.aezdek.aezgram.server
 
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
+import xyz.aezdek.aezgram.protocol.PushPrefs
 import xyz.aezdek.aezgram.protocol.PushSubscriptionRequest
 import xyz.aezdek.aezgram.protocol.Wire
+import xyz.aezdek.aezgram.protocol.WsType
 import java.math.BigInteger
 import java.net.URI
 import java.net.http.HttpClient
@@ -80,7 +82,30 @@ class WebPush(private val db: Db, private val clock: Clock, private val subject:
         exec("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?", endpoint, session.userId)
     }
 
+    fun setPrefs(session: Session, prefs: PushPrefs) = db.tx {
+        if (prefs.mutedTypes.size > 32 || prefs.mutedThreads.size > 500) badRequest("Too many entries")
+        exec(
+            "INSERT OR REPLACE INTO push_prefs (user_id, muted_types, muted_threads) VALUES (?, ?, ?)",
+            session.userId, prefs.mutedTypes.joinToString(","), prefs.mutedThreads.joinToString(","),
+        )
+    }
+
+    fun prefs(userId: String): PushPrefs = db.tx {
+        one("SELECT muted_types, muted_threads FROM push_prefs WHERE user_id = ?", userId) {
+            PushPrefs(it.str("muted_types").split(',').filter(String::isNotEmpty), it.str("muted_threads").split(',').filter(String::isNotEmpty))
+        }
+    } ?: PushPrefs()
+
+    /** Test rings always go through; everything else honours the user's mirrored notification switches. */
+    fun wanted(userId: String, message: PushMessage): Boolean {
+        if (message.type == WsType.RING_TEST) return true
+        val prefs = prefs(userId)
+        if (message.type in prefs.mutedTypes) return false
+        return !(message.type in setOf("message", "reaction") && message.ref != null && message.ref in prefs.mutedThreads)
+    }
+
     fun sendToUser(userId: String, message: PushMessage, urgent: Boolean) {
+        if (!wanted(userId, message)) return
         val subscriptions = db.tx {
             query("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?", userId) {
                 Triple(it.str("endpoint"), it.bytes("p256dh"), it.bytes("auth"))

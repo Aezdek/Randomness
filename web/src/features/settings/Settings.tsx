@@ -214,6 +214,7 @@ function NotificationsSection() {
 
 function SecuritySection() {
   const keys = useApp((s) => s.keys!);
+  const meId = useApp((s) => s.me!.id);
   const users = useApp((s) => s.users);
   const pins = useApp((s) => s.pins);
   const [sessions, setSessions] = useState<SessionDto[] | null>(null);
@@ -237,7 +238,7 @@ function SecuritySection() {
       </Card>
       <Card title="Contacts">
         {Object.values(users)
-          .filter((u) => !u.deleted)
+          .filter((u) => !u.deleted && u.id !== meId)
           .map((u) => (
             <Link key={u.id} to={`/verify/${u.id}`} className="user-row result">
               <Avatar userId={u.id} size={40} />
@@ -429,7 +430,7 @@ export function Settings() {
   return (
     <div className={`settings ${section ? 'has-section' : ''}`}>
       <nav className="settings-nav">
-        <h1 className="page-title" style={{ display: 'block', padding: '0 12px' }}>Settings</h1>
+        <h1 className="page-title" style={{ padding: '0 12px' }}>Settings</h1>
         {sections.map((s) => (
           <Link key={s.id} to={`/settings/${s.id}`} className={`settings-link ${section === s.id ? 'active' : ''}`}>
             <s.icon size={20} /> {s.label}

@@ -1,8 +1,11 @@
 package xyz.aezdek.aezgram.server
 
+import io.ktor.client.call.body
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import xyz.aezdek.aezgram.protocol.PushPrefs
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.security.interfaces.ECPublicKey
@@ -69,5 +72,20 @@ class WebPushTest {
         assertEquals(0x7f.toByte(), jose[0])
         assertEquals(1.toByte(), jose[63])
         assertEquals(0.toByte(), jose[32])
+    }
+
+    @Test
+    fun mutedPushTypesAndThreadsAreNotSent() = serverTest {
+        val (ana) = members("ana")
+        val push = services.push
+        assertTrue(push.wanted(ana.id, PushMessage("like", "bo", "b", "p1")))
+        ana.put("/api/v1/push/prefs", PushPrefs(mutedTypes = listOf("like", "comment"), mutedThreads = listOf("t1")))
+        assertEquals(listOf("like", "comment"), ana.get("/api/v1/push/prefs").body<PushPrefs>().mutedTypes)
+        assertFalse(push.wanted(ana.id, PushMessage("like", "bo", "b", "p1")))
+        assertFalse(push.wanted(ana.id, PushMessage("message", "bo", "b", "t1")))
+        assertTrue(push.wanted(ana.id, PushMessage("message", "bo", "b", "t2")))
+        assertTrue(push.wanted(ana.id, PushMessage("follow", "bo", "b", null)))
+        ana.put("/api/v1/push/prefs", PushPrefs(mutedTypes = listOf("ring_test")))
+        assertTrue("test rings always ring", push.wanted(ana.id, PushMessage("ring_test", null, null, null)))
     }
 }

@@ -10,7 +10,7 @@ import { threadTitle, useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
-import { Ago, Center, longDate, RichText, Spinner } from '../../ui/bits';
+import { ago, Center, longDate, RichText, Spinner } from '../../ui/bits';
 import { MediaImage, MediaVideo, useMediaUrl } from '../../ui/Media';
 import { Sheet } from '../../ui/Sheet';
 import { calls } from '../calls/calls';
@@ -403,7 +403,7 @@ export function Chat() {
                 {title}
               </b>
               <span className="faint" style={{ fontSize: 12.5 }}>
-                {typers.length ? 'typing…' : onlineNow ? 'Active now' : lastActive ? <>Active <Ago at={lastActive} className="" /> ago</> : thread.isGroup ? `${thread.members.length} members` : ''}
+                {typers.length ? 'typing…' : onlineNow ? 'Active now' : lastActive ? activeLabel(lastActive) : thread.isGroup ? `${thread.members.length} members` : ''}
               </span>
             </span>
           </button>
@@ -551,4 +551,9 @@ export function Chat() {
       {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} />}
     </div>
   );
+}
+
+function activeLabel(at: number) {
+  const since = ago(at);
+  return since === 'now' ? 'Active now' : `Active ${since} ago`;
 }

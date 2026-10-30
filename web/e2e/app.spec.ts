@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Three people use AezGram end to end against a real server: sign up with invites, profiles, follow requests,
@@ -12,7 +13,7 @@ import { join, resolve } from 'node:path';
 
 const DATA_DIR = process.env.AEZGRAM_DATA_DIR ?? '';
 const SHOTS = process.env.SHOTS_DIR;
-const FIXTURES = resolve(__dirname, 'fixtures');
+const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const MARK = 'zebra-quartz-7731';
 
 interface Person {
@@ -74,12 +75,13 @@ async function post(p: Person, files: string[], caption: string): Promise<string
   await p.page.getByRole('button', { name: 'Create' }).first().click();
   await p.page.getByRole('button', { name: /^Post/ }).click();
   await p.page.locator('.dropzone input[type=file]').setInputFiles(files.map((f) => join(FIXTURES, f)));
-  await expect(p.page.getByRole('button', { name: 'Next' })).toBeVisible();
+  const head = p.page.locator('.sheet-head');
+  await expect(head.getByRole('button', { name: 'Next' })).toBeVisible();
   if (files.length > 1) await shot(p.page, 'create-edit');
-  await p.page.getByRole('button', { name: 'Next' }).click();
+  await head.getByRole('button', { name: 'Next' }).click();
   await p.page.getByPlaceholder(/Write a caption/).fill(caption);
   await shot(p.page, 'create-details');
-  await p.page.getByRole('button', { name: 'Share' }).click();
+  await head.getByRole('button', { name: 'Share' }).click();
   await p.page.waitForURL(/\/p\//, { timeout: 60_000 });
   return p.page.url().split('/p/')[1];
 }
@@ -158,6 +160,27 @@ test('three people use AezGram end to end', async ({ browser }) => {
   await bob.page.goto('/u/alice');
   await shot(bob.page, 'profile-mobile');
 
+  // --------------------------------------------------------------------------------------------- reels
+  // A 4K portrait phone clip (rotated H.264 + AAC) must leave the browser as 1080×1920 H.264/AAC: this Chromium has
+  // no native AAC encoder, so it also exercises the WebAssembly fallback.
+  await alice.page.goto('/');
+  await alice.page.getByRole('button', { name: 'Create' }).first().click();
+  await alice.page.getByRole('button', { name: /^Reel/ }).click();
+  await alice.page.locator('.dropzone input[type=file]').setInputFiles(join(FIXTURES, 'clip-4k-portrait.mp4'));
+  const reelHead = alice.page.locator('.sheet-head');
+  await reelHead.getByRole('button', { name: 'Next' }).click();
+  await alice.page.getByPlaceholder(/Write a caption/).fill(`Ridge timelapse ${MARK}`);
+  await reelHead.getByRole('button', { name: 'Share' }).click();
+  await alice.page.waitForURL(/\/reels\//, { timeout: 120_000 });
+  await bob.page.goto('/reels');
+  const reelVideo = bob.page.locator('.reel video').first();
+  await expect.poll(() => reelVideo.evaluate((v: HTMLVideoElement) => [v.videoWidth, v.videoHeight]), { timeout: 60_000 }).toEqual([1080, 1920]);
+  await reelVideo.evaluate((v: HTMLVideoElement) => v.play());
+  await expect
+    .poll(() => reelVideo.evaluate((v: HTMLVideoElement & { webkitAudioDecodedByteCount?: number }) => v.webkitAudioDecodedByteCount ?? 0), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await shot(bob.page, 'reels-mobile');
+
   // ------------------------------------------------------------------------------------------- stories
   await alice.page.goto('/');
   await alice.page.getByRole('button', { name: 'Create' }).first().click();
@@ -165,7 +188,7 @@ test('three people use AezGram end to end', async ({ browser }) => {
   await alice.page.getByRole('button', { name: 'Text story' }).click();
   await alice.page.getByPlaceholder('Start typing…').fill('Who’s up for sunrise tomorrow? 🌄');
   await shot(alice.page, 'story-compose');
-  await alice.page.getByRole('button', { name: 'Share', exact: true }).click();
+  await alice.page.locator('.story-share').getByRole('button', { name: 'Share', exact: true }).click();
   await expect(alice.page.locator('.story-composer')).toBeHidden({ timeout: 30_000 });
 
   await bob.page.goto('/');
@@ -182,10 +205,10 @@ test('three people use AezGram end to end', async ({ browser }) => {
   await bob.page.keyboard.press('Enter');
   await alice.page.goto('/direct');
   await alice.page.locator('.thread-row').first().click();
-  await expect(alice.page.getByText('Coffee later?')).toBeVisible({ timeout: 20_000 });
+  await expect(alice.page.locator('.chat-scroll').getByText('Coffee later?')).toBeVisible({ timeout: 20_000 });
   await alice.page.locator('#chat-input').fill('Always ☕ 10am?');
   await alice.page.keyboard.press('Enter');
-  await expect(bob.page.getByText('Always ☕ 10am?')).toBeVisible({ timeout: 20_000 });
+  await expect(bob.page.locator('.chat-scroll').getByText('Always ☕ 10am?')).toBeVisible({ timeout: 20_000 });
   await shot(alice.page, 'direct-desktop');
   await shot(bob.page, 'direct-mobile');
 
@@ -193,7 +216,7 @@ test('three people use AezGram end to end', async ({ browser }) => {
   await alice.page.getByRole('button', { name: 'Video call' }).click();
   await expect(bob.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });
   await shot(bob.page, 'call-incoming-mobile');
-  await bob.page.getByRole('button', { name: 'Accept' }).click();
+  await bob.page.getByRole('button', { name: 'Accept' }).click({ force: true }); // it bobs gently while ringing
   await expect(alice.page.locator('.call-tile video')).toHaveCount(1, { timeout: 30_000 });
   await alice.page.waitForFunction(() => {
     const v = document.querySelector('.call-tile video') as HTMLVideoElement | null;
@@ -202,7 +225,7 @@ test('three people use AezGram end to end', async ({ browser }) => {
   await shot(alice.page, 'call-desktop');
   await alice.page.getByRole('button', { name: 'Hang up' }).click();
   await expect(bob.page.locator('.call-screen')).toBeHidden({ timeout: 20_000 });
-  await expect(alice.page.getByText('Video call')).toBeVisible({ timeout: 20_000 });
+  await expect(alice.page.locator('.chat-scroll').getByText('Video call')).toBeVisible({ timeout: 20_000 });
 
   // ----------------------------------------------------------------------------- a stranger sees nothing
   const cara = await person(browser, 'cara', false, 'light');

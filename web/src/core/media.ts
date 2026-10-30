@@ -1,17 +1,4 @@
 import { encode as encodeBlurhash } from 'blurhash';
-import {
-  ALL_FORMATS,
-  BlobSource,
-  BufferTarget,
-  CanvasSink,
-  Conversion,
-  Input,
-  Mp4OutputFormat,
-  Output,
-  Quality,
-  canEncodeAudio,
-  canEncodeVideo,
-} from 'mediabunny';
 import { chunkCount, cipherLength, DEFAULT_CHUNK, decryptMedia, newFileKey, newHeader, sealChunk } from '../crypto/media';
 import { b64, concat, unb64 } from '../crypto/sodium';
 import { api, fetchBlob, getToken } from './api';
@@ -48,6 +35,26 @@ const VIDEO_SPEC: Record<MediaKind, { maxEdge: number; bitrate: number; maxSecon
 const IMAGE_EDGE: Record<MediaKind, number> = { post: 2048, reel: 1440, story: 1440, message: 2048, avatar: 640 };
 
 export class UnsupportedMediaError extends Error {}
+
+let codecs: Promise<typeof import('mediabunny')> | null = null;
+
+/**
+ * Mediabunny (≈1 MB) only loads when someone actually picks a video or records a voice note. Browsers whose
+ * WebCodecs can't encode AAC (Firefox, Chromium builds without proprietary codecs) get FFmpeg's AAC encoder as
+ * WebAssembly instead, so every client still produces the same H.264/AAC MP4 the Android app plays natively.
+ */
+function loadCodecs() {
+  codecs ??= (async () => {
+    const mediabunny = await import('mediabunny');
+    if (!(await mediabunny.canEncodeAudio('aac'))) {
+      const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
+      registerAacEncoder();
+    }
+    return mediabunny;
+  })();
+  codecs.catch(() => (codecs = null));
+  return codecs;
+}
 
 function fitWithin(width: number, height: number, maxEdge: number) {
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -106,34 +113,38 @@ export async function prepareVideo(
 ): Promise<Prepared> {
   const { trim, crop } = opts;
   const spec = VIDEO_SPEC[kind];
+  const { ALL_FORMATS, BlobSource, BufferTarget, CanvasSink, Conversion, Input, Mp4OutputFormat, Output, Quality, canEncodeAudio, canEncodeVideo } = await loadCodecs();
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   const track = await input.getPrimaryVideoTrack();
   if (!track) throw new UnsupportedMediaError('That file has no video in it.');
   const duration = await input.computeDuration();
   const end = Math.min(trim?.end ?? duration, (trim?.start ?? 0) + spec.maxSeconds);
   const { width, height } = fitWithin(crop?.width ?? track.displayWidth, crop?.height ?? track.displayHeight, spec.maxEdge);
-  if (!(await canEncodeVideo('avc', { width, height, bitrate: spec.bitrate }))) {
+  if (!(await canEncodeVideo('avc', { width, height, quality: new Quality({ bitrate: spec.bitrate }) }))) {
     throw new UnsupportedMediaError('This browser cannot encode H.264 video. Use Chrome or Edge, or post it from the Android app.');
   }
   const hasAudio = !!(await input.getPrimaryAudioTrack());
   if (hasAudio && !(await canEncodeAudio('aac'))) {
-    throw new UnsupportedMediaError('This browser cannot encode AAC audio. Use Chrome or Edge, or post it from the Android app.');
+    throw new UnsupportedMediaError('This browser cannot encode audio for video. Use Chrome or Edge, or post it from the Android app.');
   }
-  const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
+  const target = new BufferTarget();
+  const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
   const conversion = await Conversion.init({
     input,
     output,
     tracks: 'primary',
-    video: { width, height, fit: 'contain', codec: 'avc', quality: new Quality(spec.bitrate), frameRate: 30, forceTranscode: true, ...(crop ? { crop } : {}) },
-    audio: { codec: 'aac', quality: new Quality(128_000), numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true },
+    video: { width, height, fit: 'contain', codec: 'avc', quality: new Quality({ bitrate: spec.bitrate }), frameRate: 30, forceTranscode: true, ...(crop ? { crop } : {}) },
+    audio: { codec: 'aac', quality: new Quality({ bitrate: 128_000 }), numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true },
     trim: { start: trim?.start ?? 0, end },
     showWarnings: false,
   });
-  if (!conversion.isValid) throw new UnsupportedMediaError('That video cannot be converted in this browser.');
+  // Mediabunny drops a track it can't encode and carries on; a reel without its picture is not a reel.
+  if (!conversion.isValid || conversion.discardedTracks.some((d) => d.track.type === 'video' || d.reason !== 'discarded_by_user')) {
+    throw new UnsupportedMediaError('That video cannot be converted in this browser. Try Chrome or Edge, or post it from the Android app.');
+  }
   conversion.onProgress = (progress) => onProgress?.(progress);
   await conversion.execute();
-  const buffer = (output.target as BufferTarget).buffer!;
-  const blob = new Blob([buffer], { type: 'video/mp4' });
+  const blob = new Blob([target.buffer!], { type: 'video/mp4' });
 
   // Poster: a frame a little way in, as a JPEG.
   const sink = new CanvasSink(track, { width, height, fit: 'contain' });
@@ -273,16 +284,18 @@ export function bytesLabel(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-/** Voice notes: AAC in MP4 where the browser can encode it (Android plays WebM/Opus too, as a fallback). */
+/** Voice notes: mono AAC in MP4 (the raw WebM/Opus recording is the fallback; Android plays that too). */
 export async function prepareVoice(blob: Blob, durationMs: number): Promise<Prepared> {
   try {
+    const { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output, Quality, canEncodeAudio } = await loadCodecs();
     if (await canEncodeAudio('aac')) {
       const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
-      const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
-      const conversion = await Conversion.init({ input, output, video: { discard: true }, audio: { codec: 'aac', quality: new Quality(64_000), numberOfChannels: 1, forceTranscode: true }, showWarnings: false });
+      const target = new BufferTarget();
+      const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+      const conversion = await Conversion.init({ input, output, video: { discard: true }, audio: { codec: 'aac', quality: new Quality({ bitrate: 64_000 }), numberOfChannels: 1, forceTranscode: true }, showWarnings: false });
       if (conversion.isValid) {
         await conversion.execute();
-        return { blob: new Blob([(output.target as BufferTarget).buffer!], { type: 'audio/mp4' }), mime: 'audio/mp4', width: 0, height: 0, durationMs };
+        return { blob: new Blob([target.buffer!], { type: 'audio/mp4' }), mime: 'audio/mp4', width: 0, height: 0, durationMs };
       }
     }
   } catch {
