@@ -3,6 +3,7 @@ import { childKey, openObject, unwrapKey } from '../crypto/object';
 import { CryptoError, b64, fromUtf8, unb64 } from '../crypto/sodium';
 import { wrapKey } from '../crypto/object';
 import { api } from './api';
+import { ApiError } from './errors';
 import { LocalDb, type Pin } from './db';
 import { CHILD_KEYED, Kind, type HighlightPayload } from './payloads';
 import { getState, useApp, type Entity } from './store';
@@ -109,6 +110,25 @@ class SyncEngine {
   }
 
   /** Pins identity keys on first sight and flags changes; refuses keys that are not self-signed. */
+  /** Users fetched outside a sync go through the same signature check and key pinning; null if absent or refused. */
+  async upsertUser(user: UserDto): Promise<UserDto | null> {
+    this.applyUsers([user]);
+    return getState().users[user.id] ?? null;
+  }
+
+  /**
+   * A wrap task can arrive before the sync that introduces its recipient (they joined a moment ago). Fetch them rather
+   * than closing the task with nothing sealed, which would keep the author's older posts from them for good.
+   */
+  private async fetchUser(id: string): Promise<UserDto | null> {
+    try {
+      return await this.upsertUser(await api.get<UserDto>(`/users/${id}`));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
   private applyUsers(users: UserDto[]) {
     if (!users.length) return;
     const { pins } = getState();
@@ -281,7 +301,7 @@ class SyncEngine {
     if (!keys) return;
     const tasks = await api.get<WrapTaskDto[]>('/wrap-tasks');
     for (const task of tasks) {
-      const recipient = users[task.recipientId];
+      const recipient = users[task.recipientId] ?? (await this.fetchUser(task.recipientId));
       if (!recipient || recipient.deleted) {
         await api.post(`/wrap-tasks/${task.id}/done`);
         continue;

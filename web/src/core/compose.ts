@@ -318,7 +318,8 @@ export async function toggleSaved(postId: string) {
 
 async function refreshUser(id: string) {
   const user = await api.get<import('./types').UserDto>(`/users/${id}`);
-  useApp.setState((s) => ({ users: { ...s.users, [id]: user } }));
+  // Through the engine, so the box key's signature is checked and identity changes are pinned, as in a sync.
+  await engine.upsertUser(user);
   return user;
 }
 

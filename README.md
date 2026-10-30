@@ -100,7 +100,8 @@ bash deploy/tests/run.sh
 ./gradlew -p android :app:testDebugUnitTest :app:assembleDebug
 ```
 
-On every push to `aezgram`, CI runs all of the above. It builds the image (server, web app and unsigned APK) and
+On every push to `aezgram`, CI runs all of the above, plus the photo and video pipeline on an Android emulator. It
+renders the Android screens to screenshots for review, and builds the image (server, web app and unsigned APK) and
 smoke-tests it, including signing the APK and checking it the way a phone would. Then it publishes everything to
 the rolling `aezgram-latest` release that `install.sh` and `update.sh` read.
 

@@ -96,6 +96,8 @@ class ClientTest {
 
         // Profiles are sealed to every member.
         ana.composer.saveProfile(ProfilePayload(displayName = "Ana Lima", bio = "hi"))
+        // If Ana's client hadn't heard of Bo yet, the server has it seal the profile to Bo on its next sync.
+        ana.engine.sync()
         bo.engine.sync()
         val anaId = ana.state.value.me!!.id
         val boId = bo.state.value.me!!.id

@@ -292,7 +292,9 @@ fun Route.api(s: Services) = route("/api/v1") {
     }
     post("/wrap-tasks/{id}/done") {
         val session = call.session(s)
-        blocking { s.objects.completeTask(session.userId, call.param("id").toLongOrNull() ?: badRequest("bad id")) }
+        val fx = Effects()
+        blocking { s.objects.completeTask(session.userId, call.param("id").toLongOrNull() ?: badRequest("bad id"), fx) }
+        s.realtime.apply(fx)
         call.respond(OkResponse())
     }
 

@@ -39,9 +39,9 @@ class SyncEngine(
         private set
     private var cursor = 0L
     private val syncLock = Mutex()
-    @Volatile
+    /** Guards [again] and [running] together. */
+    private val guard = Any()
     private var again = false
-    @Volatile
     private var running: CompletableDeferred<Unit>? = null
 
     /** Objects waiting for a parent, an author or a highlight key. Guarded by [ingestLock]. */
@@ -78,27 +78,39 @@ class SyncEngine(
         }
     }
 
-    /** Coalesces concurrent requests: one sync runs at a time, and one more runs after it if anything asked. */
+    /**
+     * Coalesces concurrent requests: one sync runs at a time, and one more runs after it if anything asked. Returns only
+     * once a sync that *started after this call* has finished. [guard] makes "ask for another round" and "finish" one
+     * step each, so a request can't slip in after the last round's check and be answered by an older round.
+     */
     suspend fun sync() {
-        running?.let {
-            again = true
-            it.await()
-            return
-        }
+        val inFlight = synchronized(guard) { running?.also { again = true } }
+        if (inFlight != null) return inFlight.await()
         syncLock.withLock {
             val done = CompletableDeferred<Unit>()
-            running = done
+            synchronized(guard) {
+                running = done
+                again = false
+            }
             try {
-                do {
-                    again = false
+                while (true) {
                     syncOnce()
-                } while (again)
+                    val finished = synchronized(guard) {
+                        if (again) {
+                            again = false
+                            false
+                        } else {
+                            running = null
+                            true
+                        }
+                    }
+                    if (finished) break
+                }
                 done.complete(Unit)
             } catch (e: Throwable) {
+                synchronized(guard) { running = null }
                 done.completeExceptionally(e)
                 throw e
-            } finally {
-                running = null
             }
         }
     }
@@ -324,7 +336,7 @@ class SyncEngine(
         val keys = s.keys ?: return
         val tasks: List<WrapTaskDto> = api.get("/wrap-tasks")
         for (task in tasks) {
-            val recipient = state.value.users[task.recipientId]
+            val recipient = recipientOf(task.recipientId)
             if (recipient == null || recipient.deleted) {
                 api.post<OkResponse>("/wrap-tasks/${task.id}/done")
                 continue
@@ -340,6 +352,23 @@ class SyncEngine(
             for (chunk in wraps.chunked(500)) api.post<OkResponse, WrapsRequest>("/wraps", WrapsRequest(chunk))
             api.post<OkResponse>("/wrap-tasks/${task.id}/done")
         }
+    }
+
+    /**
+     * A task can arrive before the sync that introduces its recipient (they joined a moment ago). Fetch them then, through
+     * the usual signature check and key pinning, rather than closing the task with nothing sealed: that would keep the
+     * author's older posts from them for good. Null only when the account is gone (or its keys don't check out).
+     */
+    private suspend fun recipientOf(id: String): UserDto? {
+        state.value.users[id]?.let { return it }
+        val user = try {
+            api.get<UserDto>("/users/$id")
+        } catch (e: ApiException) {
+            if (e.status == 404) return null
+            throw e
+        }
+        upsertUser(user)
+        return state.value.users[id]
     }
 
     fun upsertThread(thread: ThreadDto) {

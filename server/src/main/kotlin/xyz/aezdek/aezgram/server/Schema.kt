@@ -174,6 +174,10 @@ object Schema {
             muted_threads TEXT NOT NULL
         );
         """.trimIndent(),
+        // 3: when the author's client last fetched a wrap task, so completing it can't drop objects made after that.
+        """
+        ALTER TABLE wrap_tasks ADD COLUMN fetched_at INTEGER;
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

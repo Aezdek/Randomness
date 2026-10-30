@@ -38,6 +38,47 @@ class ObjectsTest {
     }
 
     @Test
+    fun aPostSealedBeforeTheAuthorHeardOfANewMemberStillReachesThem() = serverTest {
+        val (alice, bob) = members("alice", "bob")
+        val directory = listOf(alice, bob).associateBy { it.id }
+        // Alice's client handles the join-time task first, while it has nothing to seal...
+        alice.processWrapTasks(directory)
+        assertTrue(alice.get("/api/v1/wrap-tasks").body<List<WrapTaskDto>>().isEmpty())
+
+        // ...then posts to all members with a member list from before bob joined.
+        val (post) = alice.seal("post", "members", "hello everyone")
+        assertEquals(HttpStatusCode.Created, alice.create(post).status)
+        val tasks = alice.get("/api/v1/wrap-tasks").body<List<WrapTaskDto>>()
+        assertEquals(listOf(bob.id), tasks.map { it.recipientId })
+        assertEquals(listOf(post.id), tasks.single().objects.map { it.id })
+
+        alice.processWrapTasks(directory)
+        bob.sync()
+        assertEquals("hello everyone", bob.open(bob.received.getValue(post.id), alice))
+    }
+
+    @Test
+    fun finishingATaskFetchedBeforeANewPostKeepsItOpenForThatPost() = serverTest {
+        val (alice, bob) = members("alice", "bob")
+        val directory = listOf(alice, bob).associateBy { it.id }
+        // Alice's client fetches the join-time task while there is nothing to seal...
+        val task = alice.get("/api/v1/wrap-tasks").body<List<WrapTaskDto>>().single { it.recipientId == bob.id }
+        assertTrue(task.objects.isEmpty())
+        // ...meanwhile posts without bob (its member list is older than his account)...
+        val (post) = alice.seal("post", "members", "made meanwhile")
+        assertEquals(HttpStatusCode.Created, alice.create(post).status)
+        // ...and reports the task done. That must not drop the new post.
+        alice.post("/api/v1/wrap-tasks/${task.id}/done", null)
+        val open = alice.get("/api/v1/wrap-tasks").body<List<WrapTaskDto>>()
+        assertEquals(listOf(post.id), open.single { it.recipientId == bob.id }.objects.map { it.id })
+
+        alice.processWrapTasks(directory)
+        assertTrue(alice.get("/api/v1/wrap-tasks").body<List<WrapTaskDto>>().isEmpty())
+        bob.sync()
+        assertEquals("made meanwhile", bob.open(bob.received.getValue(post.id), alice))
+    }
+
+    @Test
     fun followersOfAPrivateAccountGetOldPostsThroughWrapTasks() = serverTest {
         val (alice, bob, carol) = members("alice", "bob", "carol")
         val directory = listOf(alice, bob, carol).associateBy { it.id }

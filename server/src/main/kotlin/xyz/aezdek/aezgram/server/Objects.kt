@@ -232,6 +232,7 @@ class Objects(private val db: Db, private val clock: Clock) {
         }
         up.blobIds.distinct().forEach { exec("INSERT INTO object_blobs (object_id, blob_id) VALUES (?, ?)", up.id, it) }
         up.refIds.distinct().forEach { exec("INSERT INTO object_refs (object_id, ref_id) VALUES (?, ?)", up.id, it) }
+        queueMissedWraps(userId, up, wraps.mapTo(HashSet()) { it.recipientId }, fx, now)
 
         val obj = load(up.id)!!
         val readers = readers(obj)
@@ -380,6 +381,24 @@ class Objects(private val db: Db, private val clock: Clock) {
         }
     }
 
+    /**
+     * A client that hadn't heard of someone yet (they joined or followed moments ago) seals a new post without them, and
+     * the "seal your old posts for them" task may already have run before the post existed. Queue another task for
+     * anyone the audience includes but the wraps left out, and nudge the author's client to sync and seal it.
+     */
+    private fun Tx.queueMissedWraps(authorId: String, up: ObjectUpload, wrapped: Set<String>, fx: Effects, now: Long) {
+        if (up.kind !in TOP_LEVEL || (up.audience != Audience.MEMBERS && up.audience != Audience.FOLLOWERS)) return
+        val authorPrivate = one("SELECT is_private FROM users WHERE id = ?", authorId) { it.bool("is_private") } ?: true
+        val missed = strings("SELECT id FROM users WHERE deleted = 0 AND id != ?", authorId).filter { other ->
+            other !in wrapped && !blocked(authorId, other) && (
+                up.audience == Audience.MEMBERS || !authorPrivate ||
+                    followState(other, authorId) == xyz.aezdek.aezgram.protocol.FollowState.FOLLOWING
+                )
+        }
+        missed.forEach { addWrapTask(authorId, it, "missed", now) }
+        if (missed.isNotEmpty()) fx.syncUsers += authorId
+    }
+
     /** Tells [userId] about an object and every descendant (comments, likes) they can now read. */
     private fun Tx.notifyTree(id: String, userId: String, fx: Effects, now: Long) {
         var frontier = listOf(id)
@@ -437,31 +456,47 @@ class Objects(private val db: Db, private val clock: Clock) {
     /** The author's open tasks, each with the objects to seal for its recipient (and the author's own wraps). */
     fun wrapTasks(authorId: String): List<WrapTaskDto> = db.tx {
         val now = clock.now()
-        val authorPrivate = one("SELECT is_private FROM users WHERE id = ?", authorId) { it.bool("is_private") } ?: true
         query("SELECT id, recipient_id, reason FROM wrap_tasks WHERE author_id = ? AND done_at IS NULL ORDER BY id", authorId) {
             Triple(it.getLong("id"), it.str("recipient_id"), it.str("reason"))
         }.map { (taskId, recipientId, reason) ->
-            val recipientOk = exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", recipientId) && !blocked(authorId, recipientId)
-            val follows = followState(recipientId, authorId) == xyz.aezdek.aezgram.protocol.FollowState.FOLLOWING
-            val audiences = buildList {
-                add(Audience.MEMBERS)
-                if (follows || !authorPrivate) add(Audience.FOLLOWERS)
-            }
-            val objects = if (!recipientOk) emptyList() else query(
-                """SELECT * FROM objects o WHERE o.author_id = ? AND o.deleted = 0 AND o.archived = 0
-                   AND o.thread_id IS NULL AND o.parent_id IS NULL AND o.kind IN (${placeholders(TOP_LEVEL.size)})
-                   AND o.audience IN (${placeholders(audiences.size)})
-                   AND (o.expires_at IS NULL OR o.expires_at > ?)
-                   AND NOT EXISTS (SELECT 1 FROM wraps w WHERE w.object_id = o.id AND w.recipient_id = ?)
-                   ORDER BY o.received_at""",
-                authorId, *TOP_LEVEL.toTypedArray(), *audiences.toTypedArray(), now, recipientId,
-            ) { it.toObjectRow() }.map { toDto(it, authorId) }
-            WrapTaskDto(taskId, recipientId, reason, objects)
+            exec("UPDATE wrap_tasks SET fetched_at = ? WHERE id = ?", now, taskId)
+            WrapTaskDto(taskId, recipientId, reason, unsealedFor(authorId, recipientId, now, since = 0).map { toDto(it, authorId) })
         }
     }
 
-    fun completeTask(authorId: String, taskId: Long) = db.tx {
-        if (exec("UPDATE wrap_tasks SET done_at = ? WHERE id = ? AND author_id = ?", clock.now(), taskId, authorId) == 0) notFound()
+    /**
+     * Closes a task, unless something the recipient should read appeared after the client fetched it (say a post made
+     * while the client was sealing, and so sealed without them): then it stays open for the client's next sync.
+     */
+    fun completeTask(authorId: String, taskId: Long, fx: Effects): Unit = db.tx {
+        val (recipientId, fetchedAt) = one("SELECT recipient_id, fetched_at FROM wrap_tasks WHERE id = ? AND author_id = ?", taskId, authorId) {
+            it.str("recipient_id") to (it.longOrNull("fetched_at") ?: 0L)
+        } ?: notFound()
+        if (unsealedFor(authorId, recipientId, clock.now(), since = fetchedAt).isEmpty()) {
+            exec("UPDATE wrap_tasks SET done_at = ? WHERE id = ? AND done_at IS NULL", clock.now(), taskId)
+        } else {
+            fx.syncUsers += authorId
+        }
+    }
+
+    /** [authorId]'s live top-level objects that [recipientId] may read but has no wrap for, received at or after [since]. */
+    private fun Tx.unsealedFor(authorId: String, recipientId: String, now: Long, since: Long): List<ObjectRow> {
+        if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", recipientId) || blocked(authorId, recipientId)) return emptyList()
+        val authorPrivate = one("SELECT is_private FROM users WHERE id = ?", authorId) { it.bool("is_private") } ?: true
+        val follows = followState(recipientId, authorId) == xyz.aezdek.aezgram.protocol.FollowState.FOLLOWING
+        val audiences = buildList {
+            add(Audience.MEMBERS)
+            if (follows || !authorPrivate) add(Audience.FOLLOWERS)
+        }
+        return query(
+            """SELECT * FROM objects o WHERE o.author_id = ? AND o.deleted = 0 AND o.archived = 0
+               AND o.thread_id IS NULL AND o.parent_id IS NULL AND o.kind IN (${placeholders(TOP_LEVEL.size)})
+               AND o.audience IN (${placeholders(audiences.size)})
+               AND (o.expires_at IS NULL OR o.expires_at > ?) AND o.received_at >= ?
+               AND NOT EXISTS (SELECT 1 FROM wraps w WHERE w.object_id = o.id AND w.recipient_id = ?)
+               ORDER BY o.received_at""",
+            authorId, *TOP_LEVEL.toTypedArray(), *audiences.toTypedArray(), now, since, recipientId,
+        ) { it.toObjectRow() }
     }
 
     // ------------------------------------------------------------------------------------------------------ expiry
