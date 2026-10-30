@@ -1,0 +1,191 @@
+name: AezGram
+
+on:
+  push:
+    branches: [aezgram]
+  pull_request:
+    branches: [aezgram]
+  workflow_dispatch:
+
+concurrency:
+  group: aezgram-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERSION: 1.0.${{ github.run_number }}
+
+jobs:
+  server:
+    name: Server and crypto
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests (crypto vectors, 30 server integration tests)
+        run: ./gradlew --continue :shared:crypto:test :server:test :server:installDist
+      - name: Cross-language vectors are up to date
+        run: git diff --exit-code crypto-vectors/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: server-test-reports
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: server/build/install/server/
+          retention-days: 3
+
+  web:
+    name: Web (unit, build, end-to-end)
+    needs: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-dist
+          path: ${{ runner.temp }}/server
+      - run: npm ci --no-audit --no-fund
+      - name: Unit tests (crypto vectors against Kotlin's output)
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start the server on a fresh data directory
+        run: |
+          chmod +x "$RUNNER_TEMP/server/bin/server"
+          mkdir -p "$RUNNER_TEMP/data"
+          AEZGRAM_DATA_DIR="$RUNNER_TEMP/data" AEZGRAM_HOST=127.0.0.1 AEZGRAM_PORT=8080 AEZGRAM_WEB_DIR="$PWD/dist" \
+            AEZGRAM_MIN_FREE_GB=1 AEZGRAM_VERSION="$VERSION" nohup "$RUNNER_TEMP/server/bin/server" >"$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8080/healthz && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/server.log"; exit 1
+      - name: End to end (three users, E2EE, a real WebRTC call, 4K video, no plaintext on the server)
+        run: AEZGRAM_DATA_DIR="$RUNNER_TEMP/data" SHOTS_DIR="$RUNNER_TEMP/shots" npx playwright test
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/server.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-screenshots
+          path: |
+            ${{ runner.temp }}/shots/
+            web/test-results/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 3
+
+  deploy:
+    name: Deploy scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools (shellcheck, rclone, the real cloudflared)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q shellcheck rclone
+          curl -fsSL -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x "$RUNNER_TEMP/cloudflared"
+          "$RUNNER_TEMP/cloudflared" --version
+      - name: shellcheck
+        run: shellcheck -x -P SCRIPTDIR --severity=warning deploy/*.sh deploy/tests/run.sh deploy/tests/stubs/* scripts/*.sh
+      - name: install / update / backup / restore against fixtures
+        run: REAL_CLOUDFLARED="$RUNNER_TEMP/cloudflared" deploy/tests/run.sh
+
+  image:
+    name: Image and release
+    needs: [server, web, deploy]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/aezgram'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Android APK (when the Android job published one)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: aezgram-apk
+          path: deploy/apk
+      - name: Build the image
+        run: |
+          TAG="aezgram:${GITHUB_SHA::12}"
+          docker build --pull --build-arg AEZGRAM_VERSION="$VERSION" -t "$TAG" .
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+      - name: Smoke test the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/data" && sudo chown 10001:10001 "$RUNNER_TEMP/data"
+          docker run -d --name smoke --read-only --tmpfs /tmp:exec --memory 512m -p 127.0.0.1:18080:8080 -v "$RUNNER_TEMP/data:/data" "$TAG"
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/healthz | grep -q "\"version\":\"$VERSION\""; then
+              curl -fsS http://127.0.0.1:18080/ | grep -q '<title>' && docker rm -f smoke && exit 0
+            fi
+            sleep 1
+          done
+          docker logs smoke; exit 1
+      - name: Package the release
+        run: |
+          mkdir -p out
+          docker save "$TAG" | gzip -n > out/aezgram-image.tar.gz
+          tar -czf out/aezgram-deploy.tar.gz -C deploy lib.sh compose.yml update.sh backup.sh restore.sh RUNBOOK.md systemd
+          cp deploy/install.sh out/install.sh
+          SHA=$(sha256sum out/aezgram-image.tar.gz | cut -c1-64)
+          cat > out/aezgram-release.env <<EOF
+          AEZGRAM_COMMIT=$GITHUB_SHA
+          AEZGRAM_VERSION=$VERSION
+          AEZGRAM_IMAGE_TAG=$TAG
+          AEZGRAM_IMAGE_SHA256=$SHA
+          AEZGRAM_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          sed -i 's/^ *//' out/aezgram-release.env
+          ls -la out
+          {
+            echo "### AezGram $VERSION"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Image: \`$TAG\`, archive sha256 \`$SHA\` ($(du -h out/aezgram-image.tar.gz | cut -f1))"
+            echo "- APK: $([ -f deploy/apk/aezgram.apk ] && echo included || echo 'not in this build')"
+            echo "- On Resolute: \`sudo /opt/hl/aezgram/update.sh\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish to the aezgram-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f aezgram-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/aezgram-latest
+          NOTES="AezGram $VERSION, built from ${GITHUB_SHA::12}. Install: see deploy/RUNBOOK.md. Update on Resolute: sudo /opt/hl/aezgram/update.sh"
+          if gh release view aezgram-latest >/dev/null 2>&1; then
+            gh release edit aezgram-latest --title "AezGram $VERSION" --notes "$NOTES"
+          else
+            gh release create aezgram-latest --title "AezGram $VERSION" --notes "$NOTES" --latest=false
+          fi
+          gh release upload aezgram-latest out/* --clobber
