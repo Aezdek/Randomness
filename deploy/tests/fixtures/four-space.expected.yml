@@ -1,0 +1,15 @@
+tunnel: resolute
+credentials-file: /root/.cloudflared/resolute.json
+ingress:
+    -   hostname: lucifer.aezdek.xyz
+        service: http://127.0.0.1:8080
+    -   hostname: print.aezdek.xyz
+        path: ^/api/
+        service: http_status:404
+    -   hostname: print.aezdek.xyz
+        service: http://127.0.0.1:8090
+    -   hostname: gram.aezdek.xyz
+        service: http://127.0.0.1:8472
+    -   service: http_status:404
+warp-routing:
+    enabled: false

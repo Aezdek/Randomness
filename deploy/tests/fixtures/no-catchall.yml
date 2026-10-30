@@ -1,0 +1,4 @@
+tunnel: resolute
+ingress:
+  - hostname: lucifer.aezdek.xyz
+    service: http://127.0.0.1:8080

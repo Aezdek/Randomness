@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Test double for curl. file:// goes to the real curl (the fake release); the local health check answers with the
+# version "running"; tunnel hostnames answer 200, or 530 after a cloudflared restart if listed in
+# $STUB_BREAK_AFTER_RESTART.
+state=${STUB_STATE:?}
+url="" want_code=false out=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case ${args[i]} in
+    -w) want_code=true; i=$((i + 1)) ;;
+    -o) out=${args[i + 1]}; i=$((i + 1)) ;;
+    -H | -X | --data | --max-time | --retry | -d) i=$((i + 1)) ;;
+    http://* | https://* | file://*) url=${args[i]} ;;
+  esac
+done
+case $url in
+  file://*) exec /usr/bin/curl "$@" ;;
+  http://127.0.0.1:*/healthz)
+    running=$(cat "$state/running" 2>/dev/null || true)
+    [ -n "$running" ] && [ "$running" != broken ] || exit 7
+    echo "{\"ok\":true,\"version\":\"$running\"}"
+    ;;
+  https://*/healthz) echo '{"ok":true,"version":"x"}' ;;
+  https://api.github.com/*) exit 22 ;;
+  https://*)
+    host=${url#https://}; host=${host%%/*}
+    code=200
+    if [ "$(cat "$state/restarts" 2>/dev/null || echo 0)" -gt 0 ] && [[ " ${STUB_BREAK_AFTER_RESTART:-} " == *" $host "* ]]; then code=530; fi
+    [ -n "$out" ] && [ "$out" != /dev/null ] && : >"$out"
+    $want_code && printf '%s' "$code"
+    ;;
+  *) exit 6 ;;
+esac

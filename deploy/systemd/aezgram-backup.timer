@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly AezGram backup, after the server's 03:00 database snapshot
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

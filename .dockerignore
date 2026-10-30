@@ -1,0 +1,12 @@
+**/build
+**/.gradle
+**/.kotlin
+**/node_modules
+web/dist
+web/test-results
+web/playwright-report
+android
+crypto-vectors
+.git
+.github
+*.jks

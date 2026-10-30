@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Test double for docker: images are files in $STUB_STATE/images, "running" is the version compose started.
+set -euo pipefail
+state=${STUB_STATE:?}
+mkdir -p "$state/images"
+echo "docker $*" >>"$state/docker.log"
+env_of() { sed -n "s/^$2=//p" "$1" | tail -n1; }
+case "${1:-}" in
+  compose)
+    shift
+    env_file="" root=""
+    while [ $# -gt 0 ]; do
+      case $1 in
+        --env-file) env_file=$2; shift 2 ;;
+        --project-directory) root=$2; shift 2 ;;
+        -f) shift 2 ;;
+        *) break ;;
+      esac
+    done
+    case "${1:-}" in
+      version) echo "Docker Compose version v2.40.0" ;;
+      up)
+        version=$(env_of "$env_file" AEZGRAM_VERSION)
+        if [ -n "${STUB_BROKEN_VERSION:-}" ] && [ "$version" = "$STUB_BROKEN_VERSION" ]; then echo broken >"$state/running"; else echo "$version" >"$state/running"; fi
+        port=$(env_of "$env_file" AEZGRAM_HOST_PORT)
+        echo "$port" >"$state/port"
+        [ -f "$root/data/first-invite.txt" ] || echo "ABCDE-FGHJK" >"$root/data/first-invite.txt"
+        ;;
+      stop) rm -f "$state/running" ;;
+      ps) [ -f "$state/running" ] && echo "c0ffee" || true ;;
+      logs) echo "(stub logs)" ;;
+    esac
+    ;;
+  load)
+    file=$3
+    tag=$(cat "$state/next-tag")
+    sha256sum "$file" | cut -c1-64 | sed 's/^/sha256:/' >"$state/images/${tag//\//_}"
+    echo "Loaded image: $tag"
+    ;;
+  image)
+    case $2 in
+      inspect)
+        tag=${!#}
+        [ -f "$state/images/${tag//\//_}" ] || { echo "No such image: $tag" >&2; exit 1; }
+        cat "$state/images/${tag//\//_}"
+        ;;
+      ls) ls "$state/images" 2>/dev/null || true ;;
+      rm) rm -f "$state/images/${3//\//_}" ;;
+    esac
+    ;;
+esac

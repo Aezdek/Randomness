@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Test double for ss: ports in $STUB_BOUND_PORTS are "listening".
+port=${!#}; port=${port##*:}
+for p in ${STUB_BOUND_PORTS:-}; do [ "$p" = "$port" ] && echo "LISTEN 0 4096 127.0.0.1:$p 0.0.0.0:*"; done
+exit 0

@@ -1,0 +1,39 @@
+# AezGram on Resolute. The image is pinned in .env (AEZGRAM_IMAGE + AEZGRAM_IMAGE_ID, set by update.sh), never
+# pulled: there is no registry to pull from and no Watchtower, so nothing changes until you run update.sh.
+name: aezgram
+
+services:
+  aezgram:
+    image: ${AEZGRAM_IMAGE:?run update.sh to install an image}
+    pull_policy: never
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AEZGRAM_DATA_DIR: /data
+      AEZGRAM_HOST: 0.0.0.0
+      AEZGRAM_PORT: "8080"
+    # Only cloudflared on this machine talks to it.
+    ports:
+      - "127.0.0.1:${AEZGRAM_HOST_PORT:?}:8080"
+    volumes:
+      - ./data:/data
+    # Shares 6.7 GB with Immich, Jellyfin, Ollama and openGym: the JVM heap is capped at 384 MB inside this.
+    mem_limit: 512m
+    read_only: true
+    tmpfs:
+      # exec: sqlite-jdbc extracts its native library here.
+      - /tmp:size=64m,exec
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    labels:
+      # In case Watchtower runs for other stacks on this box: never for this one.
+      com.centurylinklabs.watchtower.enable: "false"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"ok\":true' <&3"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }

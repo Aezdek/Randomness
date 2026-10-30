@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Test double for systemctl: logs calls; restarting cloudflared bumps a counter the curl double reads.
+echo "systemctl $*" >>"${STUB_STATE:?}/systemctl.log"
+if [ "$1" = restart ] && [ "$2" = "${CLOUDFLARED_SERVICE:-cloudflared}" ]; then
+  echo $(( $(cat "$STUB_STATE/restarts" 2>/dev/null || echo 0) + 1 )) >"$STUB_STATE/restarts"
+fi
+exit 0

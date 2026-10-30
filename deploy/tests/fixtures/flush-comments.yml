@@ -1,0 +1,14 @@
+# Resolute tunnel
+tunnel: resolute
+credentials-file: /root/.cloudflared/resolute.json
+originRequest:
+  noTLSVerify: false
+
+ingress:
+- hostname: "lucifer.aezdek.xyz"   # the main site
+  service: http://localhost:8080
+- hostname: 'print.aezdek.xyz'
+  service: http://localhost:8090
+# Everything else gets a 404.
+# Keep this last.
+- service: http_status:404   # catch-all
