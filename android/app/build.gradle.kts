@@ -19,6 +19,7 @@ android {
         targetSdk = 36
         versionCode = runNumber
         versionName = "1.0.$runNumber"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SERVER_URL", "\"${System.getenv("AEZGRAM_SERVER_URL") ?: "https://gram.aezdek.xyz"}\"")
     }
 
@@ -41,6 +42,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Device tests reuse the web e2e fixtures (a 4K portrait phone clip, photos) rather than a second copy.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("../../web/e2e/fixtures")
     }
 
     testOptions {
@@ -108,6 +114,10 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.core)
 }
 
 tasks.withType<Test>().configureEach {
