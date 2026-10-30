@@ -1,0 +1,227 @@
+.shell {
+  display: flex;
+  min-height: 100%;
+}
+
+/* Desktop sidebar */
+.sidenav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--nav-w);
+  padding: 22px 12px 18px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 30;
+}
+.sidenav .brand {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.sidenav .brand .mark {
+  display: none;
+}
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 50px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: 15.5px;
+  font-weight: 450;
+  transition: background var(--t-fast);
+}
+.nav-item:hover {
+  background: var(--bg-hover);
+}
+.nav-item svg {
+  transition: transform var(--t) var(--ease-out);
+}
+.nav-item:hover svg {
+  transform: scale(1.06);
+}
+.nav-item.active {
+  font-weight: 700;
+}
+.nav-item .badge {
+  position: absolute;
+  left: 28px;
+  top: 8px;
+}
+.nav-item .avatar {
+  --size: 26px;
+}
+.nav-item.active .avatar {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
+}
+.sidenav .spacer {
+  flex: 1;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--nav-w);
+}
+
+/* Tablet: icon rail */
+@media (max-width: 1263px) {
+  .sidenav {
+    width: var(--nav-w-rail);
+    align-items: center;
+  }
+  .sidenav .brand .word {
+    display: none;
+  }
+  .sidenav .brand .mark {
+    display: block;
+  }
+  .nav-item {
+    width: 50px;
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item .label {
+    display: none;
+  }
+  .main {
+    margin-left: var(--nav-w-rail);
+  }
+}
+
+/* Mobile: top bar + bottom tabs */
+.topbar,
+.bottombar {
+  display: none;
+}
+@media (max-width: 767px) {
+  .sidenav {
+    display: none;
+  }
+  .main {
+    margin-left: 0;
+    padding-top: calc(var(--top-h) + var(--safe-t));
+    padding-bottom: calc(var(--bottom-h) + var(--safe-b));
+  }
+  .topbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: calc(var(--top-h) + var(--safe-t));
+    padding: var(--safe-t) 8px 0 16px;
+    background: var(--glass);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar .title {
+    flex: 1;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .bottombar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 30;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    height: calc(var(--bottom-h) + var(--safe-b));
+    padding-bottom: var(--safe-b);
+    background: var(--glass);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--border);
+  }
+  .bottombar a,
+  .bottombar button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 44px;
+    border-radius: var(--r-sm);
+  }
+  .bottombar .avatar {
+    --size: 26px;
+  }
+  .bottombar .active .avatar {
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text);
+  }
+  .bottombar .badge {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+}
+@media (min-width: 768px) {
+  .only-mobile {
+    display: none !important;
+  }
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 31px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+}
+.topbar .wordmark {
+  font-size: 27px;
+}
+
+.page {
+  max-width: 935px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+}
+.page.narrow {
+  max-width: 640px;
+}
+.page-title {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  margin: 8px 0 20px;
+}
+@media (max-width: 767px) {
+  .page {
+    padding: 12px 0 32px;
+  }
+  .page-title {
+    display: none;
+  }
+}
+
+.offline-banner {
+  position: fixed;
+  top: calc(var(--safe-t) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  background: var(--bg-elev-3);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 550;
+  box-shadow: var(--shadow);
+}

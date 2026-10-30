@@ -185,7 +185,7 @@ object MessageType {
 data class ReactionPayload(val emoji: String)
 
 @Serializable
-data class LivePayload(val title: String = "", val startedAt: Long)
+data class LivePayload(val title: String = "", val startedAt: Long, val callId: String? = null)
 
 /** Call/live signalling, sealed with SignalCrypto and relayed over the WebSocket. */
 @Serializable
