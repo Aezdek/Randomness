@@ -30,6 +30,11 @@ class Prefs(context: Context) {
         get() = prefs.getLong("activitySeen", 0)
         set(value) = prefs.edit().putLong("activitySeen", value).apply()
 
+    /** Vanish mode is a per-chat, per-device switch (as on the web). */
+    fun vanish(threadId: String): Boolean = prefs.getBoolean("vanish.$threadId", false)
+
+    fun setVanish(threadId: String, on: Boolean) = prefs.edit().putBoolean("vanish.$threadId", on).apply()
+
     var notifiedUpTo: Long
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()

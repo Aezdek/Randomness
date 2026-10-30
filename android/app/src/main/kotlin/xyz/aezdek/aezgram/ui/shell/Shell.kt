@@ -31,7 +31,7 @@ import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.StickyNote2
+import androidx.compose.material.icons.automirrored.outlined.StickyNote2
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -96,6 +96,12 @@ object Routes {
     @Composable
     fun render(screen: Screen, onCreate: () -> Unit) {
         when (screen) {
+            Screen.Home -> xyz.aezdek.aezgram.ui.feed.Home()
+            is Screen.Post -> xyz.aezdek.aezgram.ui.feed.PostDetail(screen.id)
+            Screen.Inbox -> xyz.aezdek.aezgram.ui.messages.Inbox()
+            is Screen.Chat -> xyz.aezdek.aezgram.ui.messages.Chat(screen.threadId)
+            Screen.NewChat -> xyz.aezdek.aezgram.ui.messages.NewChat()
+            is Screen.ThreadInfo -> xyz.aezdek.aezgram.ui.messages.ThreadInfo(screen.threadId)
             else -> Placeholder(screen.toString())
         }
     }
@@ -153,7 +159,7 @@ private fun CreateSheet(onDismiss: () -> Unit) {
             Option(Icons.Outlined.GridView, "Post", "Photos and videos on your profile") { onDismiss(); nav.go(Screen.Create(CreateKind.POST)) }
             Option(Icons.Outlined.AutoStories, "Story", "Disappears from the tray after 24 hours") { onDismiss(); nav.go(Screen.Create(CreateKind.STORY)) }
             Option(Icons.Outlined.Movie, "Reel", "A full-screen vertical video") { onDismiss(); nav.go(Screen.Create(CreateKind.REEL)) }
-            Option(Icons.Outlined.StickyNote2, "Note", "A short thought above your chats") { onDismiss(); nav.go(Screen.Create(CreateKind.NOTE)) }
+            Option(Icons.AutoMirrored.Outlined.StickyNote2, "Note", "A short thought above your chats") { onDismiss(); nav.go(Screen.Create(CreateKind.NOTE)) }
             Option(Icons.Outlined.Videocam, "Live", "Go live to your followers", live = true) { onDismiss(); Graph.calls.startLive() }
         }
     }
