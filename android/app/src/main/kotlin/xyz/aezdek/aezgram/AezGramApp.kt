@@ -20,6 +20,7 @@ import xyz.aezdek.aezgram.media.MediaCache
 import xyz.aezdek.aezgram.service.ConnectionService
 import xyz.aezdek.aezgram.service.Notifier
 import xyz.aezdek.aezgram.protocol.DeviceInfo
+import xyz.aezdek.aezgram.protocol.WsType
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -93,6 +94,15 @@ object Graph {
         notifier = Notifier(app)
         calls = CallManager(app, client)
         client.onSignedOut = { ConnectionService.stop(app) }
+        // Call signals and test rings, whether or not the background service is running.
+        scope.launch {
+            client.realtime.frames.collect { frame ->
+                when (frame.t) {
+                    WsType.SIGNAL -> calls.onSignal(frame)
+                    WsType.RING_TEST -> calls.testRing()
+                }
+            }
+        }
     }
 }
 
