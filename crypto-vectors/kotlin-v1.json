@@ -1,0 +1,74 @@
+{
+    "password": {
+        "password": "pässwörd ✓ 🔐",
+        "salt": "AAcOFRwjKjE4P0ZNVFtiaQ",
+        "opsLimit": 1,
+        "memLimit": 8388608,
+        "argonInput": "70c3a4737377c3b6726420e29c9320f09f9490",
+        "authKey": "ZxSU5U_Rbw_8rO9tnsOpAGRLTnm0qLZ5k_6ULkxjTlw",
+        "vaultKey": "rMhK7hunEPL8Zb3mxKgSZXcvoqzerSwJ8HqOlkg96ro"
+    },
+    "account": {
+        "signSeed": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+        "boxSeed": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+        "signPk": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "signSk": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA",
+        "boxPk": "YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA",
+        "boxSk": "qjxia8nDjIwgGHjrsdWwtQrEDomGx4eT2x1O82n8oc4",
+        "boxPkSig": "CbKp38RXn2oFd8i6glabdd-GG21heQa9PlDrpGfRqg6nwm7rMTts6igFjif9g3ybg0Nn7zsOXpwccXhISNonDw",
+        "vault": "3XQ4cA4u3ds5zqvGH3jIBPDKOiHU0iPRO6PZ1E-iTJqh1IahWURj4_h63SJflIStrcX6y8zCaKRvotKFmSwamgWD5dBnneZXisWN0jyCVIebmGWKWFim1DMDOOyMwlprNJiNLoxbFYK766J9DeF9-zV7RTpsfLnS5PRu3JrV3or6-7aVw0qZ5CE"
+    },
+    "object": {
+        "header": {
+            "id": "vectorObject0001",
+            "kind": "post",
+            "authorId": "author1",
+            "parentId": "parent1",
+            "threadId": null,
+            "audience": "followers",
+            "createdAt": 1700000000123,
+            "expiresAt": 1700086400000,
+            "version": 3,
+            "blobIds": [
+                "bbb",
+                "aaa"
+            ],
+            "refIds": [
+                "r2",
+                "r1"
+            ]
+        },
+        "plaintext": "{\"caption\":\"héllo 🌍\",\"media\":[]}",
+        "contentKey": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-f4CBgoM",
+        "payload": "_g4D_ueu9jXyq619_reUI7-HrRK_Ima_EkP7KZW5OXBI8ephgqXKMYpFkX9jxnVYeaghKAaQ-cQqGvdXtPKoVMEzl7msrzVjcQrhFw",
+        "commitment": "lnHFcIBzCtNATX3BLUCHe-1qbKKBVHN5BRjo2QjQMwc",
+        "signature": "RuttZIco57F1_EPFHanKNzk7me5OjaN6riNXox3f3ZxQYUEWPvwlTLiATnP2PgCGJPGj0ijChjRO4FfIzofBDg",
+        "wrap": "rZqsbvWDVAJdrxgACgCrLnxYuC40oKdK98Uo_zHx8yOS85qz5z4orE2EmamplPhsFbno2Ai9AQod8k8q-sS7FJBJvC64gFcV4nU9pYU3lZ8"
+    },
+    "child": {
+        "parentKey": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-f4CBgoM",
+        "childId": "comment-ü-1",
+        "key": "OTmFP9iWTNyqGjIJxA0i0B7MvmUpWRU5tC5aS8YpxpY"
+    },
+    "media": {
+        "fileKey": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+        "chunkSize": 256,
+        "plain": "AA0aJzRBTltodYKPnKm2w9Dd6vcEER4rOEVSX2x5hpOgrbrH1OHu-wgVIi88SVZjcH2Kl6SxvsvY5fL_DBkmM0BNWmd0gY6bqLXCz9zp9gMQHSo3RFFea3iFkp-sucbT4O36BxQhLjtIVWJvfImWo7C9ytfk8f4LGCUyP0xZZnOAjZqntMHO2-j1Ag8cKTZDUF1qd4SRnqu4xdLf7PkGEyAtOkdUYW57iJWir7zJ1uPw_QoXJDE-S1hlcn-MmaazwM3a5_QBDhsoNUJPXGl2g5CdqrfE0d7r-AUSHyw5RlNgbXqHlKGuu8jV4u_8CRYjMD1KV2RxfouYpbK_zNnm8wANGic0QU5baHWCj5yptsPQ3er3BBEeKzhFUl9seYaToK26x9Th7vsIFSIvPElWY3B9ipeksb7L2OXy_wwZJjNATVpndIGOm6i1ws_c6fYDEB0qN0RRXmt4hZKfrLnG0-Dt-gcUIS47SFVib3yJlqOwvcrX5PH-CxglMj9MWWZzgI2ap7TBztvo9QIPHCk2Q1BdaneEkZ6ruMXS3-z5BhMgLTpHVGFue4iVoq-8ydbj8P0KFyQxPktYZXJ_jJmms8DN2uf0AQ4bKDVCT1xpdoOQnaq3xNHe6_gFEh8sOUZTYG16h5ShrrvI1eLv_AkWIzA9SldkcX6LmKWyv8zZ5vMADRonNEFOW2h1go-cqbbD0N3q9wQRHis4RVJfbHmGk6CtusfU4e77CBUiLzxJVmNwfYqXpLG-y9jl8v8MGSYzQE1aZ3SBjpuotcLP3On2AxAdKjdEUV5reIWSn6y5xtPg7foHFCEuO0hVYm98iZajsL3K1-Tx_gsYJTI_TFlmc4CNmqe0wc7b6PUCDxwpNkNQXWp3hJGeq7jF0t_s-QYTIC06R1RhbnuIlaKvvMnW4_D9ChckMT5LWGVyf4yZprPAzdrn9AEOGyg1Qk9caXaDkJ2qt8TR3uv4BRIfLDlGU2BteoeUoa67yNXi7_wJFiMwPUpXZHF-i5ilsr_M2ebzAA0aJzRBTltodYKPnKm2w9Dd6vcEER4rOEVSX2x5hpOgrbrH1OHu-wgVIi88SVZjcH2Kl6SxvsvY5fL_DBkmM0BNWmd0gY6bqLXCz9zp9gMQHSo3RFFea3iFkp-sucbT4O36BxQhLjtIVWJvfImWo7C9ytfk8f4LGCUyP0xZZnOAjZqntMHO2-j1Ag8cKTZDUF1qd4SRnqu4xdLf7PkGEyAtOkdUYW57iJWir7zJ1uPw_QoXJDE-S1hlcn-MmaazwM3a5_QBDhsoNUJPXGl2g5CdqrfE0d7r-AUSHyw5RlNgbXqHlKGuuw",
+        "cipher": "QUdNMQAAAQAAAAAAAAAD6I9tl4dXefT32d8Wjj9ez9sXXTT4JBn-0CD0RHUFOK-qlgoAgUEFnhnY6h_hz-igFzqa7Ezh60Pz-0LFXXIYCV2ZG6_CEp3VaNavEMEyNq5BkWDZ3KEal7Za_rHbmY41qMqqjt8h_NCsh0E4hI1t0VQ7iGymXd7_TgRl3BeFGoSZ2oS9_voGh6rXxsMql6KECODnWqkW8oOXqf_oHjVUGX6sqNx0E5THIKRWngxhPs0qJGUyO5o2ymHp0RoBGk3a_ZOhu8HjEumTHyTwvt7YDa8zuWlklvN4lPi5p1Fqvp2p-EBOHXvjJetXPnsVUcSKGZ83wcpsPbeMuZRTPoWUYnYjQbCxv7bY4PimRvelqaj_AFrCCJJNzwSV558uA3z5qulTJmplbiUz-7DRPHLQPt1hH51q_NX_CkkjRH6qRPxkqZQboH0G-IxL4Nl26RF4At0spER77pekPKPRKVmNpF6tr3o4Bp3DK4oKKHGfbbX4Vcq_tB46o_3V6FE-Kh8c5FmK8a_TxgIjzbDtL_QucTXPRsDINUuqG6Qb5K1LssXHGu72VHImMkQf5sBjxFK8LpL66DLLl9hniGeXLJHmjCghENg2RAtDnIxf2pM9boJiWLgPw_XJppACR7Uw6ijo71OgRN5oE6SI4H4WdSCtP_lw3xZTQE4ex953NY5NNBr5qNg-H6TlD1LarK1__SbtMMNwsBMvT-1A1CRU3h3iG_BRJilF9sTBhhMEnzcqxv-hHH1LKxQxHFdCDv0Yajl_GCfYxPgmjf40VN5m4PdOYNxx2MDczk_Hs2UnZurJf8mKrYjHWMfHvNgK32ml_DKRNaY2c82TtQL6_MPYkhG3BwsoWdJH_y0tdzn6qGBEEMsULJDTvsFWt_LvbVxp3PLV_BLQTK7C81anPMU_gb8nL3WbDFuDZpStkHQpVpSDrOhj_P1yIYegolIgwxuGHK_ZuckPRTXczM-RmRLdPYYbsPiTDHYjvPFoARtzKsSocoaVk4rGIwMkgzKGcmL4pE-a3Y1j92Vm_-NMeoUB2uWkh5OT4oJSxm9itPAirhzR1knwal3RA3r9d66tsnqaW-sGTF1XNeuWbL3PIEZIeM3NHNkxVe4jCVA4nSLpJQETH0rAXM473LCGD_MD3DW1XPUn-_L9bjCVW0I5xFUBZsC8sylK_3ZuFu8CoyzpsWTDLhZOqf5bTOxaxPXtgfZEGHSQL_bzCRuHtDneTkOYLaLJQQY68WeZSD4Sxn7dZuza6v-vhO3Z77M1RN4bYDV9MsIY0hJAjRX5NPgiJ5FOQIeXgPZ5xIqrb-ISrDQKMu3EXKRL-Di77FU_gsuboledzflS5nh_rY_EuWdCQkCztHNhYK2AyWv-b_ouP8FzVVGlwX4fqHSARp-rDYyGuIYVJ2ioWbA_Wb0YEV3yw-x2jDgPw_wgQ7OYOEvMlg"
+    },
+    "safety": {
+        "signPkA": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+        "signPkB": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+        "codeA": "892787633655012173182108374535",
+        "pair": "886551675954495922864162228686892787633655012173182108374535"
+    },
+    "signal": {
+        "from": "alice",
+        "to": "bob",
+        "senderSignPk": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+        "sentAt": 1700000000000,
+        "sealed": "Yn04JfrRIQHpAViOJz0VefAJDm71zoWab0QqToPKNhkdyRAEMVq4Y9jiqxl-9pEnE5HvHQH534WhY7pXygCQPLKcwg5Ss-83fnRJeQ",
+        "signature": "oMx4Ts2YOY31VPsJC_ZPre4E3d2P6tcugWC3siOIBAMLcnJFSMk68uofWyAml1yhu-0HbE5X__vHuN2GgDimBA",
+        "plaintext": "{\"type\":\"offer\",\"sdp\":\"v=0\"}"
+    }
+}
