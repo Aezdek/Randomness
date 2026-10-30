@@ -221,7 +221,7 @@ fun Chat(threadId: String) {
                 val newDay = prev == null || !sameDay(prev.dto.receivedAt, message.dto.receivedAt)
                 Column {
                     if (newDay) {
-                        Text(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(message.dto.receivedAt)), fontSize = 12.sp, color = Aez.colors.text3,
+                        Text(dayLabel(message.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3,
                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
                     }
                     Bubble(
@@ -302,6 +302,22 @@ fun Chat(threadId: String) {
                 }
             }
         }
+    }
+}
+
+/** "Today 21:40", "Yesterday 09:12", "Tuesday 18:03", then the date, as Instagram's chat dividers read. */
+private fun dayLabel(at: Long, now: Long = System.currentTimeMillis()): String {
+    val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
+    val days = run {
+        val day = 86_400_000L
+        val zone = java.util.TimeZone.getDefault()
+        (now + zone.getOffset(now)) / day - (at + zone.getOffset(at)) / day
+    }
+    return when {
+        days == 0L -> "Today $time"
+        days == 1L -> "Yesterday $time"
+        days < 7L -> java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(Date(at)) + " $time"
+        else -> DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at))
     }
 }
 

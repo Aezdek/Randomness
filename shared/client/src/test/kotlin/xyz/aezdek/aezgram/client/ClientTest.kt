@@ -77,6 +77,9 @@ class ClientTest {
         assertTrue(what, check())
     }
 
+    /** The index for the state as it is now. [AezClient.index] is derived on another thread, so it can lag a moment. */
+    private val AezClient.current: Index get() = Index.build(state.value)
+
     private fun tempFile(bytes: ByteArray): File = File.createTempFile("media", ".bin", dir).apply { writeBytes(bytes) }
 
     @Test
@@ -96,7 +99,8 @@ class ClientTest {
         bo.engine.sync()
         val anaId = ana.state.value.me!!.id
         val boId = bo.state.value.me!!.id
-        assertEquals("Ana Lima", bo.index.value.profile(anaId)?.displayName)
+        assertEquals("Ana Lima", bo.current.profile(anaId)?.displayName)
+        until("the UI's index catches up") { bo.index.value.profile(anaId)?.displayName == "Ana Lima" }
 
         // Bo asks to follow (accounts start private); Ana confirms.
         bo.engine.sync()
@@ -116,7 +120,7 @@ class ClientTest {
         assertEquals("Golden hour @bo #golden", seen!!.payloadAs<PostPayload>()!!.caption)
         assertArrayEquals(photo, bo.media.download(seen.payloadAs<PostPayload>()!!.media.single()))
         // The @mention reached Bo as an activity item only he can read.
-        assertTrue(bo.index.value.activity.any { it.dto.authorId == anaId })
+        assertTrue(bo.current.activity.any { it.dto.authorId == anaId })
 
         // Ranged reads decrypt only the chunks they need, for video streaming.
         val ranged = bo.media.openRanged(ref)
@@ -128,30 +132,30 @@ class ClientTest {
         bo.composer.toggleLike(post.id)
         bo.composer.comment(post.id, "This light is unreal")
         ana.engine.sync()
-        assertTrue(ana.index.value.isLiked(post.id, boId))
-        assertEquals("This light is unreal", ana.index.value.commentsOf(post.id).single().payloadAs<CommentPayload>()!!.text)
+        assertTrue(ana.current.isLiked(post.id, boId))
+        assertEquals("This light is unreal", ana.current.commentsOf(post.id).single().payloadAs<CommentPayload>()!!.text)
         bo.composer.toggleLike(post.id)
         ana.engine.sync()
-        assertTrue(ana.index.value.likesOf(post.id).isEmpty())
+        assertTrue(ana.current.likesOf(post.id).isEmpty())
 
         // A story, then a direct chat that arrives over the WebSocket without polling.
         ana.composer.createStory(StoryPayload(text = StoryText("Sunrise tomorrow?")), closeFriends = false)
         bo.engine.sync()
-        assertEquals(1, bo.index.value.stories[anaId]?.size)
+        assertEquals(1, bo.current.stories[anaId]?.size)
 
         until("Bo's socket is open") { bo.realtime.isOpen }
         val threadId = ana.composer.openDirect(boId)
         ana.composer.sendMessage(threadId, MessagePayload(MessageType.TEXT, text = "Coffee later?"))
         until("Bo receives the message by itself") {
-            bo.index.value.messages[threadId].orEmpty().any { it.payloadAs<MessagePayload>()?.text == "Coffee later?" }
+            bo.current.messages[threadId].orEmpty().any { it.payloadAs<MessagePayload>()?.text == "Coffee later?" }
         }
-        val message = bo.index.value.messages[threadId]!!.single()
+        val message = bo.current.messages[threadId]!!.single()
         bo.composer.react(message, "❤️")
         bo.composer.sendMessage(threadId, MessagePayload(MessageType.TEXT, text = "Always", replyTo = message.id))
         ana.engine.sync()
-        assertEquals(2, ana.index.value.messages[threadId]!!.size)
-        assertEquals(1, ana.index.value.reactionsOf(message.id).size)
-        assertEquals(1, ana.index.value.unreadCount(ana.state.value.threads[threadId]!!, anaId))
+        assertEquals(2, ana.current.messages[threadId]!!.size)
+        assertEquals(1, ana.current.reactionsOf(message.id).size)
+        assertEquals(1, ana.current.unreadCount(ana.state.value.threads[threadId]!!, anaId))
 
         // Call signalling is sealed to Bo and signed by Ana; anything else is rejected.
         val frame = ana.sealSignal(boId, CallSignal("offer", "call-1", sdp = "v=0"))!!

@@ -83,8 +83,8 @@ fun Explore() {
     var query by rememberSaveable { mutableStateOf("") }
     val q = query.trim().lowercase().removePrefix("@").removePrefix("#")
     val posts = index.posts.filter { !it.dto.archived && state.users[it.dto.authorId]?.blockedByMe != true }
-    // Accounts you don't follow yet first, then everything else, newest first.
-    val explore = posts.sortedWith(compareBy<Entity> { state.users[it.dto.authorId]?.followState == FollowState.FOLLOWING }.thenByDescending { it.dto.createdAt })
+    // Other people's posts: accounts you don't follow yet first, then everything else, newest first.
+    val explore = posts.filter { it.dto.authorId != me.id }.sortedWith(compareBy<Entity> { state.users[it.dto.authorId]?.followState == FollowState.FOLLOWING }.thenByDescending { it.dto.createdAt })
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(Aez.colors.glass).statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Aez.colors.elev2).padding(horizontal = 12.dp, vertical = 11.dp),

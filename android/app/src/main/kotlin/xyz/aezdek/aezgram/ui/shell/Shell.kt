@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.AddBox
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
@@ -135,7 +135,11 @@ private fun BottomBar(screen: Screen, onCreate: () -> Unit) {
         Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
             Tab(if (screen == Screen.Home) Icons.Filled.Home else Icons.Outlined.Home, "Home") { nav.go(Screen.Home) }
             Tab(if (screen is Screen.Explore) Icons.Filled.Search else Icons.Outlined.Search, "Search") { nav.go(Screen.Explore()) }
-            Tab(Icons.Outlined.AddBox, "Create", onClick = onCreate)
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onCreate), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 36.dp, height = 28.dp).clip(RoundedCornerShape(10.dp)).background(Brand.gradient), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, "Create", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
             Tab(if (screen is Screen.Reels) Icons.Filled.Movie else Icons.Outlined.Movie, "Reels") { nav.go(Screen.Reels()) }
             Box(
                 Modifier.size(48.dp).clip(CircleShape).clickable { me?.let { nav.root(Screen.Profile(it.id)) } },

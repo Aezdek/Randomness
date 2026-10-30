@@ -104,6 +104,7 @@ import xyz.aezdek.aezgram.ui.Screen
 import xyz.aezdek.aezgram.ui.components.ActionSheet
 import xyz.aezdek.aezgram.ui.components.AezButton
 import xyz.aezdek.aezgram.ui.components.AezField
+import xyz.aezdek.aezgram.ui.components.Avatar
 import xyz.aezdek.aezgram.ui.components.ButtonStyle
 import xyz.aezdek.aezgram.ui.components.Chip
 import xyz.aezdek.aezgram.ui.components.IconAction
@@ -368,18 +369,32 @@ fun CreateReel() {
 @Composable
 fun CreateNote() {
     val nav = LocalNav.current
+    val state by Graph.client.state.collectAsState()
+    val index by Graph.client.index.collectAsState()
+    val me = state.me ?: return
     var text by remember { mutableStateOf("") }
     var emoji by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize().background(Aez.colors.bg).imePadding()) {
         TopBar("New note")
         Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.clip(RoundedCornerShape(22.dp)).background(Aez.colors.elev2).padding(horizontal = 20.dp, vertical = 14.dp)) {
-                if (text.isEmpty()) Text("Share a thought…", color = Aez.colors.text3, fontSize = 17.sp)
-                BasicTextField(text, { text = it.take(60) }, textStyle = TextStyle(color = Aez.colors.text, fontSize = 17.sp, textAlign = TextAlign.Center),
-                    cursorBrush = SolidColor(Aez.colors.text), modifier = Modifier.width(240.dp))
+            // The note as your friends will see it above your photo in their inbox.
+            Box(Modifier.padding(top = 12.dp)) {
+                Box(
+                    Modifier.width(260.dp).clip(RoundedCornerShape(24.dp)).background(Aez.colors.elev2).padding(horizontal = 20.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (text.isEmpty()) Text("Share a thought…", color = Aez.colors.text3, fontSize = 17.sp, textAlign = TextAlign.Center)
+                    BasicTextField(text, { text = it.take(60) }, textStyle = TextStyle(color = Aez.colors.text, fontSize = 17.sp, textAlign = TextAlign.Center),
+                        cursorBrush = SolidColor(Aez.colors.text), modifier = Modifier.fillMaxWidth())
+                }
+                emoji?.let { Text(it, fontSize = 24.sp, modifier = Modifier.align(Alignment.TopStart).offset(x = (-8).dp, y = (-12).dp)) }
             }
-            Text("${text.length}/60 · visible for 24 hours", fontSize = 12.sp, color = Aez.colors.text3, modifier = Modifier.padding(top = 8.dp))
-            Row(Modifier.padding(vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.padding(top = 4.dp, end = 70.dp).size(12.dp).clip(CircleShape).background(Aez.colors.elev2))
+            Box(Modifier.padding(top = 3.dp, end = 52.dp).size(7.dp).clip(CircleShape).background(Aez.colors.elev2))
+            Spacer(Modifier.height(8.dp))
+            Avatar(me.id, 96.dp, index, me.username)
+            Text("${text.length}/60 · friends see it for 24 hours", fontSize = 12.sp, color = Aez.colors.text3, modifier = Modifier.padding(top = 14.dp))
+            Row(Modifier.padding(vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (e in listOf("🎵", "☕", "🏃", "🌙", "🎉", "💭")) {
                     Text(e, fontSize = 26.sp, modifier = Modifier.clip(CircleShape).background(if (emoji == e) Aez.colors.elev3 else Color.Transparent)
                         .clickable { emoji = if (emoji == e) null else e }.padding(6.dp))

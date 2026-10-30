@@ -147,21 +147,26 @@ private fun NotesRow(index: Index, state: AppState) {
     LazyRow(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(people, key = { it }) { userId ->
             val note = index.notes[userId]?.payloadAs<NotePayload>()
-            Column(Modifier.width(78.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.height(116.dp), contentAlignment = Alignment.BottomCenter) {
-                    Avatar(userId, 70.dp, index, state.users[userId]?.username ?: me.username, ring = ringOf(userId, index, state)) {
+            Column(Modifier.width(92.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(118.dp), contentAlignment = Alignment.BottomCenter) {
+                    Avatar(userId, 68.dp, index, state.users[userId]?.username ?: me.username, ring = ringOf(userId, index, state)) {
                         if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) else nav.go(Screen.Profile(userId))
                     }
-                    Box(
-                        Modifier.align(Alignment.TopCenter).widthIn(max = 96.dp).clip(RoundedCornerShape(14.dp)).background(Aez.colors.elev2)
-                            .clickable { if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) }
-                            .padding(horizontal = 9.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            note?.let { (it.emoji?.plus(" ") ?: "") + it.text } ?: if (userId == me.id) "Share a note" else "",
-                            fontSize = 11.sp, color = if (note == null) Aez.colors.text3 else Aez.colors.text, maxLines = 3,
-                            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                        )
+                    // A thought bubble above the avatar: two lines at most, with the little tail Instagram's notes have.
+                    Column(Modifier.align(Alignment.TopCenter)) {
+                        Box(
+                            Modifier.widthIn(min = 56.dp, max = 92.dp).clip(RoundedCornerShape(16.dp)).background(Aez.colors.elev2)
+                                .clickable { if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                note?.let { (it.emoji?.plus(" ") ?: "") + it.text } ?: if (userId == me.id) "Share a note" else "",
+                                fontSize = 11.sp, lineHeight = 14.sp, color = if (note == null) Aez.colors.text3 else Aez.colors.text, maxLines = 2,
+                                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                            )
+                        }
+                        Box(Modifier.padding(start = 16.dp, top = 2.dp).size(7.dp).clip(CircleShape).background(Aez.colors.elev2))
                     }
                 }
                 Spacer(Modifier.height(4.dp))

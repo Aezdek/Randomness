@@ -125,7 +125,7 @@ fun Readiness() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (ready.all) Aez.colors.elev1 else Aez.colors.danger.copy(alpha = 0.10f)).padding(18.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (ready.all) Aez.colors.elev1 else tint(Aez.colors.danger)).padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(48.dp).clip(CircleShape).background(Brand.gradient), contentAlignment = Alignment.Center) {

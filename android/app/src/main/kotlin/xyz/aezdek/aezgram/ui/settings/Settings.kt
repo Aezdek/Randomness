@@ -608,9 +608,13 @@ private fun Stat(label: String, value: String, warn: Boolean = false) {
     }
 }
 
+/** A quiet, opaque wash of [color] over the card surface (solid, so it looks the same on every surface beneath). */
+@Composable
+internal fun tint(color: Color): Color = androidx.compose.ui.graphics.lerp(Aez.colors.elev1, color, 0.16f)
+
 @Composable
 internal fun Warning(text: String) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.danger.copy(alpha = 0.12f)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(tint(Aez.colors.danger)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.WarningAmber, null, tint = Aez.colors.danger, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(text, fontSize = 13.sp, color = Aez.colors.text)
