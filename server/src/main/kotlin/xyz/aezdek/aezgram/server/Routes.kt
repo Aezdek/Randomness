@@ -328,6 +328,14 @@ fun Route.api(s: Services) = route("/api/v1") {
         s.realtime.apply(fx)
         call.respond(thread)
     }
+    post("/threads/{id}/epochs") {
+        val session = call.session(s)
+        val req = call.receive<ObjectUpload>()
+        val fx = Effects()
+        val dto = blocking { s.threads.rotate(session.userId, call.param("id"), req, fx) }
+        s.realtime.apply(fx)
+        call.respond(HttpStatusCode.Created, dto)
+    }
     delete("/threads/{id}/members/{userId}") {
         val session = call.session(s)
         val fx = Effects()

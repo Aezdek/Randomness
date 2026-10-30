@@ -211,8 +211,9 @@ class Objects(private val db: Db, private val clock: Clock) {
         for (wrap in up.wraps) {
             if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", wrap.recipientId)) badRequest("Unknown recipient")
             if (members != null && wrap.recipientId !in members) badRequest("Recipient is not in the chat")
-            if (wrap.recipientId != userId && members == null && blocked(userId, wrap.recipientId)) badRequest("Recipient is blocked")
         }
+        // Someone who blocked the author (which the author's client cannot know) silently gets no wrap.
+        val wraps = up.wraps.filter { it.recipientId == userId || members != null || !blocked(userId, it.recipientId) }
         checkBlobs(userId, up.blobIds)
         checkRefs(userId, up.refIds)
 
@@ -223,7 +224,7 @@ class Objects(private val db: Db, private val clock: Clock) {
             B64u.dec(up.payload, "payload", max = MAX_PAYLOAD), B64u.dec(up.commitment, "commitment", size = 32),
             B64u.dec(up.signature, "signature", size = 64), now,
         )
-        for (wrap in up.wraps.distinctBy { it.recipientId }) {
+        for (wrap in wraps.distinctBy { it.recipientId }) {
             exec(
                 "INSERT INTO wraps (object_id, recipient_id, sealed, created_at) VALUES (?, ?, ?, ?)",
                 up.id, wrap.recipientId, B64u.dec(wrap.sealed, "wrap", max = 256), now,

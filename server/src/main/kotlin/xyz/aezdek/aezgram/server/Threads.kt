@@ -4,6 +4,7 @@ import xyz.aezdek.aezgram.protocol.AddMembersRequest
 import xyz.aezdek.aezgram.protocol.CreateThreadRequest
 import xyz.aezdek.aezgram.protocol.Kind
 import xyz.aezdek.aezgram.protocol.MAX_MEMBERS
+import xyz.aezdek.aezgram.protocol.ObjectUpload
 import xyz.aezdek.aezgram.protocol.ThreadDto
 import xyz.aezdek.aezgram.protocol.ThreadMemberDto
 
@@ -107,6 +108,19 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
         }
         change(members, ChangeType.THREAD, threadId, fx, now)
         thread(threadId)!!
+    }
+
+    /**
+     * A new epoch for the current members, started by whichever member next sends after someone left. The epoch's key
+     * must be sealed to every current member, and to nobody else.
+     */
+    fun rotate(me: String, threadId: String, epoch: ObjectUpload, fx: Effects) = db.tx {
+        val members = members(threadId)
+        if (me !in members) notFound()
+        if (epoch.kind != Kind.EPOCH || epoch.threadId != threadId) badRequest("bad epoch")
+        val recipients = epoch.wraps.map { it.recipientId }.toSet()
+        if (recipients != members.toSet()) badRequest("Seal the new key to exactly the current members")
+        objects.createIn(this, me, epoch, fx, allowThreadKinds = true)
     }
 
     /** Leaving (userId == me) or removing someone (creator only). Their wraps on the thread's keys go too. */
