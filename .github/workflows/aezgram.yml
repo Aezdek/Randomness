@@ -29,8 +29,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      - name: Tests (crypto vectors, 30 server integration tests)
-        run: ./gradlew --continue :shared:crypto:test :server:test :server:installDist
+      - name: Tests (crypto vectors, server integration, the Android client's shared logic against the real server)
+        run: ./gradlew --continue :shared:crypto:test :server:test :shared:client:test :server:installDist
       - name: Cross-language vectors are up to date
         run: git diff --exit-code crypto-vectors/
       - uses: actions/upload-artifact@v5
