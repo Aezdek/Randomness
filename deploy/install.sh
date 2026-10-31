@@ -29,12 +29,13 @@ SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 PORT_RANGE=${HUSH_PORT_RANGE:-8470-8499}
 RESTART_SETTLE_SECONDS=${RESTART_SETTLE_SECONDS:-60}
 
-# The deploy files: next to this script in a checkout, otherwise from the same release as the image.
-if [ -f "$HERE/lib.sh" ] && [ -f "$HERE/compose.yml" ]; then
+# The deploy files: next to this script in a checkout, otherwise from the same release as the image. Files next to it
+# in the install folder itself are the installed copies (possibly older), so a re-run from there fetches fresh ones.
+if [ -f "$HERE/lib.sh" ] && [ -f "$HERE/compose.yml" ] && ! [ "$HERE" -ef "$ROOT" ]; then
   SRC=$HERE
 else
   SRC=$(mktemp -d)
-  trap 'rm -rf "$SRC"' EXIT
+  SRC_TMP=$SRC
   curl -fsSL --retry 3 "$RELEASE_BASE/hush-deploy.tar.gz" | tar -xz -C "$SRC" ||
     { echo "error: could not download the deploy files from $RELEASE_BASE" >&2; exit 1; }
 fi
@@ -42,6 +43,7 @@ fi
 . "$SRC/lib.sh"
 set -E
 trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
+trap 'rm -rf "${SRC_TMP:-}"' EXIT
 
 [ "$(id -u)" = 0 ] || [ -n "${HUSH_TEST:-}" ] || die "run with sudo"
 
@@ -66,7 +68,7 @@ note "Data: $ROOT/data ($(df -h --output=avail "$ROOT/data" | tail -n1 | tr -d '
 # ------------------------------------------------------------------------------------------- 2. layout
 log "Files in $ROOT"
 for file in compose.yml update.sh backup.sh restore.sh lib.sh RUNBOOK.md; do
-  [ -f "$SRC/$file" ] && install -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$SRC/$file" "$ROOT/$file"
+  [ -f "$SRC/$file" ] && ! [ "$SRC/$file" -ef "$ROOT/$file" ] && install -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$SRC/$file" "$ROOT/$file"
 done
 
 ENV_FILE=$ROOT/.env

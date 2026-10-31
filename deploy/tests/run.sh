@@ -62,6 +62,7 @@ HUSH_IMAGE_TAG=hush:${3:0:12}
 HUSH_IMAGE_SHA256=$(sha256sum "$release/hush-image.tar.gz" | cut -c1-64)
 HUSH_BUILT_AT=2026-10-30T10:00:00Z
 EOF
+  tar -czf "$release/hush-deploy.tar.gz" -C "$DEPLOY" lib.sh compose.yml update.sh backup.sh restore.sh RUNBOOK.md systemd
   echo "hush:${3:0:12}" >"$1/state/next-tag"
 }
 
@@ -116,6 +117,15 @@ out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "re-running is safe" test $? -eq 0
 check "re-running leaves the tunnel config alone" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$edited"
 check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c hush '$BOX/opt/hl/PORTS.md') = 1 ]"
+
+# As on Resolute: install.sh downloaded into the install folder and run again from there.
+cp "$DEPLOY/install.sh" "$HUSH_ROOT/install.sh"
+echo "# from an older release" >>"$HUSH_ROOT/lib.sh"
+out=$(cd "$HUSH_ROOT" && bash ./install.sh 2>&1)
+status=$?
+check "re-running from inside the install folder works" test $status -eq 0
+[ $status -eq 0 ] || echo "$out" | tail -n 5 | sed 's/^/      /'
+check "... and installs the release's scripts, not the old copies" bash -c "! grep -q 'from an older release' '$HUSH_ROOT/lib.sh'"
 
 sandbox regress flush-comments.yml
 original=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
