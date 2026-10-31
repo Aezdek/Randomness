@@ -572,7 +572,7 @@ private fun AdminSection() {
             }
         }
     }
-    Card("Invites", "Each code lets one person join, within 30 days. Hush holds up to ${s?.maxUsers ?: 10} members.") {
+    Card("Invites", "Each code lets one person join, within 7 days. Hush holds up to ${s?.maxUsers ?: 10} members.") {
         AezButton("New invite", {
             scope.launch {
                 Graph.attempt { Graph.client.api.post<InviteDto>("/admin/invites") }?.let { shareInvite(context, it.code) }
