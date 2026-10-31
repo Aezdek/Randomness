@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../core/api';
-import { deleteObject, openDirect, recordView, sendMessage } from '../../core/compose';
+import { deleteObject, like, openDirect, recordView, sendMessage, unlike } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Audience, Kind, MessageType, type AnswerPayload, type HighlightPayload, type StoryPayload } from '../../core/payloads';
 import { useIndex } from '../../core/selectors';
@@ -183,6 +183,8 @@ export function StoryViewerPage() {
     );
   }
 
+  const liked = (index.children[story.dto.id] ?? []).some((e) => e.dto.kind === Kind.LIKE && e.dto.authorId === me.id);
+
   const send = async (text: string, reaction = false) => {
     try {
       const threadId = await openDirect(story.dto.authorId);
@@ -341,9 +343,16 @@ export function StoryViewerPage() {
                 </form>
                 {!typing && (
                   <>
-                    <button className="icon-btn story-icon" onClick={() => void send('❤️', true)} aria-label="Like">
-                      <Heart size={26} />
-                    </button>
+                    {/* A like is private, as on Instagram: the author sees it in the viewers list, not as a message. */}
+                    <motion.button
+                      className="icon-btn story-icon"
+                      whileTap={{ scale: 0.8 }}
+                      onClick={() => void (liked ? unlike(story.dto.id) : like(story.dto.id)).catch((e) => toast(messageOf(e), 'error'))}
+                      aria-label={liked ? 'Unlike' : 'Like'}
+                      aria-pressed={liked}
+                    >
+                      <Heart size={26} fill={liked ? 'var(--heart)' : 'none'} color={liked ? 'var(--heart)' : 'currentColor'} />
+                    </motion.button>
                     <button className="icon-btn story-icon" onClick={() => setSheet('share')} aria-label="Share">
                       <Send size={24} />
                     </button>
