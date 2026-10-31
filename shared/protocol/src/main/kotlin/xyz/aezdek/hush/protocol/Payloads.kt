@@ -222,6 +222,16 @@ data class CallSignal(
     val participants: List<String> = emptyList(),
     val text: String? = null,
     val live: Boolean = false,
+    /**
+     * The sending device (a random id per app run). Someone signed in on a phone and a laptop gets every signal on both,
+     * so once one device answers, signals for that call name it in [toDevice]; the user's other devices stop ringing
+     * and ignore the rest.
+     */
+    val device: String? = null,
+    val toDevice: String? = null,
+    /** For [CallSignalType.STATE]: whether the sender's camera and microphone are on. */
+    val camera: Boolean? = null,
+    val mic: Boolean? = null,
 )
 
 object CallSignalType {

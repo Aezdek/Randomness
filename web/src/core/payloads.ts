@@ -79,4 +79,8 @@ export interface CallSignal {
   type: 'invite' | 'offer' | 'answer' | 'ice' | 'accept' | 'decline' | 'busy' | 'hangup' | 'join' | 'state' | 'chat' | 'heart';
   callId: string; threadId?: string | null; video?: boolean; sdp?: string | null; candidate?: string | null;
   sdpMid?: string | null; sdpMLineIndex?: number | null; participants?: string[]; text?: string | null; live?: boolean;
+  /** The sending device, and the one device a signal is for once someone has answered (see CallSignal in Payloads.kt). */
+  device?: string | null; toDevice?: string | null;
+  /** For 'state': whether the sender's camera and microphone are on. */
+  camera?: boolean | null; mic?: boolean | null;
 }

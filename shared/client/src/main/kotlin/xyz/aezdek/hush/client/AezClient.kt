@@ -234,9 +234,10 @@ class AezClient(
         val s = state.value
         val me = s.me ?: return null
         val keys = s.keys ?: return null
-        val user = s.users[to] ?: return null
+        // A signal to yourself reaches your other devices ("answered on another device").
+        val boxPk = if (to == me.id) keys.boxPk else B64.decode(s.users[to]?.boxPk ?: return null)
         val plain = Payloads.json.encodeToString(CallSignal.serializer(), signal).encodeToByteArray()
-        val sealed = SignalCrypto.seal(plain, me.id, to, System.currentTimeMillis(), keys, B64.decode(user.boxPk))
+        val sealed = SignalCrypto.seal(plain, me.id, to, System.currentTimeMillis(), keys, boxPk)
         return WsFrame(
             t = WsType.SIGNAL, to = to, callId = signal.callId, ring = ring,
             signal = SignalDto(B64.encode(sealed.sealed), B64.encode(sealed.signature), sealed.sentAt),
@@ -253,6 +254,7 @@ class AezClient(
         val from = frame.from ?: return null
         val dto = frame.signal ?: return null
         val candidates = LinkedHashSet<String>()
+        if (from == me.id) candidates += B64.encode(keys.signPk)
         s.users[from]?.let { candidates += it.signPk }
         s.pins[from]?.let { candidates += it.signPk; candidates += it.history }
         for (signPk in candidates) {

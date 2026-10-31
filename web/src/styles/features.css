@@ -3255,11 +3255,23 @@ input[type='range'] {
   backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.call-mini {
+/* The minimised call floats inside the window and can be dragged anywhere in it, never off the edge. */
+.call-mini-bounds {
   position: fixed;
-  right: 20px;
-  bottom: calc(var(--bottom-h) + 20px);
+  inset: calc(8px + var(--safe-t)) 8px calc(var(--bottom-h) + 8px + var(--safe-b)) 8px;
   z-index: 90;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .call-mini-bounds {
+    bottom: 8px;
+  }
+}
+.call-mini {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  pointer-events: auto;
   width: 160px;
   aspect-ratio: 3 / 4;
   border-radius: 18px;
@@ -3284,6 +3296,61 @@ input[type='range'] {
   bottom: 8px;
   display: flex;
   justify-content: space-between;
+}
+.call-tile-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.call-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.call-menu {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 240px;
+  max-width: min(320px, 90vw);
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(28, 28, 32, 0.92);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #fff;
+  text-align: left;
+}
+.call-menu b {
+  padding: 6px 10px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+.call-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: left;
+}
+.call-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.call-menu button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .icon-btn.danger {
   background: #ff3b30 !important;

@@ -1,4 +1,4 @@
-import { Heart, Lock, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, PictureInPicture2, Radio, RefreshCcw, Send, Video, VideoOff } from 'lucide-react';
+import { Camera, Check, Heart, Lock, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, PictureInPicture2, Radio, RefreshCcw, Send, Video, VideoOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useIndex } from '../../core/selectors';
@@ -31,21 +31,54 @@ function Timer({ since }: { since: number }) {
   return <span className="tabular">{`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`}</span>;
 }
 
-function Tile({ peer, video }: { peer: Peer; video: boolean }) {
+/** Whether someone's video is worth showing: a live track that's getting frames, and they haven't said it's off. */
+function showsVideo(peer: Peer) {
+  return peer.camera !== false && !!peer.stream?.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted);
+}
+
+function Tile({ peer }: { peer: Peer }) {
   const users = useApp((s) => s.users);
-  const hasVideo = !!peer.stream?.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+  const video = showsVideo(peer);
   return (
     <div className="call-tile">
-      {peer.stream && <StreamVideo stream={peer.stream} className={hasVideo && video ? '' : 'hidden'} />}
-      {(!hasVideo || !video) && (
+      {peer.stream && <StreamVideo stream={peer.stream} className={video ? 'remote' : 'hidden'} />}
+      {!video && (
         <div className="call-tile-avatar">
           <Avatar userId={peer.userId} size={88} />
         </div>
       )}
       <span className="call-tile-name">
+        {peer.mic === false && <MicOff size={13} />}
         {users[peer.userId]?.username}
-        {peer.state !== 'connected' && <em> · {peer.state === 'ringing' ? 'ringing' : peer.state === 'declined' ? 'declined' : peer.state === 'left' ? 'left' : 'connecting'}</em>}
+        {peer.state !== 'connected' && (
+          <em>
+            {' '}
+            · {peer.state === 'ringing' ? 'ringing' : peer.state === 'declined' ? 'declined' : peer.state === 'left' ? 'left' : peer.state === 'reconnecting' ? 'reconnecting…' : 'connecting'}
+          </em>
+        )}
       </span>
+    </div>
+  );
+}
+
+/** Picks a camera on a computer; phones just flip between front and back. */
+function CameraMenu({ onClose }: { onClose: () => void }) {
+  const local = useCall((s) => s.local);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const current = local?.getVideoTracks()[0]?.getSettings().deviceId;
+  useEffect(() => {
+    void calls.cameras().then(setCameras);
+  }, []);
+  return (
+    <div className="call-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+      <b>Camera</b>
+      {cameras.length === 0 && <span className="faint">No camera found</span>}
+      {cameras.map((c, i) => (
+        <button key={c.deviceId || i} role="menuitemradio" aria-checked={c.deviceId === current} onClick={() => (onClose(), void calls.switchCamera(c.deviceId))}>
+          <span>{c.label || `Camera ${i + 1}`}</span>
+          {c.deviceId === current && <Check size={16} />}
+        </button>
+      ))}
     </div>
   );
 }
@@ -126,7 +159,9 @@ export function CallHost() {
   const call = useCall();
   const users = useApp((s) => s.users);
   const remote = useRef<HTMLDivElement>(null);
+  const bounds = useRef<HTMLDivElement>(null);
   const [selfPos, setSelfPos] = useState({ x: 0, y: 0 });
+  const [cameraMenu, setCameraMenu] = useState(false);
 
   if (call.status === 'idle') return null;
 
@@ -166,22 +201,29 @@ export function CallHost() {
   }
 
   if (call.minimized && !call.live) {
-    const main = connected[0];
+    const main = connected.find(showsVideo) ?? connected[0];
     return (
-      <motion.div className="call-mini" drag dragMomentum={false} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-        {main?.stream ? <StreamVideo stream={main.stream} /> : <Avatar userId={others[0]?.userId} size={64} />}
+      <div className="call-mini-bounds" ref={bounds}>
+      <motion.div className="call-mini" drag dragConstraints={bounds} dragElastic={0.1} dragMomentum={false} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+        {main && showsVideo(main) ? <StreamVideo stream={main.stream} /> : <Avatar userId={(main ?? others[0])?.userId} size={64} />}
         <div className="call-mini-bar">
           <button className="icon-btn sm on-media" onClick={() => useCall.setState({ minimized: false })} aria-label="Expand">
             <Maximize2 size={16} />
+          </button>
+          <button className="icon-btn sm on-media" onClick={() => calls.toggleMute()} aria-label={call.muted ? 'Unmute' : 'Mute'}>
+            {call.muted ? <MicOff size={16} /> : <Mic size={16} />}
           </button>
           <button className="icon-btn sm on-media danger" onClick={() => calls.hangup()} aria-label="Hang up">
             <PhoneOff size={16} />
           </button>
         </div>
       </motion.div>
+      </div>
     );
   }
 
+  const hasCamera = !!call.local?.getVideoTracks().length;
+  const pipTarget = () => remote.current?.querySelector<HTMLVideoElement>('video.remote') ?? null;
   const gridClass = call.live ? 'live' : connected.length <= 1 ? 'solo' : connected.length <= 4 ? 'quad' : 'nine';
   const hostView = call.live?.role === 'host';
   const viewerView = call.live?.role === 'viewer';
@@ -191,13 +233,13 @@ export function CallHost() {
       {others[0] && !connected.length && <AvatarBackdrop userId={others[0].userId} />}
       <div className={`call-grid ${gridClass}`} ref={remote}>
         {viewerView ? (
-          others[0] && <Tile peer={others[0]} video />
+          others[0] && <Tile peer={others[0]} />
         ) : hostView ? (
           <div className="call-tile">
-            <StreamVideo stream={call.local} muted mirror />
+            <StreamVideo stream={call.local} muted mirror={call.facing !== 'environment'} />
           </div>
         ) : connected.length ? (
-          connected.map((p) => <Tile key={p.userId} peer={p} video={call.video} />)
+          connected.map((p) => <Tile key={p.userId} peer={p} />)
         ) : (
           <div className="call-center">
             <Avatar userId={others[0]?.userId} size={128} />
@@ -207,9 +249,9 @@ export function CallHost() {
         )}
       </div>
 
-      {!call.live && call.video && call.local && (
+      {!call.live && hasCamera && call.local && (
         <motion.div className="call-self" drag dragConstraints={remote} dragMomentum={false} style={{ x: selfPos.x, y: selfPos.y }} onDragEnd={(_, info) => setSelfPos((p) => ({ x: p.x + info.offset.x, y: p.y + info.offset.y }))}>
-          <StreamVideo stream={call.local} muted mirror />
+          <StreamVideo stream={call.local} muted mirror={call.facing !== 'environment'} />
           {call.cameraOff && <div className="call-self-off"><VideoOff size={20} /></div>}
         </motion.div>
       )}
@@ -237,20 +279,23 @@ export function CallHost() {
             <button className={`round ${call.cameraOff ? 'off' : ''}`} onClick={() => void calls.toggleCamera()} aria-label={call.cameraOff ? 'Camera on' : 'Camera off'}>
               {call.cameraOff ? <VideoOff size={22} /> : <Video size={22} />}
             </button>
-            <button className="round" onClick={() => void calls.flip()} aria-label="Switch camera">
-              <RefreshCcw size={22} />
-            </button>
+            {hasCamera && (
+              <span className="call-menu-anchor">
+                <button
+                  className="round"
+                  onClick={() => (call.facing ? void calls.switchCamera() : setCameraMenu((v) => !v))}
+                  aria-label={call.facing ? 'Flip camera' : 'Choose camera'}
+                  aria-expanded={call.facing ? undefined : cameraMenu}
+                >
+                  {call.facing ? <RefreshCcw size={22} /> : <Camera size={22} />}
+                </button>
+                {cameraMenu && !call.facing && <CameraMenu onClose={() => setCameraMenu(false)} />}
+              </span>
+            )}
           </>
         )}
-        {'pictureInPictureEnabled' in document && connected[0] && (
-          <button
-            className="round"
-            onClick={() => {
-              const video = remote.current?.querySelector('video');
-              if (video) void (video as HTMLVideoElement).requestPictureInPicture().catch(() => undefined);
-            }}
-            aria-label="Picture in picture"
-          >
+        {'pictureInPictureEnabled' in document && connected.some(showsVideo) && (
+          <button className="round" onClick={() => void pipTarget()?.requestPictureInPicture().catch(() => undefined)} aria-label="Picture in picture">
             <PictureInPicture2 size={22} />
           </button>
         )}

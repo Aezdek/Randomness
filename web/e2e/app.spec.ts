@@ -228,6 +228,33 @@ test('three people use Hush end to end', async ({ browser }) => {
   await expect(bob.page.locator('.call-screen')).toBeHidden({ timeout: 20_000 });
   await expect(alice.page.locator('.chat-scroll').getByText('Video call')).toBeVisible({ timeout: 20_000 });
 
+  // Bob is also signed in on a laptop. Both ring; he answers on his phone; the laptop stops ringing at once and stays
+  // out of the call (it used to answer the video offer itself, and decline the running call 45 seconds later).
+  const bobLaptop = await person(browser, 'bob-laptop');
+  await bobLaptop.page.goto('/');
+  await bobLaptop.page.getByLabel('Username').fill('bob');
+  await bobLaptop.page.getByLabel('Password', { exact: true }).fill('bob has a long password');
+  await bobLaptop.page.getByRole('button', { name: 'Sign in' }).last().click();
+  await expect(bobLaptop.page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible({ timeout: 60_000 });
+  await alice.page.getByRole('button', { name: 'Video call' }).click();
+  await expect(bob.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });
+  await expect(bobLaptop.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });
+  await bob.page.getByRole('button', { name: 'Accept' }).click({ force: true });
+  await expect(bobLaptop.page.locator('.call-screen')).toBeHidden({ timeout: 10_000 });
+  await alice.page.waitForFunction(() => {
+    const v = document.querySelector('.call-tile video.remote') as HTMLVideoElement | null;
+    return !!v && v.readyState >= 2 && v.videoWidth > 0;
+  }, undefined, { timeout: 30_000 });
+  // Bob's camera off shows his picture instead; back on shows his video again.
+  await bob.page.getByRole('button', { name: 'Camera off' }).click();
+  await expect(alice.page.locator('.call-tile-avatar')).toBeVisible({ timeout: 10_000 });
+  await bob.page.getByRole('button', { name: 'Camera on' }).click();
+  await expect(alice.page.locator('.call-tile video.remote')).toBeVisible({ timeout: 10_000 });
+  await bob.page.getByRole('button', { name: 'Hang up' }).click();
+  await expect(alice.page.locator('.call-screen')).toBeHidden({ timeout: 20_000 });
+  await expect(bobLaptop.page.locator('.call-screen')).toBeHidden();
+  await bobLaptop.ctx.close();
+
   // ----------------------------------------------------------------------------- a stranger sees nothing
   const cara = await person(browser, 'cara', false, 'light');
   await signUp(cara, await newInvite(alice));

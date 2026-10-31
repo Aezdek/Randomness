@@ -169,6 +169,11 @@ self.addEventListener('push', (event) => {
         requireInteraction: !!info.urgent,
         data: { url: info.url },
       });
+      // A call rings for 45 seconds, so its notification shouldn't outlive that (the caller may have hung up long ago).
+      if (data.type === 'call') {
+        await new Promise((resolve) => setTimeout(resolve, 45_000));
+        for (const n of await self.registration.getNotifications({ tag: `call-${data.ref}` })) n.close();
+      }
     })(),
   );
 });
