@@ -51,12 +51,38 @@ class Index(
 
     fun lastMessage(threadId: String): Entity? = messages[threadId]?.lastOrNull()
 
+    private val customs = HashMap<String, ChatCustom>()
+
+    /** The chat's theme, nicknames, quick reaction and pins (computed once per index). */
+    fun chatCustom(threadId: String): ChatCustom = synchronized(customs) {
+        customs.getOrPut(threadId) { ChatCustom.of(messages[threadId].orEmpty()) }
+    }
+
+    /** What a chat calls someone: their nickname there, else their display name, else their username. */
+    fun nameIn(threadId: String?, userId: String, users: Map<String, UserDto>): String =
+        threadId?.let { chatCustom(it).nicknames[userId] }
+            ?: profile(userId)?.displayName?.takeIf { it.isNotBlank() } ?: users[userId]?.username ?: "someone"
+
     fun threadTitle(thread: ThreadDto, users: Map<String, UserDto>, me: String): String {
         threadMeta[thread.id]?.payloadAs<xyz.aezdek.hush.protocol.ThreadPayload>()?.name?.takeIf { it.isNotBlank() }?.let { return it }
-        val others = thread.members.filter { it.userId != me }.map { member ->
-            profile(member.userId)?.displayName?.takeIf { it.isNotBlank() } ?: users[member.userId]?.username ?: "someone"
-        }
+        val others = thread.members.filter { it.userId != me }.map { member -> nameIn(thread.id, member.userId, users) }
         return others.joinToString(", ").ifEmpty { "Just you" }
+    }
+
+    /** The line a chat event shows in the conversation and the inbox: "You changed the theme to Ocean". */
+    fun eventText(threadId: String?, authorId: String, event: xyz.aezdek.hush.protocol.ChatEvent, users: Map<String, UserDto>, me: String): String {
+        val who = if (authorId == me) "You" else nameIn(threadId, authorId, users)
+        fun whom(id: String) = if (id == me) "you" else users[id]?.username ?: "someone"
+        return when {
+            event.theme != null -> "$who changed the theme to ${ChatThemes.byId(event.theme)?.name ?: "Hush"}"
+            event.nicknameFor != null && event.nickname.isNullOrBlank() -> "$who removed the nickname for ${whom(event.nicknameFor!!)}"
+            event.nicknameFor != null -> if (event.nicknameFor == authorId) "$who set ${if (authorId == me) "your" else "their"} nickname to ${event.nickname!!.trim()}"
+                else "$who set the nickname for ${whom(event.nicknameFor!!)} to ${event.nickname!!.trim()}"
+            event.quickReaction != null -> "$who set the quick reaction to ${event.quickReaction}"
+            event.pin != null -> "$who pinned a message"
+            event.unpin != null -> "$who unpinned a message"
+            else -> "$who changed the chat"
+        }
     }
 
     fun displayName(user: UserDto?): String =

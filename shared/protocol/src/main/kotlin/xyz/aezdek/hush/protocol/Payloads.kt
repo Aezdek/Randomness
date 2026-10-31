@@ -167,6 +167,27 @@ data class MessagePayload(
     val storyId: String? = null,
     val call: CallSummary? = null,
     val edited: Boolean = false,
+    /** For [MessageType.SYSTEM]: a change to the chat that every member sees ("Ana changed the theme"). */
+    val event: ChatEvent? = null,
+)
+
+/**
+ * A change anyone in a chat can make, sent as an ordinary (end-to-end encrypted) message so every member's app applies
+ * it and shows it in the conversation. The chat's current look is all such events folded in order; the server never
+ * learns any of it. Each event changes one thing.
+ */
+@Serializable
+data class ChatEvent(
+    /** A theme id from the clients' theme list; "default" goes back to the original. */
+    val theme: String? = null,
+    /** Whose nickname changes; a null or blank [nickname] clears it. */
+    val nicknameFor: String? = null,
+    val nickname: String? = null,
+    /** The emoji the composer's quick-reaction button sends (a heart until someone changes it). */
+    val quickReaction: String? = null,
+    /** A message pinned to, or taken off, the top of the chat. */
+    val pin: String? = null,
+    val unpin: String? = null,
 )
 
 object MessageType {
