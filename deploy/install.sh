@@ -214,7 +214,18 @@ configure_tunnel() {
     elif grep -qi 'already' <<<"$out"; then
       note "DNS for $HOST already exists"
     else
-      warn "could not create the DNS record ($out). Add a CNAME $HOST -> $tunnel.cfargotunnel.com in Cloudflare."
+      # A CNAME has to point at the tunnel's ID; config.yml may name the tunnel instead, so ask its credentials file.
+      local id=$tunnel creds
+      if ! [[ $id =~ ^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$ ]]; then
+        creds=$(sed -n 's/^credentials-file:[[:space:]]*//p' "$CF_CONFIG" | tr -d "\"' ")
+        id=$(sed -n 's/.*"TunnelID"[[:space:]]*:[[:space:]]*"\([0-9a-f-]*\)".*/\1/p' "$creds" 2>/dev/null || true)
+      fi
+      warn "could not create the DNS record: cloudflared isn't logged in to Cloudflare here (no cert.pem). Add it in the dashboard instead:"
+      if [ -n "$id" ]; then
+        note "  DNS for ${HOST#*.}: add a CNAME named ${HOST%%.*}, target $id.cfargotunnel.com, proxied (orange cloud)."
+      else
+        note "  DNS for ${HOST#*.}: add a CNAME named ${HOST%%.*}, proxied, with the same target as your other tunnel hostnames (<id>.cfargotunnel.com)."
+      fi
     fi
   fi
   local deadline=$((SECONDS + RESTART_SETTLE_SECONDS))

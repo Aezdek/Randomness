@@ -127,6 +127,16 @@ check "re-running from inside the install folder works" test $status -eq 0
 [ $status -eq 0 ] || echo "$out" | tail -n 5 | sed 's/^/      /'
 check "... and installs the release's scripts, not the old copies" bash -c "! grep -q 'from an older release' '$HUSH_ROOT/lib.sh'"
 
+# A tunnel named in config.yml, and no cert.pem to create DNS records with: the CNAME advice needs the tunnel's ID.
+sandbox nocert flush-comments.yml
+export STUB_NO_ORIGIN_CERT=1
+printf '{"AccountTag":"a","TunnelSecret":"s","TunnelID":"0d6c1d4e-8f7a-4c1b-9e2f-3a4b5c6d7e8f"}\n' >"$BOX/tunnel.json"
+sed -i "s#^credentials-file:.*#credentials-file: $BOX/tunnel.json#" "$BOX/etc/cloudflared/config.yml"
+out=$(bash "$DEPLOY/install.sh" 2>&1)
+check "without cert.pem, install still finishes" test $? -eq 0
+check "... and gives the CNAME target by tunnel ID, not name" grep -q 'target 0d6c1d4e-8f7a-4c1b-9e2f-3a4b5c6d7e8f.cfargotunnel.com' <<<"$out"
+unset STUB_NO_ORIGIN_CERT
+
 sandbox regress flush-comments.yml
 original=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
 export STUB_BREAK_AFTER_RESTART=lucifer.aezdek.xyz

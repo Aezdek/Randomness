@@ -2,7 +2,11 @@
 # Test double for cloudflared. With $REAL_CLOUDFLARED set (CI downloads it), validation and rule matching run on
 # the real binary; only `tunnel route dns` (which needs a Cloudflare login) is faked.
 echo "cloudflared $*" >>"${STUB_STATE:?}/cloudflared.log"
-if [ "$2" = route ]; then echo "Added CNAME $4 which will route to this tunnel"; exit 0; fi
+if [ "$2" = route ]; then
+  # Without a cert.pem from `cloudflared tunnel login`, as on a box whose tunnel runs from a credentials file only.
+  if [ -n "${STUB_NO_ORIGIN_CERT:-}" ]; then echo "ERR Cannot determine default origin certificate path. No file cert.pem" >&2; exit 1; fi
+  echo "Added CNAME $4 which will route to this tunnel"; exit 0
+fi
 if [ -n "${STUB_VALIDATE_FAIL:-}" ] && [ "$4 $5" = "ingress validate" ]; then echo "Validation failed: stub says no" >&2; exit 1; fi
 if [ -n "${REAL_CLOUDFLARED:-}" ]; then exec "$REAL_CLOUDFLARED" "$@"; fi
 config=$3
