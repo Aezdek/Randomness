@@ -9,6 +9,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PhoneMissed
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
@@ -65,12 +67,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
@@ -82,6 +86,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.client.AppState
+import xyz.aezdek.hush.client.ChatCustom
+import xyz.aezdek.hush.client.ChatThemes
 import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.client.Index
 import xyz.aezdek.hush.media.EncryptedDataSource
@@ -90,6 +96,7 @@ import xyz.aezdek.hush.media.MediaPrep
 import xyz.aezdek.hush.media.VideoPlayer
 import xyz.aezdek.hush.media.VoiceRecorder
 import xyz.aezdek.hush.protocol.Audience
+import xyz.aezdek.hush.protocol.ChatEvent
 import xyz.aezdek.hush.protocol.MediaRef
 import xyz.aezdek.hush.protocol.MessagePayload
 import xyz.aezdek.hush.protocol.MessageType
@@ -117,7 +124,7 @@ private val EMOJI = Regex("^(\\p{So}|\\p{Cn}|[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u2
 private val QUICK = listOf("❤️", "😂", "😮", "😢", "😡", "👍")
 
 @Composable
-fun Chat(threadId: String) {
+fun Chat(threadId: String, focus: String? = null) {
     val nav = LocalNav.current
     val context = LocalContext.current
     val state by Graph.client.state.collectAsState()
@@ -133,6 +140,9 @@ fun Chat(threadId: String) {
     }
     val messages = index.messages[threadId].orEmpty()
     val others = thread.members.map { it.userId }.filter { it != me.id }
+    val custom = index.chatCustom(threadId)
+    val theme = ChatThemes.byId(custom.theme) ?: ChatThemes.all.first()
+    val themeBrush = Brush.linearGradient(theme.colors.map { Color(it) })
     var vanish by remember(threadId) { mutableStateOf(Graph.prefs.vanish(threadId)) }
     var replyTo by remember { mutableStateOf<Entity?>(null) }
     var editing by remember { mutableStateOf<Entity?>(null) }
@@ -208,10 +218,45 @@ fun Chat(threadId: String) {
                 modifier = Modifier.fillMaxWidth().background(Brand.messageGradient).padding(6.dp))
         }
         val listState = rememberLazyListState()
-        LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(0) }
         val reversed = messages.asReversed()
+        // The list is drawn bottom up (newest first), with the typing bubble as its first item while someone types.
+        fun itemOf(messageId: String): Int? = reversed.indexOfFirst { it.id == messageId }.takeIf { it >= 0 }?.let { it + if (typing.isNotEmpty()) 1 else 0 }
+        var flash by remember { mutableStateOf<String?>(null) }
+        fun jump(messageId: String) {
+            val at = itemOf(messageId) ?: return Graph.toast("That message is no longer in the chat")
+            scope.launch {
+                listState.animateScrollToItem(at)
+                flash = messageId
+                delay(1400)
+                if (flash == messageId) flash = null
+            }
+        }
+        var focused by remember(threadId, focus) { mutableStateOf(focus == null) }
+        LaunchedEffect(messages.size) {
+            if (!focused && focus != null) {
+                focused = true
+                jump(focus)
+            } else if (messages.isNotEmpty()) listState.animateScrollToItem(0)
+        }
+        val pinned = custom.pinned.asReversed().firstNotNullOfOrNull { id -> messages.firstOrNull { it.id == id } }
+        if (pinned != null) {
+            val p = pinned.payloadAs<MessagePayload>()
+            Row(
+                Modifier.fillMaxWidth().background(Aez.colors.elev1).clickable { jump(pinned.id) }.padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.PushPin, null, tint = Color(theme.colors[1]), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    (if (pinned.dto.authorId == me.id) "You" else index.nameIn(threadId, pinned.dto.authorId, state.users)) + "  " +
+                        (p?.text?.takeIf { it.isNotBlank() } ?: if (p?.media?.isNotEmpty() == true) "Photo or video" else "Message"),
+                    fontSize = 13.sp, color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                if (custom.pinned.size > 1) Text("${custom.pinned.size} pinned", fontSize = 12.sp, color = Aez.colors.text3)
+            }
+        }
         val theirRead = thread.members.filter { it.userId != me.id }.minOfOrNull { it.lastReadAt } ?: 0L
-        val lastMine = messages.lastOrNull { it.dto.authorId == me.id }
+        val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true) {
             if (typing.isNotEmpty()) item { TypingBubble(typing.first(), index, state) }
             itemsIndexed(reversed, key = { _, m -> m.id }) { reversedIndex, message ->
@@ -224,10 +269,12 @@ fun Chat(threadId: String) {
                         Text(dayLabel(message.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3,
                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
                     }
+                    fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type == MessageType.SYSTEM
                     Bubble(
-                        message, index, state, isGroup = thread.isGroup,
-                        firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay,
-                        lastOfGroup = next?.dto?.authorId != message.dto.authorId,
+                        message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]),
+                        firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || isEvent(prev),
+                        lastOfGroup = next?.dto?.authorId != message.dto.authorId || isEvent(next),
+                        flash = flash == message.id,
                         onLongPress = { menu = message },
                     )
                     if (message === lastMine && theirRead >= message.dto.receivedAt) {
@@ -261,7 +308,9 @@ fun Chat(threadId: String) {
                     send(MessagePayload(MessageType.TEXT, text = text, replyTo = reply?.id))
                 }
             },
-            onHeart = { send(MessagePayload(MessageType.HEART)) },
+            quickReaction = custom.quickReaction,
+            accent = Color(theme.colors[1]),
+            onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
             onVoice = { media ->
                 scope.launch {
                     sending = "Sending voice message…"
@@ -294,6 +343,13 @@ fun Chat(threadId: String) {
                     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("message", p.text.orEmpty()))
                 }
                 if (mine) SheetItem("Edit", Icons.Outlined.Edit) { menu = null; editing = message }
+            }
+            if (message.dto.audience != Audience.VANISH && message.dto.audience != Audience.ONCE && p?.type != MessageType.SYSTEM) {
+                val isPinned = message.id in custom.pinned
+                SheetItem(if (isPinned) "Unpin" else "Pin", Icons.Outlined.PushPin) {
+                    menu = null
+                    Graph.launch { Graph.client.composer.sendChatEvent(threadId, if (isPinned) ChatEvent(unpin = message.id) else ChatEvent(pin = message.id)) }
+                }
             }
             if (mine) {
                 SheetItem("Unsend", Icons.Outlined.Delete, danger = true) {
@@ -356,11 +412,20 @@ private fun TypingBubble(userId: String, index: Index, state: AppState) {
 
 @Composable
 private fun Bubble(
-    message: Entity, index: Index, state: AppState, isGroup: Boolean, firstOfGroup: Boolean, lastOfGroup: Boolean, onLongPress: () -> Unit,
+    message: Entity, index: Index, state: AppState, isGroup: Boolean, themeBrush: Brush, themeColor: Color, firstOfGroup: Boolean, lastOfGroup: Boolean,
+    flash: Boolean, onLongPress: () -> Unit,
 ) {
     val nav = LocalNav.current
     val me = state.me ?: return
     val p = message.payloadAs<MessagePayload>() ?: return
+    if (p.type == MessageType.SYSTEM) {
+        // "Ana changed the theme to Ocean": a line in the conversation, not a bubble.
+        p.event?.let {
+            Text(index.eventText(message.dto.threadId, message.dto.authorId, it, state.users, me.id), fontSize = 12.sp, color = Aez.colors.text2,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 10.dp))
+        }
+        return
+    }
     val mine = message.dto.authorId == me.id
     val reactions = index.reactionsOf(message.id)
     val once = message.dto.audience == Audience.ONCE
@@ -372,7 +437,7 @@ private fun Bubble(
     )
     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 1.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
         if (isGroup && !mine && firstOfGroup) {
-            Text(state.users[message.dto.authorId]?.username ?: "", fontSize = 11.sp, color = Aez.colors.text3, modifier = Modifier.padding(start = 46.dp, top = 6.dp))
+            Text(index.nameIn(message.dto.threadId, message.dto.authorId, state.users), fontSize = 11.sp, color = Aez.colors.text3, modifier = Modifier.padding(start = 46.dp, top = 6.dp))
         }
         p.replyTo?.let { id ->
             val quoted = state.entities[id]?.payloadAs<MessagePayload>()
@@ -392,7 +457,7 @@ private fun Bubble(
                 Graph.launch { Graph.client.composer.react(message, "❤️") }
             }, onClick = {})
             when {
-                big -> Text(if (p.type == MessageType.HEART) "❤️" else p.text.orEmpty(), fontSize = 44.sp, modifier = clickModifier.padding(4.dp))
+                big -> Text(if (p.type == MessageType.HEART) p.text ?: ChatCustom.DEFAULT_REACTION else p.text.orEmpty(), fontSize = 44.sp, modifier = clickModifier.padding(4.dp))
                 p.type == MessageType.MEDIA && once && !mine && !opened -> {
                     Row(
                         Modifier.clip(shape).background(Aez.colors.bubbleOther).combinedClickable(onLongClick = onLongPress) {
@@ -410,7 +475,7 @@ private fun Bubble(
                     for (ref in p.media) MediaBubble(ref)
                     p.text?.takeIf { it.isNotBlank() }?.let { Text(it, modifier = Modifier.background(Aez.colors.bubbleOther).padding(10.dp), color = Aez.colors.text) }
                 }
-                p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) Brand.violet else Aez.colors.bubbleOther)) {
+                p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) themeColor else Aez.colors.bubbleOther)) {
                     VoiceBubble(p.media.first(), if (mine) Color.White else Aez.colors.text)
                 }
                 p.type == MessageType.SHARE -> SharedPost(p, state, clickModifier)
@@ -430,7 +495,8 @@ private fun Bubble(
                         }
                         Box(
                             clickModifier.widthIn(max = 280.dp).clip(shape)
-                                .then(if (mine) Modifier.background(Brand.messageGradient) else Modifier.background(Aez.colors.bubbleOther))
+                                .then(if (mine) Modifier.background(themeBrush) else Modifier.background(Aez.colors.bubbleOther))
+                                .then(if (flash) Modifier.border(2.dp, themeColor, shape) else Modifier)
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         ) {
                             RichText(p.text.orEmpty(), style = TextStyle(color = if (mine) Color.White else Aez.colors.text, fontSize = 15.sp, lineHeight = 20.sp))
@@ -571,6 +637,8 @@ private fun Composer(
     onToggleOnce: () -> Unit,
     onPick: () -> Unit,
     onSend: (String) -> Unit,
+    quickReaction: String,
+    accent: Color,
     onHeart: () -> Unit,
     onVoice: (xyz.aezdek.hush.client.PreparedMedia) -> Unit,
 ) {
@@ -647,7 +715,7 @@ private fun Composer(
                 )
             }
             if (text.isNotBlank()) {
-                Text(if (editing != null) "Save" else "Send", color = Brand.violet, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                Text(if (editing != null) "Save" else "Send", color = accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
                     onSend(text.trim())
                     text = ""
                 }.padding(horizontal = 12.dp, vertical = 10.dp))
@@ -655,7 +723,8 @@ private fun Composer(
                 IconAction(Icons.Outlined.Visibility, if (once) "View once on" else "View once off", onToggleOnce,
                     tint = if (once) Brand.pink else Aez.colors.text2, size = 22.dp)
                 IconAction(Icons.Filled.Mic, "Voice message", { micPermission.launch(Manifest.permission.RECORD_AUDIO) }, size = 24.dp)
-                IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = Brand.pink, size = 24.dp)
+                if (quickReaction == ChatCustom.DEFAULT_REACTION) IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = Brand.pink, size = 24.dp)
+                else Text(quickReaction, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onHeart).padding(8.dp))
             }
         }
     }

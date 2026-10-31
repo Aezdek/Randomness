@@ -116,17 +116,18 @@ class ConnectionService : Service() {
     private fun notifyMessages(fresh: List<Entity>, index: Index, state: AppState, me: String) {
         val settings = index.settings
         if (!settings.notifyMessages) return
-        val byThread = fresh.filter { it.dto.kind == Kind.MESSAGE }.groupBy { it.dto.threadId }
+        // A theme or nickname change shows in the chat but doesn't buzz anyone's phone.
+        fun notifies(e: Entity) = e.dto.kind == Kind.MESSAGE && e.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM
+        val byThread = fresh.filter(::notifies).groupBy { it.dto.threadId }
         for ((threadId, _) in byThread) {
             threadId ?: continue
             if (threadId in settings.mutedThreads || foregroundOn(threadId)) continue
             val thread = state.threads[threadId] ?: continue
             val mine = thread.members.firstOrNull { it.userId == me }
-            val unread = index.messages[threadId].orEmpty().filter { it.dto.authorId != me && it.dto.receivedAt > (mine?.lastReadAt ?: 0) }
+            val unread = index.messages[threadId].orEmpty().filter { it.dto.authorId != me && it.dto.receivedAt > (mine?.lastReadAt ?: 0) && notifies(it) }
             if (unread.isEmpty()) continue
             val lines = unread.map { entity ->
-                val name = index.profile(entity.dto.authorId)?.displayName?.takeIf { it.isNotBlank() } ?: state.users[entity.dto.authorId]?.username ?: "Someone"
-                name to preview(entity.payloadAs<MessagePayload>())
+                index.nameIn(threadId, entity.dto.authorId, state.users) to preview(entity.payloadAs<MessagePayload>())
             }
             Graph.notifier.message(threadId, index.threadTitle(thread, state.users, me), lines, thread.isGroup)
         }
@@ -182,7 +183,7 @@ class ConnectionService : Service() {
             MessageType.STORY_REPLY -> "Replied to your story: ${payload.text.orEmpty()}"
             MessageType.STORY_REACTION -> "Reacted to your story ${payload.text.orEmpty()}"
             MessageType.CALL -> if (payload.call?.missed == true) "Missed call" else "Call"
-            MessageType.HEART -> "❤️"
+            MessageType.HEART -> payload.text ?: "❤️"
             else -> payload.text ?: "Sent a message"
         }
 

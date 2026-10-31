@@ -342,6 +342,11 @@ class Composer(
         return Entity(dto, epoch.key, payload)
     }
 
+    /** Changes the chat's theme, a nickname, the quick reaction or a pin: an encrypted message every member applies.
+     *  Always a normal message, never in vanish mode, so the change stays. */
+    suspend fun sendChatEvent(threadId: String, event: xyz.aezdek.hush.protocol.ChatEvent): Entity =
+        sendMessage(threadId, MessagePayload(xyz.aezdek.hush.protocol.MessageType.SYSTEM, event = event), audience = Audience.THREAD)
+
     suspend fun sendMessage(threadId: String, payload: MessagePayload, audience: String = Audience.THREAD, expiresAt: Long? = null,
                             blobIds: List<String>? = null): Entity {
         repeat(2) { attempt ->

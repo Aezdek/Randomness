@@ -115,6 +115,12 @@ class ScreenshotTest {
     fun readiness() = shot("13-readiness") { Readiness() }
 
     @Test
+    fun groupChatWithTheme() = shot("15-chat-group-theme", Screen.Chat(Fixtures.GROUP))
+
+    @Test
+    fun chatDetails() = shot("16-chat-details", Screen.ThreadInfo(Fixtures.DM))
+
+    @Test
     fun admin() = shot("14-admin") { AdminScreen() }
 
     @Test

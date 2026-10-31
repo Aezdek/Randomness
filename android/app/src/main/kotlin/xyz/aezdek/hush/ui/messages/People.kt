@@ -147,9 +147,30 @@ fun ThreadInfo(threadId: String) {
     var leaving by remember { mutableStateOf(false) }
     val meta = index.threadMeta[threadId]
     val isAdmin = thread.members.firstOrNull { it.userId == me.id }?.role == "admin" || thread.createdBy == me.id
+    val custom = index.chatCustom(threadId)
+    val media = sharedMedia(index.messages[threadId].orEmpty())
+    var sheet by remember { mutableStateOf<String?>(null) }
+    val other = thread.members.map { it.userId }.firstOrNull { it != me.id }
+    fun toggleMute() = Graph.launch {
+        Graph.client.composer.saveSettings { s -> s.copy(mutedThreads = if (muted) s.mutedThreads - threadId else (s.mutedThreads + threadId).distinct()) }
+    }
+    // Back to the chat, scrolled to the message.
+    fun jump(messageId: String) {
+        sheet = null
+        nav.back()
+        nav.replace(Screen.Chat(threadId, focus = messageId))
+    }
     Column(Modifier.fillMaxSize()) {
         TopBar("Details")
         LazyColumn(Modifier.weight(1f)) {
+            item {
+                ChatHero(
+                    thread, index, state, muted,
+                    onProfile = if (!thread.isGroup && other != null) ({ nav.go(Screen.Profile(other)) }) else null,
+                    onSearch = { sheet = "search" }, onMute = { toggleMute() },
+                )
+            }
+            item { CustomRows(custom, onTheme = { sheet = "theme" }, onNicknames = { sheet = "nicknames" }, onReaction = { sheet = "reaction" }) }
             if (thread.isGroup) {
                 item {
                     var name by remember(meta?.id) { mutableStateOf(meta?.payloadAs<ThreadPayload>()?.name.orEmpty()) }
@@ -178,6 +199,7 @@ fun ThreadInfo(threadId: String) {
                     Graph.prefs.setVanish(threadId, vanish)
                 }
             }
+            if (media.isNotEmpty()) item { MediaSection(media, ::jump) { sheet = "media" } }
             item { SectionLabel("People") }
             items(thread.members, key = { it.userId }) { member ->
                 val user = state.users[member.userId]
@@ -185,7 +207,7 @@ fun ThreadInfo(threadId: String) {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(me.id, 46.dp, index, me.username)
                         Spacer(Modifier.width(12.dp))
-                        Text("${me.username} (you)", fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
+                        Text((custom.nicknames[me.id]?.let { "$it · " } ?: "") + "${me.username} (you)", fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
                     }
                 } else if (user != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -204,6 +226,13 @@ fun ThreadInfo(threadId: String) {
                 item { SheetItem("Leave chat", Icons.AutoMirrored.Outlined.ExitToApp, danger = true) { leaving = true } }
             }
         }
+    }
+    when (sheet) {
+        "theme" -> ThemeSheet(threadId, custom.theme) { sheet = null }
+        "reaction" -> ReactionSheet(threadId, custom.quickReaction) { sheet = null }
+        "nicknames" -> NicknamesSheet(thread, custom, index, state) { sheet = null }
+        "search" -> SearchSheet(thread, index.messages[threadId].orEmpty(), index, state, ::jump) { sheet = null }
+        "media" -> AllMediaSheet(media, ::jump) { sheet = null }
     }
     if (adding) {
         var picked by remember { mutableStateOf(listOf<String>()) }

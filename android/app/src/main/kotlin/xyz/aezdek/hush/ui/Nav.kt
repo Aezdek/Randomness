@@ -13,7 +13,8 @@ sealed interface Screen {
     data class Profile(val userId: String) : Screen
     data object Activity : Screen
     data object Inbox : Screen
-    data class Chat(val threadId: String) : Screen
+    /** [focus]: a message to scroll to (a pin, a search result, a photo from the details). */
+    data class Chat(val threadId: String, val focus: String? = null) : Screen
     data object NewChat : Screen
     data class ThreadInfo(val threadId: String) : Screen
     data class Post(val id: String) : Screen
@@ -42,6 +43,11 @@ class Navigator {
         } else if (stack.lastOrNull() != screen) {
             stack.add(screen)
         }
+    }
+
+    /** Swaps the current screen for [screen] (back to a chat, scrolled to a message). */
+    fun replace(screen: Screen) {
+        if (stack.isEmpty()) stack.add(screen) else stack[stack.lastIndex] = screen
     }
 
     /** Opens [screen] as the profile tab's root (your own profile from the bottom bar). */

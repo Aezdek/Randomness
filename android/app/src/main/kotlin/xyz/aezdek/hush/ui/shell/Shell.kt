@@ -99,7 +99,7 @@ object Routes {
             Screen.Home -> xyz.aezdek.hush.ui.feed.Home()
             is Screen.Post -> xyz.aezdek.hush.ui.feed.PostDetail(screen.id)
             Screen.Inbox -> xyz.aezdek.hush.ui.messages.Inbox()
-            is Screen.Chat -> xyz.aezdek.hush.ui.messages.Chat(screen.threadId)
+            is Screen.Chat -> xyz.aezdek.hush.ui.messages.Chat(screen.threadId, screen.focus)
             Screen.NewChat -> xyz.aezdek.hush.ui.messages.NewChat()
             is Screen.ThreadInfo -> xyz.aezdek.hush.ui.messages.ThreadInfo(screen.threadId)
             is Screen.Explore -> xyz.aezdek.hush.ui.explore.Explore()

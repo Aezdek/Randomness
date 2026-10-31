@@ -17,6 +17,7 @@ import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.Audience
+import xyz.aezdek.hush.protocol.ChatEvent
 import xyz.aezdek.hush.protocol.CommentPayload
 import xyz.aezdek.hush.protocol.DeviceInfo
 import xyz.aezdek.hush.protocol.FollowState
@@ -138,7 +139,11 @@ object Fixtures {
         message(DM, MAYA, "you're the best", 5 * MIN)
         add(Kind.THREAD, ME, ThreadPayload(name = "Weekend trip ✈️"), 72 * HOUR, Audience.THREAD, threadId = GROUP)
         message(GROUP, LEO, "Train at 8:40, don't be late", 3 * HOUR)
+        // The group has a theme, a nickname and a pin, set by encrypted chat events.
+        add(Kind.MESSAGE, ZARA, MessagePayload(MessageType.SYSTEM, event = ChatEvent(theme = "ocean")), 150 * MIN, Audience.THREAD, threadId = GROUP)
+        add(Kind.MESSAGE, ME, MessagePayload(MessageType.SYSTEM, event = ChatEvent(nicknameFor = LEO, nickname = "Captain")), 140 * MIN, Audience.THREAD, threadId = GROUP)
         message(GROUP, ZARA, "I'll bring snacks", 2 * HOUR)
+        message(GROUP, ME, "Perfect, see you both at the station", 90 * MIN)
 
         val threads = mapOf(
             DM to ThreadDto(DM, false, ME, now - 200 * HOUR, listOf(member(ME, now - 42 * MIN), member(MAYA, now - 10 * MIN))),

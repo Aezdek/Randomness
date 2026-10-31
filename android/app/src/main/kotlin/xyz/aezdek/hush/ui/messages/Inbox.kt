@@ -51,6 +51,7 @@ import xyz.aezdek.hush.protocol.MessagePayload
 import xyz.aezdek.hush.protocol.MessageType
 import xyz.aezdek.hush.protocol.NotePayload
 import xyz.aezdek.hush.protocol.ThreadDto
+import xyz.aezdek.hush.protocol.UserDto
 import xyz.aezdek.hush.ui.CreateKind
 import xyz.aezdek.hush.ui.LocalNav
 import xyz.aezdek.hush.ui.Screen
@@ -72,12 +73,13 @@ fun sortedThreads(state: AppState, index: Index): List<ThreadDto> {
 }
 
 /** What a chat row shows under the name. */
-fun lastLine(entity: Entity?, me: String): String {
+fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserDto>): String {
     entity ?: return "Say hi 👋"
     val p = entity.payloadAs<MessagePayload>() ?: return ""
     val mine = entity.dto.authorId == me
     val prefix = if (mine) "You: " else ""
     return when (p.type) {
+        MessageType.SYSTEM -> p.event?.let { index.eventText(entity.dto.threadId, entity.dto.authorId, it, users, me) } ?: "" 
         MessageType.TEXT -> prefix + p.text.orEmpty()
         MessageType.MEDIA -> prefix + if (p.media.any { it.mime.startsWith("video/") }) "Sent a video" else "Sent a photo"
         MessageType.VOICE -> prefix + "Voice message"
@@ -85,7 +87,7 @@ fun lastLine(entity: Entity?, me: String): String {
         MessageType.STORY_REPLY -> if (mine) "You replied to their story" else "Replied to your story"
         MessageType.STORY_REACTION -> if (mine) "You reacted to their story" else "Reacted to your story ${p.text.orEmpty()}"
         MessageType.CALL -> if (p.call?.missed == true) "Missed ${if (p.call?.video == true) "video " else ""}call" else "${if (p.call?.video == true) "Video" else "Audio"} call"
-        MessageType.HEART -> prefix + "❤️"
+        MessageType.HEART -> prefix + (p.text ?: "❤️")
         else -> prefix + (p.text ?: "")
     } + "  ·  " + ago(entity.dto.receivedAt)
 }
@@ -204,7 +206,7 @@ private fun ThreadRow(thread: ThreadDto, index: Index, state: AppState, onLongPr
             Text(index.threadTitle(thread, state.users, me.id), fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp,
                 color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (typing) "typing…" else lastLine(index.lastMessage(thread.id), me.id),
+                if (typing) "typing…" else lastLine(index.lastMessage(thread.id), me.id, index, state.users),
                 fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = if (unread > 0) Aez.colors.text else Aez.colors.text3, fontWeight = if (unread > 0) FontWeight.SemiBold else FontWeight.Normal,
             )
