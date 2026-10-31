@@ -45,11 +45,6 @@ class Navigator {
         }
     }
 
-    /** Swaps the current screen for [screen] (back to a chat, scrolled to a message). */
-    fun replace(screen: Screen) {
-        if (stack.isEmpty()) stack.add(screen) else stack[stack.lastIndex] = screen
-    }
-
     /** Opens [screen] as the profile tab's root (your own profile from the bottom bar). */
     fun root(screen: Screen) {
         stack.clear()
