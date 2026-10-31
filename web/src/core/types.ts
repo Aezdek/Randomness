@@ -61,6 +61,11 @@ export interface InviteDto { code: string; createdAt: number; expiresAt: number;
 export interface AdminStatus {
   users: number; maxUsers: number; diskFreeBytes: number; dataBytes: number; uploadsBlocked: boolean;
   lastBackupAt?: number | null; lastBackupOk?: boolean | null; backupMessage?: string | null; version: string;
+  commit?: string | null; startedAt?: number; latestVersion?: string | null; updateAvailable?: boolean;
+}
+export interface AdminUserDto {
+  id: string; username: string; isAdmin: boolean; createdAt: number; lastActiveAt?: number | null;
+  storageBytes: number; posts: number; sessions: number;
 }
 export interface AppVersion { versionCode: number; versionName: string; sha256: string; size: number; url: string }
 export interface IdList { ids: string[] }

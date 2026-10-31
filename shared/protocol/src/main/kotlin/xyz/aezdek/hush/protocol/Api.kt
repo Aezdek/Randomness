@@ -368,6 +368,26 @@ data class AdminStatus(
     val lastBackupOk: Boolean? = null,
     val backupMessage: String? = null,
     val version: String,
+    /** The commit this server runs (written by update.sh), when known. */
+    val commit: String? = null,
+    val startedAt: Long = 0,
+    /** The newest published release, checked at most hourly; null when unknown or GitHub can't be reached. */
+    val latestVersion: String? = null,
+    val updateAvailable: Boolean = false,
+)
+
+/** A member as the admin panel lists them: no content, only what running the server needs. */
+@Serializable
+data class AdminUserDto(
+    val id: String,
+    val username: String,
+    val isAdmin: Boolean,
+    val createdAt: Long,
+    val lastActiveAt: Long? = null,
+    /** Encrypted media they uploaded. */
+    val storageBytes: Long,
+    val posts: Int,
+    val sessions: Int,
 )
 
 @Serializable

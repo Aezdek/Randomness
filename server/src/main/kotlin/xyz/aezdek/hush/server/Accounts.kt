@@ -1,6 +1,7 @@
 package xyz.aezdek.hush.server
 
 import org.slf4j.LoggerFactory
+import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.AuthResponse
 import xyz.aezdek.hush.protocol.ChangePasswordRequest
 import xyz.aezdek.hush.protocol.DeviceInfo
@@ -292,32 +293,84 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
 
     /** Deletes the account and everything it authored. Frees the username. */
     fun deleteAccount(session: Session, authKey: String, objects: Objects, fx: Effects) {
+        db.tx { checkAuthKey(session.userId, authKey) }
+        removeAccount(session.userId, objects, fx)
+    }
+
+    // ------------------------------------------------------------------------------------------------------ admin
+
+    /** Members with what running the server needs to know about them (never their content). */
+    fun adminUsers(session: Session): List<AdminUserDto> = db.tx {
+        requireAdmin(session.userId)
+        query(
+            """SELECT u.id, u.username, u.is_admin, u.created_at, u.last_active_at,
+                 (SELECT COALESCE(SUM(size), 0) FROM blobs b WHERE b.uploader_id = u.id) AS storage,
+                 (SELECT COUNT(*) FROM objects o WHERE o.author_id = u.id AND o.deleted = 0 AND o.kind IN ('post', 'reel')) AS posts,
+                 (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
+               FROM users u WHERE u.deleted = 0 ORDER BY u.created_at""",
+        ) {
+            AdminUserDto(
+                it.str("id"), it.str("username"), it.bool("is_admin"), it.getLong("created_at"), it.longOrNull("last_active_at"),
+                it.getLong("storage"), it.getInt("posts"), it.getInt("sessions"),
+            )
+        }
+    }
+
+    /** An admin removes someone else's account and everything they posted. Admins can't be removed this way. */
+    fun removeMember(session: Session, userId: String, objects: Objects, fx: Effects) {
+        db.tx {
+            requireAdmin(session.userId)
+            if (userId == session.userId) badRequest("Delete your own account from Settings → Account instead")
+            val isAdmin = one("SELECT is_admin FROM users WHERE id = ? AND deleted = 0", userId) { it.bool("is_admin") } ?: notFound("No such member")
+            if (isAdmin) forbidden("Admins can't be removed")
+        }
+        removeAccount(userId, objects, fx)
+    }
+
+    /** Ends every session of [userId]: each device must sign in again (their data stays). */
+    fun signOutEverywhere(session: Session, userId: String) {
+        val ended = db.tx {
+            requireAdmin(session.userId)
+            if (userId == session.userId) badRequest("Sign out your own devices from Settings → Security")
+            if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", userId)) notFound("No such member")
+            strings("SELECT id FROM sessions WHERE user_id = ?", userId).also { exec("DELETE FROM sessions WHERE user_id = ?", userId) }
+        }
+        sessionCache.entries.removeIf { it.value.first.userId == userId }
+        ended.forEach(presence::disconnectSession)
+    }
+
+    /** Withdraws an invite nobody has used yet. */
+    fun revokeInvite(session: Session, code: String) = db.tx {
+        requireAdmin(session.userId)
+        if (exec("DELETE FROM invites WHERE code = ? AND used_by IS NULL", code) == 0) notFound("No unused invite with that code")
+    }
+
+    private fun removeAccount(userId: String, objects: Objects, fx: Effects) {
         val sessions = db.tx {
-            checkAuthKey(session.userId, authKey)
             val now = clock.now()
-            val mine = strings("SELECT id FROM objects WHERE author_id = ? AND deleted = 0 AND parent_id IS NULL", session.userId)
+            val mine = strings("SELECT id FROM objects WHERE author_id = ? AND deleted = 0 AND parent_id IS NULL", userId)
             for (id in mine) with(objects) { deleteTree(id, fx, now) }
-            exec("DELETE FROM wraps WHERE recipient_id = ?", session.userId)
-            exec("DELETE FROM follows WHERE follower_id = ? OR followee_id = ?", session.userId, session.userId)
-            exec("DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?", session.userId, session.userId)
-            val threads = strings("SELECT thread_id FROM thread_members WHERE user_id = ?", session.userId)
-            exec("DELETE FROM thread_members WHERE user_id = ?", session.userId)
+            exec("DELETE FROM wraps WHERE recipient_id = ?", userId)
+            exec("DELETE FROM follows WHERE follower_id = ? OR followee_id = ?", userId, userId)
+            exec("DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?", userId, userId)
+            val threads = strings("SELECT thread_id FROM thread_members WHERE user_id = ?", userId)
+            exec("DELETE FROM thread_members WHERE user_id = ?", userId)
             for (thread in threads) {
                 change(strings("SELECT user_id FROM thread_members WHERE thread_id = ?", thread), ChangeType.THREAD, thread, fx, now)
             }
-            exec("DELETE FROM wrap_tasks WHERE author_id = ? OR recipient_id = ?", session.userId, session.userId)
-            exec("DELETE FROM push_subscriptions WHERE user_id = ?", session.userId)
-            exec("DELETE FROM push_prefs WHERE user_id = ?", session.userId)
-            val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", session.userId)
-            exec("DELETE FROM sessions WHERE user_id = ?", session.userId)
+            exec("DELETE FROM wrap_tasks WHERE author_id = ? OR recipient_id = ?", userId, userId)
+            exec("DELETE FROM push_subscriptions WHERE user_id = ?", userId)
+            exec("DELETE FROM push_prefs WHERE user_id = ?", userId)
+            val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", userId)
+            exec("DELETE FROM sessions WHERE user_id = ?", userId)
             exec(
                 "UPDATE users SET deleted = 1, username = ?, vault = ?, auth_hash = ? WHERE id = ?",
-                "deleted-${session.userId}", ByteArray(0), ByteArray(32), session.userId,
+                "deleted-$userId", ByteArray(0), ByteArray(32), userId,
             )
-            change(strings("SELECT id FROM users WHERE deleted = 0"), ChangeType.USER, session.userId, fx, now)
+            change(strings("SELECT id FROM users WHERE deleted = 0"), ChangeType.USER, userId, fx, now)
             sessions
         }
-        sessionCache.entries.removeIf { it.value.first.userId == session.userId }
+        sessionCache.entries.removeIf { it.value.first.userId == userId }
         sessions.forEach(presence::disconnectSession)
     }
 

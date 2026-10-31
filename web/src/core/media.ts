@@ -3,6 +3,8 @@ import { chunkCount, cipherLength, DEFAULT_CHUNK, decryptMedia, newFileKey, newH
 import { b64, concat, unb64 } from '../crypto/sodium';
 import { api, fetchBlob, getToken } from './api';
 import { ApiError } from './errors';
+import { toast } from './store';
+import type { InputAudioTrack } from 'mediabunny';
 import type { MediaRef } from './payloads';
 import type { BlobDto, UploadState } from './types';
 
@@ -20,6 +22,8 @@ export interface Prepared {
   durationMs?: number;
   blurhash?: string;
   poster?: Prepared;
+  /** The video had sound this browser can't read (such as an iPhone's Spatial Audio), so it was left out. */
+  silent?: boolean;
 }
 
 export type MediaKind = 'post' | 'reel' | 'story' | 'message' | 'avatar';
@@ -37,6 +41,15 @@ const IMAGE_EDGE: Record<MediaKind, number> = { post: 2048, reel: 1440, story: 1
 export class UnsupportedMediaError extends Error {}
 
 let codecs: Promise<typeof import('mediabunny')> | null = null;
+let bundledAac = false;
+
+/** Switches every later AAC encode to the bundled WebAssembly encoder (it takes precedence over the browser's own). */
+async function useBundledAac() {
+  if (bundledAac) return;
+  const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
+  registerAacEncoder();
+  bundledAac = true;
+}
 
 /**
  * Mediabunny (≈1 MB) only loads when someone actually picks a video or records a voice note. Browsers whose
@@ -46,10 +59,7 @@ let codecs: Promise<typeof import('mediabunny')> | null = null;
 function loadCodecs() {
   codecs ??= (async () => {
     const mediabunny = await import('mediabunny');
-    if (!(await mediabunny.canEncodeAudio('aac'))) {
-      const { registerAacEncoder } = await import('@mediabunny/aac-encoder');
-      registerAacEncoder();
-    }
+    if (!(await mediabunny.canEncodeAudio('aac'))) await useBundledAac();
     return mediabunny;
   })();
   codecs.catch(() => (codecs = null));
@@ -117,34 +127,79 @@ export async function prepareVideo(
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   const track = await input.getPrimaryVideoTrack();
   if (!track) throw new UnsupportedMediaError('That file has no video in it.');
+  if (!(await track.canDecode())) {
+    throw new UnsupportedMediaError(
+      `This browser can't read this video's format (${track.codec ?? 'unknown'}; iPhones record HEVC). Try Safari, or Chrome on a Mac, or post it from the Android app.`,
+    );
+  }
   const duration = await input.computeDuration();
   const end = Math.min(trim?.end ?? duration, (trim?.start ?? 0) + spec.maxSeconds);
   const { width, height } = fitWithin(crop?.width ?? track.displayWidth, crop?.height ?? track.displayHeight, spec.maxEdge);
   if (!(await canEncodeVideo('avc', { width, height, quality: new Quality({ bitrate: spec.bitrate }) }))) {
     throw new UnsupportedMediaError('This browser cannot encode H.264 video. Use Chrome or Edge, or post it from the Android app.');
   }
-  const hasAudio = !!(await input.getPrimaryAudioTrack());
-  if (hasAudio && !(await canEncodeAudio('aac'))) {
+  // iPhones can record Spatial Audio (Apple's APAC), alongside or instead of plain AAC. Use the first sound track this
+  // browser can decode; with none, the video goes up without sound rather than not at all.
+  const audioTracks = await input.getAudioTracks();
+  let audioTrack: InputAudioTrack | null = null;
+  for (const candidate of audioTracks) {
+    if (await candidate.canDecode()) {
+      audioTrack = candidate;
+      break;
+    }
+  }
+  const silent = audioTracks.length > 0 && !audioTrack;
+  if (silent) toast("This browser can't read that video's sound (iPhone Spatial Audio, for example), so it goes up without sound.");
+  if (audioTrack && !(await canEncodeAudio('aac'))) {
     throw new UnsupportedMediaError('This browser cannot encode audio for video. Use Chrome or Edge, or post it from the Android app.');
   }
-  const target = new BufferTarget();
-  const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-  const conversion = await Conversion.init({
-    input,
-    output,
-    tracks: 'primary',
-    video: { width, height, fit: 'contain', codec: 'avc', quality: new Quality({ bitrate: spec.bitrate }), frameRate: 30, forceTranscode: true, ...(crop ? { crop } : {}) },
-    audio: { codec: 'aac', quality: new Quality({ bitrate: 128_000 }), numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true },
-    trim: { start: trim?.start ?? 0, end },
-    showWarnings: false,
-  });
-  // Mediabunny drops a track it can't encode and carries on; a reel without its picture is not a reel.
-  if (!conversion.isValid || conversion.discardedTracks.some((d) => d.track.type === 'video' || d.reason !== 'discarded_by_user')) {
-    throw new UnsupportedMediaError('That video cannot be converted in this browser. Try Chrome or Edge, or post it from the Android app.');
+
+  const convert = async () => {
+    const target = new BufferTarget();
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+    const conversion = await Conversion.init({
+      input,
+      output,
+      video: (t) =>
+        t === track
+          ? { width, height, fit: 'contain', codec: 'avc', quality: new Quality({ bitrate: spec.bitrate }), frameRate: 30, forceTranscode: true, ...(crop ? { crop } : {}) }
+          : { discard: true },
+      audio: (t) =>
+        t === audioTrack
+          ? { codec: 'aac', quality: new Quality({ bitrate: 128_000 }), numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true }
+          : { discard: true },
+      trim: { start: trim?.start ?? 0, end },
+      showWarnings: false,
+    });
+    // Mediabunny drops a track it can't handle and carries on; a reel without its picture (or chosen sound) is not one.
+    const lost = conversion.discardedTracks.find((d) => d.reason !== 'discarded_by_user');
+    if (!conversion.isValid || lost) {
+      throw new UnsupportedMediaError(
+        `This browser can't convert that video${lost ? ` (${lost.track.type}: ${lost.reason.replaceAll('_', ' ')})` : ''}. Try Safari or Chrome, or post it from the Android app.`,
+      );
+    }
+    conversion.onProgress = (progress) => onProgress?.(progress);
+    await conversion.execute();
+    return target.buffer!;
+  };
+
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await convert();
+  } catch (error) {
+    if (error instanceof UnsupportedMediaError) throw error;
+    // Some browsers' own AAC encoders accept a setup and then fail part-way ("The given encoding is not supported").
+    // The bundled encoder doesn't: try once more with it before giving up.
+    if (!audioTrack || bundledAac) throw failedToConvert(error);
+    await useBundledAac();
+    onProgress?.(0);
+    try {
+      buffer = await convert();
+    } catch (retryError) {
+      throw failedToConvert(retryError);
+    }
   }
-  conversion.onProgress = (progress) => onProgress?.(progress);
-  await conversion.execute();
-  const blob = new Blob([target.buffer!], { type: 'video/mp4' });
+  const blob = new Blob([buffer], { type: 'video/mp4' });
 
   // Poster: a frame a little way in, as a JPEG.
   const sink = new CanvasSink(track, { width, height, fit: 'contain' });
@@ -158,7 +213,13 @@ export async function prepareVideo(
         : await new Promise<Blob>((resolve) => (canvas as HTMLCanvasElement).toBlob((b) => resolve(b!), 'image/jpeg', 0.8));
     poster = { blob: posterBlob, mime: 'image/jpeg', width, height, blurhash: await blurhashOf(canvas, width, height) };
   }
-  return { blob, mime: 'video/mp4', width, height, durationMs: Math.round((end - (trim?.start ?? 0)) * 1000), blurhash: poster?.blurhash, poster };
+  return { blob, mime: 'video/mp4', width, height, durationMs: Math.round((end - (trim?.start ?? 0)) * 1000), blurhash: poster?.blurhash, poster, silent };
+}
+
+function failedToConvert(error: unknown) {
+  if (error instanceof UnsupportedMediaError) return error;
+  const reason = error instanceof Error ? error.message : String(error);
+  return new UnsupportedMediaError(`This browser couldn't convert that video (${reason}). Try Safari or Chrome, or post it from the Android app.`);
 }
 
 export async function prepare(file: File | Blob, kind: MediaKind, onProgress?: (f: number) => void): Promise<Prepared> {

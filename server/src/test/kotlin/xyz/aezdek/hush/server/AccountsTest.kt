@@ -17,7 +17,9 @@ import xyz.aezdek.hush.crypto.B64
 import xyz.aezdek.hush.crypto.KdfParams
 import xyz.aezdek.hush.crypto.PasswordKeys
 import xyz.aezdek.hush.protocol.AdminStatus
+import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.ChangePasswordRequest
+import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.Me
 import xyz.aezdek.hush.protocol.PreloginRequest
 import xyz.aezdek.hush.protocol.PreloginResponse
@@ -25,6 +27,37 @@ import xyz.aezdek.hush.protocol.SessionDto
 import xyz.aezdek.hush.protocol.UserDto
 
 class AccountsTest {
+
+    @Test
+    fun theAdminManagesMembersAndInvites() = serverTest {
+        val (admin, bob, cara) = members("admin", "bob", "cara")
+
+        val users = admin.get("/api/v1/admin/users").body<List<AdminUserDto>>()
+        assertEquals(listOf("admin", "bob", "cara"), users.map { it.username })
+        assertTrue(users.first().isAdmin)
+        assertTrue(users.all { it.sessions == 1 })
+        assertEquals(HttpStatusCode.Forbidden, bob.get("/api/v1/admin/users").status)
+
+        val status = admin.get("/api/v1/admin/status").body<AdminStatus>()
+        assertTrue(status.startedAt > 0)
+        assertFalse(status.updateAvailable)
+
+        // An unused invite can be withdrawn, once.
+        val invite = admin.post("/api/v1/admin/invites", null).body<InviteDto>()
+        assertEquals(HttpStatusCode.OK, admin.delete("/api/v1/admin/invites/${invite.code}").status)
+        assertEquals(HttpStatusCode.NotFound, admin.delete("/api/v1/admin/invites/${invite.code}").status)
+
+        // Signing bob out everywhere ends his session; his account stays.
+        assertEquals(HttpStatusCode.OK, admin.post("/api/v1/admin/users/${bob.id}/sign-out", null).status)
+        assertEquals(HttpStatusCode.Unauthorized, bob.get("/api/v1/me").status)
+
+        // Removing cara deletes her account; admins can't be removed, and members can't remove anyone.
+        assertEquals(HttpStatusCode.Forbidden, cara.delete("/api/v1/admin/users/${bob.id}").status)
+        assertEquals(HttpStatusCode.OK, admin.delete("/api/v1/admin/users/${cara.id}").status)
+        assertEquals(HttpStatusCode.Unauthorized, cara.get("/api/v1/me").status)
+        assertEquals(listOf("admin", "bob"), admin.get("/api/v1/admin/users").body<List<AdminUserDto>>().map { it.username })
+        assertEquals(HttpStatusCode.BadRequest, admin.delete("/api/v1/admin/users/${admin.id}").status)
+    }
 
     @Test
     fun firstMemberIsAdminAndNewDevicesRestoreKeysFromTheVault() = serverTest {

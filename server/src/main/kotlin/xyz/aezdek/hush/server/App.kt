@@ -56,6 +56,8 @@ class Services(val config: ServerConfig, val clock: Clock, app: Application) {
     val sync = Sync(db, objects, accounts, threads)
     val push = WebPush(db, clock, config.vapidSubject)
     val turn = Turn(config, clock)
+    val releases = Releases(config.releaseUrl, clock)
+    val startedAt = clock.now()
     val realtime = Realtime(db, presence, push, app, clock)
     val jobs = Jobs(config, db, objects, blobs, realtime)
     val limiter = RateLimiter(clock)

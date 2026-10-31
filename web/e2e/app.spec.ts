@@ -64,10 +64,10 @@ async function editProfile(p: Person, displayName: string, bio: string) {
 }
 
 async function newInvite(admin: Person): Promise<string> {
-  await admin.page.goto('/settings/admin');
+  await admin.page.goto('/admin');
   await admin.page.getByRole('button', { name: 'New invite' }).click();
   // The list also shows invites already used; wait for the fresh one rather than reading whatever is first.
-  const code = admin.page.locator('.settings-card .setting-line').filter({ hasNotText: 'Used' }).locator('b.tabular').first();
+  const code = admin.page.locator('.admin-row').filter({ has: admin.page.locator('b.tabular') }).filter({ hasNotText: 'Used' }).locator('b.tabular').first();
   await expect(code).toHaveText(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/);
   return (await code.textContent())!.trim();
 }
@@ -244,6 +244,14 @@ test('three people use Hush end to end', async ({ browser }) => {
   await shot(alice.page, 'explore-desktop');
   await alice.page.goto('/settings/security');
   await shot(alice.page, 'settings-security-desktop');
+  // The admin panel lists everyone, with the server's state; members only ever see Settings.
+  await alice.page.goto('/admin');
+  await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
+  await shot(alice.page, 'admin-desktop');
+  await bob.page.goto('/settings');
+  await expect(bob.page.getByText('Close Friends')).toBeVisible();
+  await expect(bob.page.getByText('Admin', { exact: true })).toHaveCount(0);
+  await shot(bob.page, 'settings-mobile');
   await alice.page.goto(`/verify/${await bob.page.evaluate(() => '')}`).catch(() => undefined);
 
   // ------------------------------------------------------------------------------------- no plaintext

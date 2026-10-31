@@ -12,21 +12,18 @@ import {
   ShieldCheck,
   Smartphone,
   Star,
-  Ticket,
   UserX,
-  Users,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../core/api';
 import { saveSettings, unblock } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { bytesLabel } from '../../core/media';
 import { displayName, useIndex } from '../../core/selectors';
 import { changePassword, deleteAccount, enablePush, pushSupported, resetKeys, signOut, updateMe } from '../../core/session';
 import { toast, useApp } from '../../core/store';
 import { applyTheme, useUi } from '../../core/ui';
-import type { AdminStatus, IdList, InviteDto, SessionDto } from '../../core/types';
+import type { IdList, SessionDto } from '../../core/types';
 import { Avatar } from '../../ui/Avatar';
 import { Ago, Center, Segmented, Spinner, Switch, Verified } from '../../ui/bits';
 import { Confirm } from '../../ui/Sheet';
@@ -35,16 +32,17 @@ import { StoryThumb } from '../stories/StoryThumb';
 import { MyQr } from './Verify';
 import { safetyCode, groupDigits } from '../../crypto/safety';
 
+// Each row's icon sits on a coloured tile, as in iOS Settings.
 const SECTIONS = [
-  { id: 'account', label: 'Account', icon: KeyRound },
-  { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
-  { id: 'close-friends', label: 'Close Friends', icon: Star },
-  { id: 'blocked', label: 'Blocked', icon: UserX },
-  { id: 'notifications', label: 'Notifications and calls', icon: Bell },
-  { id: 'security', label: 'Encryption and devices', icon: Laptop },
-  { id: 'archive', label: 'Archive', icon: Archive },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
-  { id: 'data', label: 'Your data', icon: Download },
+  { id: 'account', label: 'Account', icon: KeyRound, tint: '#8e8e93' },
+  { id: 'privacy', label: 'Privacy', icon: ShieldCheck, tint: '#007aff' },
+  { id: 'close-friends', label: 'Close Friends', icon: Star, tint: '#34c759' },
+  { id: 'blocked', label: 'Blocked', icon: UserX, tint: '#ff3b30' },
+  { id: 'notifications', label: 'Notifications and calls', icon: Bell, tint: '#ff3b30' },
+  { id: 'security', label: 'Encryption and devices', icon: Laptop, tint: '#5856d6' },
+  { id: 'archive', label: 'Archive', icon: Archive, tint: '#ff9500' },
+  { id: 'appearance', label: 'Appearance', icon: Palette, tint: '#007aff' },
+  { id: 'data', label: 'Your data', icon: Download, tint: '#30b0c7' },
 ] as const;
 
 function Row({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
@@ -363,54 +361,11 @@ function DataSection() {
   );
 }
 
-function AdminSection() {
-  const [status, setStatus] = useState<AdminStatus | null>(null);
-  const [invites, setInvites] = useState<InviteDto[]>([]);
-  const load = () => {
-    void api.get<AdminStatus>('/admin/status').then(setStatus);
-    void api.get<InviteDto[]>('/admin/invites').then(setInvites);
-  };
-  useEffect(load, []);
-  if (!status) return <Center><Spinner /></Center>;
-  const backupAge = status.lastBackupAt ? Date.now() - status.lastBackupAt : null;
-  const backupStale = backupAge === null || backupAge > 48 * 3_600_000 || status.lastBackupOk === false;
-  return (
-    <>
-      {backupStale && <div className="key-warning"><HardDrive size={18} /> {status.lastBackupAt ? 'The last successful backup is more than 48 hours old.' : 'No backup has run yet.'} Check hush-backup.timer on the server.</div>}
-      <Card title="Server">
-        <Row title="Members" sub={`${status.users} of ${status.maxUsers}`}><Users size={18} /></Row>
-        <Row title="Free disk" sub={`${bytesLabel(status.diskFreeBytes)} free · Hush uses ${bytesLabel(status.dataBytes)}`}>{status.uploadsBlocked && <span className="chip warn">Uploads paused</span>}</Row>
-        <Row title="Last backup" sub={status.lastBackupAt ? `${new Date(status.lastBackupAt).toLocaleString()}${status.backupMessage ? ' · ' + status.backupMessage : ''}` : 'Never'}>
-          <span className={`chip ${backupStale ? 'warn' : 'ok'}`}>{backupStale ? 'Attention' : 'OK'}</span>
-        </Row>
-        <Row title="Version" sub={status.version} />
-      </Card>
-      <Card title="Invites">
-        <button className="btn btn-brand" disabled={status.users >= status.maxUsers} onClick={() => void run(api.post('/admin/invites')).then(load)}>
-          <Ticket size={16} /> New invite
-        </button>
-        {invites.map((i) => (
-          <div className="setting-line" key={i.code}>
-            <span>
-              <b className="tabular">{i.code}</b>
-              <span className="faint">{i.usedBy ? 'Used' : i.expiresAt < Date.now() ? 'Expired' : `Expires ${new Date(i.expiresAt).toLocaleDateString()}`}</span>
-            </span>
-            {!i.usedBy && i.expiresAt > Date.now() && (
-              <button className="btn btn-secondary btn-sm" onClick={() => void run(navigator.clipboard.writeText(`${location.origin}/?invite=${i.code}`), 'Invite link copied')}>
-                Copy link
-              </button>
-            )}
-          </div>
-        ))}
-      </Card>
-    </>
-  );
-}
 
 export function Settings() {
   const { section } = useParams();
   const me = useApp((s) => s.me!);
-  const sections = me.isAdmin ? [...SECTIONS, { id: 'admin', label: 'Server', icon: HardDrive } as const] : SECTIONS;
+  const sections = SECTIONS;
   const active = sections.find((s) => s.id === section);
   const body = (() => {
     switch (section) {
@@ -423,7 +378,6 @@ export function Settings() {
       case 'archive': return <ArchiveSection />;
       case 'appearance': return <AppearanceSection />;
       case 'data': return <DataSection />;
-      case 'admin': return me.isAdmin ? <AdminSection /> : null;
       default: return null;
     }
   })();
@@ -431,15 +385,36 @@ export function Settings() {
     <div className={`settings ${section ? 'has-section' : ''}`}>
       <nav className="settings-nav">
         <h1 className="page-title" style={{ padding: '0 12px' }}>Settings</h1>
-        {sections.map((s) => (
-          <Link key={s.id} to={`/settings/${s.id}`} className={`settings-link ${section === s.id ? 'active' : ''}`}>
-            <s.icon size={20} /> {s.label}
-            <ChevronRight size={16} className="faint only-mobile" style={{ marginLeft: 'auto' }} />
-          </Link>
-        ))}
-        <button className="settings-link danger" onClick={() => void signOut()}>
-          <LogOut size={20} /> Log out
-        </button>
+        <div className="settings-group">
+          {sections.map((s) => (
+            <Link key={s.id} to={`/settings/${s.id}`} className={`settings-link ${section === s.id ? 'active' : ''}`}>
+              <span className="tile" style={{ background: s.tint }}>
+                <s.icon size={16} strokeWidth={2.2} />
+              </span>
+              <span className="settings-link-label">{s.label}</span>
+              <ChevronRight size={16} className="chevron" />
+            </Link>
+          ))}
+        </div>
+        {me.isAdmin && (
+          <div className="settings-group">
+            <Link to="/admin" className="settings-link">
+              <span className="tile" style={{ background: '#636366' }}>
+                <HardDrive size={16} strokeWidth={2.2} />
+              </span>
+              <span className="settings-link-label">Admin</span>
+              <ChevronRight size={16} className="chevron" />
+            </Link>
+          </div>
+        )}
+        <div className="settings-group">
+          <button className="settings-link danger" onClick={() => void signOut()}>
+            <span className="tile" style={{ background: '#ff3b30' }}>
+              <LogOut size={16} strokeWidth={2.2} />
+            </span>
+            <span className="settings-link-label">Log out</span>
+          </button>
+        </div>
         <p className="settings-foot faint">
           <Moon size={12} /> Hush · end-to-end encrypted
         </p>

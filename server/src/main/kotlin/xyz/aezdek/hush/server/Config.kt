@@ -19,6 +19,10 @@ data class ServerConfig(
     val minFreeBytes: Long = 10L * 1024 * 1024 * 1024,
     val maxUploadBytes: Long = 2L * 1024 * 1024 * 1024,
     val version: String = "dev",
+    /** The commit this server runs, from update.sh's HUSH_COMMIT. */
+    val commit: String? = null,
+    /** Where the newest release describes itself, so admins can see when an update is waiting. */
+    val releaseUrl: String? = null,
     /** Local hour (0–23) for the nightly SQLite snapshot. */
     val snapshotHour: Int = 3,
     val snapshotsToKeep: Int = 7,
@@ -45,6 +49,9 @@ data class ServerConfig(
                 cfTurnApiToken = env["CF_TURN_API_TOKEN"]?.takeIf { it.isNotBlank() },
                 minFreeBytes = (env["HUSH_MIN_FREE_GB"]?.toLong() ?: 10L) * 1024 * 1024 * 1024,
                 version = env["HUSH_VERSION"] ?: "dev",
+                commit = env["HUSH_COMMIT"]?.takeIf { it.isNotBlank() },
+                releaseUrl = env["HUSH_REPO"]?.takeIf { it.isNotBlank() }
+                    ?.let { "https://github.com/$it/releases/download/hush-latest/hush-release.env" },
             )
         }
     }

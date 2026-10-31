@@ -444,6 +444,27 @@ fun Route.api(s: Services) = route("/api/v1") {
         val session = call.session(s)
         call.respond(blocking { s.accounts.createInvite(session) })
     }
+    delete("/admin/invites/{code}") {
+        val session = call.session(s)
+        blocking { s.accounts.revokeInvite(session, call.param("code")) }
+        call.respond(OkResponse())
+    }
+    get("/admin/users") {
+        val session = call.session(s)
+        call.respond(blocking { s.accounts.adminUsers(session) })
+    }
+    post("/admin/users/{id}/sign-out") {
+        val session = call.session(s)
+        blocking { s.accounts.signOutEverywhere(session, call.param("id")) }
+        call.respond(OkResponse())
+    }
+    delete("/admin/users/{id}") {
+        val session = call.session(s)
+        val fx = Effects()
+        blocking { s.accounts.removeMember(session, call.param("id"), s.objects, fx) }
+        s.realtime.apply(fx)
+        call.respond(OkResponse())
+    }
     get("/app/version") {
         call.session(s)
         val file = s.config.apkDir?.let { File(it, "version.json") }?.takeIf { it.isFile } ?: notFound("No Android build in this image")
@@ -458,6 +479,7 @@ fun adminStatus(s: Services): AdminStatus {
     }
     fun field(name: String) = (backup as? kotlinx.serialization.json.JsonObject)?.get(name)
         ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+    val latest = s.releases.latest()
     return AdminStatus(
         users = s.db.tx { long("SELECT COUNT(*) FROM users WHERE deleted = 0") ?: 0 }.toInt(),
         maxUsers = MAX_MEMBERS,
@@ -468,6 +490,13 @@ fun adminStatus(s: Services): AdminStatus {
         lastBackupOk = field("ok")?.toBooleanStrictOrNull(),
         backupMessage = field("message"),
         version = s.config.version,
+        commit = s.config.commit,
+        startedAt = s.startedAt,
+        latestVersion = latest?.version,
+        // By commit when both sides know theirs: version numbers restart when the CI workflow is renamed.
+        updateAvailable = latest != null && (
+            if (latest.commit != null && s.config.commit != null) latest.commit != s.config.commit else latest.version != s.config.version
+            ),
     )
 }
 
