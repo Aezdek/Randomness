@@ -126,15 +126,16 @@ fun Welcome() {
 
 @Composable
 private fun Segmented(creating: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.elev2).padding(4.dp)) {
+    // iOS segmented control: a grey track with the chosen segment raised on it.
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Aez.colors.fill3).padding(2.dp)) {
         for ((value, label) in listOf(false to "Sign in", true to "Create account")) {
             val selected = value == creating
             Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (selected) Aez.colors.bg else Color.Transparent)
-                    .clickable { onChange(value) }.padding(vertical = 10.dp),
+                Modifier.weight(1f).clip(RoundedCornerShape(7.dp)).background(if (selected) Aez.colors.segment else Color.Transparent)
+                    .clickable { onChange(value) }.padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (selected) Aez.colors.text else Aez.colors.text2)
+                Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, fontSize = 14.sp, color = Aez.colors.text)
             }
         }
     }

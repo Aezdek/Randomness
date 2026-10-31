@@ -154,7 +154,7 @@ export async function prepareVideo(
     throw new UnsupportedMediaError('This browser cannot encode audio for video. Use Chrome or Edge, or post it from the Android app.');
   }
 
-  const convert = async () => {
+  const convert = async (withSound: boolean) => {
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
     const conversion = await Conversion.init({
@@ -165,7 +165,7 @@ export async function prepareVideo(
           ? { width, height, fit: 'contain', codec: 'avc', quality: new Quality({ bitrate: spec.bitrate }), frameRate: 30, forceTranscode: true, ...(crop ? { crop } : {}) }
           : { discard: true },
       audio: (t) =>
-        t === audioTrack
+        t === audioTrack && withSound
           ? { codec: 'aac', quality: new Quality({ bitrate: 128_000 }), numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true }
           : { discard: true },
       trim: { start: trim?.start ?? 0, end },
@@ -184,20 +184,29 @@ export async function prepareVideo(
   };
 
   let buffer: ArrayBuffer;
+  let soundless = silent;
   try {
-    buffer = await convert();
+    buffer = await convert(true);
   } catch (error) {
-    if (error instanceof UnsupportedMediaError) throw error;
+    if (error instanceof UnsupportedMediaError || !audioTrack) throw failedToConvert(error);
     // Some browsers' own AAC encoders accept a setup and then fail part-way ("The given encoding is not supported").
-    // The bundled encoder doesn't: try once more with it before giving up.
-    if (!audioTrack || bundledAac) throw failedToConvert(error);
-    await useBundledAac();
-    onProgress?.(0);
-    try {
-      buffer = await convert();
-    } catch (retryError) {
-      throw failedToConvert(retryError);
+    // The bundled encoder doesn't, so try once more with it; and if the sound itself is what fails (an iPhone track
+    // the browser claims to read but can't), the video still goes up, without sound, rather than not at all.
+    let done: ArrayBuffer | null = null;
+    if (!bundledAac) {
+      await useBundledAac();
+      onProgress?.(0);
+      done = await convert(true).catch(() => null);
     }
+    if (!done) {
+      onProgress?.(0);
+      done = await convert(false).catch((e: unknown) => {
+        throw failedToConvert(e);
+      });
+      soundless = true;
+      toast("This browser couldn't convert that video's sound, so it goes up without sound.");
+    }
+    buffer = done;
   }
   const blob = new Blob([buffer], { type: 'video/mp4' });
 
@@ -213,7 +222,7 @@ export async function prepareVideo(
         : await new Promise<Blob>((resolve) => (canvas as HTMLCanvasElement).toBlob((b) => resolve(b!), 'image/jpeg', 0.8));
     poster = { blob: posterBlob, mime: 'image/jpeg', width, height, blurhash: await blurhashOf(canvas, width, height) };
   }
-  return { blob, mime: 'video/mp4', width, height, durationMs: Math.round((end - (trim?.start ?? 0)) * 1000), blurhash: poster?.blurhash, poster, silent };
+  return { blob, mime: 'video/mp4', width, height, durationMs: Math.round((end - (trim?.start ?? 0)) * 1000), blurhash: poster?.blurhash, poster, silent: soundless };
 }
 
 function failedToConvert(error: unknown) {
