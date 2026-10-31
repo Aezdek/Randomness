@@ -16,6 +16,7 @@ import {
 } from './payloads';
 import { useApp, type AppState, type Entity } from './store';
 import type { ThreadDto, UserDto } from './types';
+import { chatCustom } from './chat';
 
 /** Everything the UI looks things up by, rebuilt only when the entity map changes. */
 export interface Index {
@@ -149,13 +150,16 @@ export function useUserByName(username: string | undefined): UserDto | undefined
   return useApp((s) => Object.values(s.users).find((u) => u.username === username?.toLowerCase()));
 }
 
+/** What a chat calls someone: their nickname there, else their display name, else their username. */
+export function nameIn(threadId: string | null | undefined, userId: string, index: Index, users: Record<string, UserDto>): string {
+  const nickname = threadId ? chatCustom(index.messages[threadId]).nicknames[userId] : undefined;
+  return nickname || index.profiles[userId]?.payload.displayName || users[userId]?.username || 'someone';
+}
+
 export function threadTitle(thread: ThreadDto, index: Index, users: Record<string, UserDto>, me: string): string {
   const name = index.threadMeta[thread.id]?.payload.name;
   if (name) return name;
-  const others = thread.members.filter((m) => m.userId !== me).map((m) => {
-    const user = users[m.userId];
-    return index.profiles[m.userId]?.payload.displayName || user?.username || 'someone';
-  });
+  const others = thread.members.filter((m) => m.userId !== me).map((m) => nameIn(thread.id, m.userId, index, users));
   return others.join(', ') || 'Just you';
 }
 

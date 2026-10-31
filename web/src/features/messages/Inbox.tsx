@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageType, type MessagePayload } from '../../core/payloads';
-import { threadTitle, unreadCount, useIndex } from '../../core/selectors';
+import { nameIn, threadTitle, unreadCount, useIndex } from '../../core/selectors';
+import { eventText } from '../../core/chat';
 import { useApp } from '../../core/store';
 import { openCreate } from '../../core/ui';
 import { Avatar } from '../../ui/Avatar';
@@ -28,7 +29,7 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
     case MessageType.CALL:
       return payload.call?.missed ? 'Missed call' : `${payload.call?.video ? 'Video' : 'Audio'} call`;
     case MessageType.HEART:
-      return you + '❤️';
+      return you + (payload.text || '❤️');
     default:
       return payload.text ?? '';
   }
@@ -104,7 +105,17 @@ export function ThreadList({ activeId }: { activeId?: string }) {
             <span className="thread-text">
               <span className="truncate thread-title">{title}</span>
               <span className="truncate thread-preview">
-                {isTyping ? <span className="typing-label">typing…</span> : last ? previewOf(last.payload, last.dto.authorId === me.id) : 'Say hi 👋'}
+                {isTyping ? (
+                  <span className="typing-label">typing…</span>
+                ) : last ? (
+                  last.payload.type === MessageType.SYSTEM && last.payload.event ? (
+                    eventText(last.payload.event, last.dto.authorId, me.id, users, (id) => nameIn(thread.id, id, index, users))
+                  ) : (
+                    previewOf(last.payload, last.dto.authorId === me.id)
+                  )
+                ) : (
+                  'Say hi 👋'
+                )}
                 {last && (
                   <>
                     {' · '}

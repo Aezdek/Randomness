@@ -70,6 +70,14 @@ export const MessageType = {
 export interface MessagePayload {
   type: string; text?: string | null; media?: MediaRef[]; replyTo?: string | null; sharedObjectId?: string | null;
   sharedAuthorId?: string | null; storyId?: string | null; call?: CallSummary | null; edited?: boolean;
+  /** For SYSTEM messages: a change to the chat every member sees (see core/chat.ts). */
+  event?: ChatEvent | null;
+}
+
+/** One change to a chat's look; see ChatEvent in Payloads.kt. */
+export interface ChatEvent {
+  theme?: string | null; nicknameFor?: string | null; nickname?: string | null; quickReaction?: string | null;
+  pin?: string | null; unpin?: string | null;
 }
 
 export interface ReactionPayload { emoji: string }

@@ -213,6 +213,23 @@ test('three people use Hush end to end', async ({ browser }) => {
   await shot(alice.page, 'direct-desktop');
   await shot(bob.page, 'direct-mobile');
 
+  // ----------------------------------------------------------------------------- chat theme and nicknames
+  // Alice picks a theme and gives Bob a nickname; both are encrypted chat events Bob's app applies too.
+  await alice.page.getByRole('button', { name: 'Details' }).click();
+  await shot(alice.page, 'chat-details-desktop');
+  await alice.page.getByRole('button', { name: /^Theme/ }).click();
+  await alice.page.getByRole('button', { name: 'Ocean' }).click();
+  await expect(bob.page.locator('.chat-event', { hasText: 'changed the theme to Ocean' })).toBeVisible({ timeout: 20_000 });
+  await alice.page.getByRole('button', { name: /^Nicknames/ }).click();
+  await alice.page.locator('.nickname-pick', { hasText: 'bob' }).click();
+  await alice.page.getByLabel('Nickname for bob').fill('Bobby');
+  await alice.page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(bob.page.locator('.chat-event', { hasText: 'set the nickname for you to Bobby' })).toBeVisible({ timeout: 20_000 });
+  for (let i = 0; i < 3 && (await alice.page.locator('.sheet').count()) > 0; i++) await alice.page.keyboard.press('Escape');
+  await expect(alice.page.locator('.chat-head')).toContainText('Bobby');
+  await shot(alice.page, 'chat-theme-desktop');
+  await shot(bob.page, 'chat-theme-mobile');
+
   // ----------------------------------------------------------------------------------------------- call
   await alice.page.getByRole('button', { name: 'Video call' }).click();
   await expect(bob.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });

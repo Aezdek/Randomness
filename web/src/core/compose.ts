@@ -3,6 +3,7 @@ import { b64, random, unb64, utf8 } from '../crypto/sodium';
 import { api } from './api';
 import {
   Audience,
+  MessageType,
   CHILD_KEYED,
   Kind,
   type AnswerPayload,
@@ -18,6 +19,7 @@ import {
   type ReactionPayload,
   type ReelPayload,
   type SettingsPayload,
+  type ChatEvent,
   type StoryPayload,
   type ThreadPayload,
   type VotePayload,
@@ -439,6 +441,12 @@ export async function sendMessage(threadId: string, payload: MessagePayload, opt
     }
   }
   throw new Error('Could not send');
+}
+
+/** Changes the chat's theme, a nickname, the quick reaction or a pin: an encrypted message every member applies.
+ *  Always sent as a normal message, never in vanish mode, so the change stays. */
+export async function sendChatEvent(threadId: string, event: ChatEvent) {
+  return sendMessage(threadId, { type: MessageType.SYSTEM, event }, { audience: Audience.THREAD });
 }
 
 export async function react(message: Entity, emoji: string) {

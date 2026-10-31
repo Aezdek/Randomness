@@ -1,12 +1,13 @@
-import { ArrowLeft, Camera, CornerUpLeft, Eye, Ghost, Heart, ImagePlus, Info, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Play, Smile, Square, Video, X } from 'lucide-react';
+import { ArrowLeft, Camera, CornerUpLeft, Eye, Ghost, Heart, ImagePlus, Info, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Smile, Square, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { deleteObject, edit, markRead, react as reactTo, recordView, sendMessage } from '../../core/compose';
+import { chatCustom, DEFAULT_REACTION, eventText, themeGradient, themeOf, type ChatCustom } from '../../core/chat';
+import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { prepare, prepareVoice, upload } from '../../core/media';
 import { Audience, Kind, MessageType, type MessagePayload, type ReactionPayload, type StoryPayload } from '../../core/payloads';
-import { threadTitle, useIndex } from '../../core/selectors';
+import { nameIn, threadTitle, useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
@@ -92,7 +93,24 @@ function Shared({ message }: { message: Entity<MessagePayload> }) {
   );
 }
 
-function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entity<MessagePayload>; mine: boolean; onReply: () => void; onEdit: () => void; showAvatar: boolean }) {
+function Bubble({
+  message,
+  mine,
+  onReply,
+  onEdit,
+  showAvatar,
+  showName,
+  custom,
+}: {
+  message: Entity<MessagePayload>;
+  mine: boolean;
+  onReply: () => void;
+  onEdit: () => void;
+  showAvatar: boolean;
+  /** Group chats name the sender above the first of their messages in a row. */
+  showName: boolean;
+  custom: ChatCustom;
+}) {
   const index = useIndex();
   const entities = useApp((s) => s.entities);
   const users = useApp((s) => s.users);
@@ -106,6 +124,9 @@ function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entit
   const vanish = message.dto.audience === Audience.VANISH;
   const big = p.type === MessageType.HEART || (p.type === MessageType.TEXT && /^\p{Extended_Pictographic}{1,3}$/u.test(p.text ?? ''));
   const story = p.storyId ? (entities[p.storyId] as Entity<StoryPayload> | undefined) : undefined;
+  const threadId = message.dto.threadId ?? null;
+  const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, index, users));
+  const pinned = custom.pinned.includes(message.dto.id);
 
   let content: React.ReactNode;
   if (p.type === MessageType.CALL && p.call) {
@@ -135,14 +156,15 @@ function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entit
         </div>
       );
   } else {
-    content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? '❤️' : p.text}</span> : <RichText text={p.text ?? ''} />;
+    content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? p.text || DEFAULT_REACTION : p.text}</span> : <RichText text={p.text ?? ''} />;
   }
 
   const plainBubble = big || p.type === MessageType.SHARE || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
   return (
-    <div className={`msg ${mine ? 'mine' : 'theirs'}`}>
+    <div className={`msg ${mine ? 'mine' : 'theirs'}`} id={`msg-${message.dto.id}`}>
       {!mine && <span className="msg-avatar">{showAvatar && <Avatar userId={message.dto.authorId} size={28} />}</span>}
       <div className="msg-col">
+        {showName && !mine && <span className="msg-sender">{name(message.dto.authorId)}</span>}
         {(p.type === MessageType.STORY_REPLY || p.type === MessageType.STORY_REACTION) && (
           <div className="story-ref">
             <span className="faint">{mine ? 'You replied to their story' : `Replied to your story`}</span>
@@ -151,7 +173,7 @@ function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entit
         )}
         {replyTarget && (
           <div className="reply-ref">
-            <CornerUpLeft size={12} /> {replyTarget.dto.authorId === me.id ? 'You' : users[replyTarget.dto.authorId]?.username}: {replyTarget.payload.text ?? 'Attachment'}
+            <CornerUpLeft size={12} /> {name(replyTarget.dto.authorId)}: {replyTarget.payload.text ?? 'Attachment'}
           </div>
         )}
         <div className="msg-row">
@@ -189,6 +211,11 @@ function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entit
         <div className="menu">
           <button onClick={() => (setMenu(false), onReply())}>Reply</button>
           {p.text && <button onClick={() => (setMenu(false), void navigator.clipboard.writeText(p.text ?? ''))}>Copy</button>}
+          {threadId && message.dto.audience !== Audience.VANISH && message.dto.audience !== Audience.ONCE && (
+            <button onClick={() => (setMenu(false), void sendChatEvent(threadId, pinned ? { unpin: message.dto.id } : { pin: message.dto.id }).catch((e) => toast(messageOf(e), 'error')))}>
+              {pinned ? 'Unpin' : 'Pin'}
+            </button>
+          )}
           {mine && p.type === MessageType.TEXT && <button onClick={() => (setMenu(false), onEdit())}>Edit</button>}
           {mine && (
             <button className="danger" onClick={() => (setMenu(false), void deleteObject(message.dto.id).catch((e) => toast(messageOf(e), 'error')))}>
@@ -200,7 +227,7 @@ function Bubble({ message, mine, onReply, onEdit, showAvatar }: { message: Entit
               {reactions.map((r) => (
                 <div key={r.dto.id} className="user-row">
                   <Avatar userId={r.dto.authorId} size={28} />
-                  <span className="user-row-text">{r.dto.authorId === me.id ? 'You' : users[r.dto.authorId]?.username}</span>
+                  <span className="user-row-text">{name(r.dto.authorId)}</span>
                   <span style={{ fontSize: 20 }}>{r.payload.emoji}</span>
                 </div>
               ))}
@@ -277,6 +304,8 @@ export function Chat() {
   const index = useIndex();
   const navigate = useNavigate();
   const messages = index.messages[threadId] ?? [];
+  const custom = chatCustom(index.messages[threadId]);
+  const theme = themeOf(custom.theme);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<Entity<MessagePayload> | null>(null);
   const [editing, setEditing] = useState<Entity<MessagePayload> | null>(null);
@@ -371,8 +400,23 @@ export function Chat() {
     }
   };
 
+  /** Scrolls to a message (a pin, a search result) and flashes it. */
+  const jump = (messageId: string) => {
+    setInfo(false);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (!el) return toast('That message is no longer in the chat');
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    });
+  };
+  const pinnedMessage = [...custom.pinned].reverse().map((id) => messages.find((m) => m.dto.id === id)).find(Boolean) as Entity<MessagePayload> | undefined;
+  const nameOf = (id: string) => nameIn(threadId, id, index, users);
+
   // Seen receipts: under my newest message, who has read up to it.
-  const lastMine = [...messages].reverse().find((m) => m.dto.authorId === me.id);
+  const lastMine = [...messages].reverse().find((m) => m.dto.authorId === me.id && (m.payload as MessagePayload).type !== MessageType.SYSTEM);
   const seenBy = lastMine ? thread.members.filter((m) => m.userId !== me.id && m.lastReadAt >= lastMine.dto.receivedAt).map((m) => m.userId) : [];
 
   return (
@@ -383,7 +427,7 @@ export function Chat() {
         </header>
         <ThreadList activeId={threadId} />
       </aside>
-      <section className="chat">
+      <section className="chat" style={{ '--chat-bubble': themeGradient(theme), '--chat-accent': theme.colors[1] } as React.CSSProperties}>
         <header className="chat-head">
           <button className="icon-btn only-mobile" onClick={() => navigate('/direct')} aria-label="Back">
             <ArrowLeft size={24} />
@@ -419,6 +463,16 @@ export function Chat() {
           </button>
         </header>
 
+        {pinnedMessage && (
+          <button className="pinned-bar" onClick={() => jump(pinnedMessage.dto.id)}>
+            <Pin size={15} />
+            <span className="truncate">
+              <b>{pinnedMessage.dto.authorId === me.id ? 'You' : nameOf(pinnedMessage.dto.authorId)}</b>{' '}
+              {pinnedMessage.payload.text || (pinnedMessage.payload.media?.length ? 'Photo or video' : 'Message')}
+            </span>
+            {custom.pinned.length > 1 && <span className="faint">{custom.pinned.length} pinned</span>}
+          </button>
+        )}
         <div className="chat-scroll" ref={scroller}>
           <div className="chat-intro">
             {thread.isGroup ? (
@@ -443,25 +497,34 @@ export function Chat() {
             const nextMsg = messages[i + 1];
             const newDay = !prev || new Date(prev.dto.receivedAt).toDateString() !== new Date(m.dto.receivedAt).toDateString();
             const gap = prev && m.dto.receivedAt - prev.dto.receivedAt > 30 * 60_000;
-            const showAvatar = !nextMsg || nextMsg.dto.authorId !== m.dto.authorId;
+            const payload = m.payload as MessagePayload;
+            const isEvent = (x: Entity | undefined) => (x?.payload as MessagePayload | undefined)?.type === MessageType.SYSTEM;
+            const showAvatar = !nextMsg || nextMsg.dto.authorId !== m.dto.authorId || isEvent(nextMsg);
+            const showName = thread.isGroup && (!prev || prev.dto.authorId !== m.dto.authorId || isEvent(prev) || newDay || !!gap);
             return (
               <Fragment key={m.dto.id}>
                 {(newDay || gap) && <div className="day">{newDay ? longDate(m.dto.receivedAt) : new Date(m.dto.receivedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</div>}
-                <Bubble
-                  message={m}
-                  mine={m.dto.authorId === me.id}
-                  showAvatar={showAvatar}
-                  onReply={() => {
-                    setReplyTo(m);
-                    document.getElementById('chat-input')?.focus();
-                  }}
-                  onEdit={() => {
-                    setEditing(m);
-                    setText(m.payload.text ?? '');
-                  }}
-                />
+                {payload.type === MessageType.SYSTEM ? (
+                  payload.event && <div className="chat-event" id={`msg-${m.dto.id}`}>{eventText(payload.event, m.dto.authorId, me.id, users, nameOf)}</div>
+                ) : (
+                  <Bubble
+                    message={m as Entity<MessagePayload>}
+                    mine={m.dto.authorId === me.id}
+                    showAvatar={showAvatar}
+                    showName={showName}
+                    custom={custom}
+                    onReply={() => {
+                      setReplyTo(m as Entity<MessagePayload>);
+                      document.getElementById('chat-input')?.focus();
+                    }}
+                    onEdit={() => {
+                      setEditing(m as Entity<MessagePayload>);
+                      setText(payload.text ?? '');
+                    }}
+                  />
+                )}
                 {m === lastMine && seenBy.length > 0 && (
-                  <div className="seen">{thread.isGroup ? `Seen by ${seenBy.map((id) => users[id]?.username).join(', ')}` : 'Seen'}</div>
+                  <div className="seen">{thread.isGroup ? `Seen by ${seenBy.map((id) => nameOf(id)).join(', ')}` : 'Seen'}</div>
                 )}
               </Fragment>
             );
@@ -537,8 +600,13 @@ export function Chat() {
                   <button type="button" className="icon-btn sm" onClick={() => file.current?.click()} aria-label="Gallery">
                     <ImagePlus size={20} />
                   </button>
-                  <button type="button" className="icon-btn sm" onClick={() => void send({ type: MessageType.HEART })} aria-label="Send a heart">
-                    <Heart size={20} />
+                  <button
+                    type="button"
+                    className="icon-btn sm quick-reaction"
+                    onClick={() => void send({ type: MessageType.HEART, text: custom.quickReaction === DEFAULT_REACTION ? null : custom.quickReaction })}
+                    aria-label={`Send ${custom.quickReaction}`}
+                  >
+                    {custom.quickReaction === DEFAULT_REACTION ? <Heart size={20} /> : <span aria-hidden>{custom.quickReaction}</span>}
                   </button>
                 </>
               )}
@@ -548,7 +616,7 @@ export function Chat() {
           )}
         </div>
       </section>
-      {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} />}
+      {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} onJump={jump} />}
     </div>
   );
 }
