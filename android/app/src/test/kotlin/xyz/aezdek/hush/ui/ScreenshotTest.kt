@@ -2,7 +2,15 @@ package xyz.aezdek.hush.ui
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -18,10 +26,13 @@ import xyz.aezdek.hush.data.ThemeMode
 import xyz.aezdek.hush.protocol.Kind
 import xyz.aezdek.hush.ui.auth.Welcome
 import xyz.aezdek.hush.ui.create.CreateNote
+import xyz.aezdek.hush.ui.components.TopBar
+import xyz.aezdek.hush.ui.settings.AdminPanel
 import xyz.aezdek.hush.ui.settings.Readiness
 import xyz.aezdek.hush.ui.settings.Settings
 import xyz.aezdek.hush.ui.shell.Shell
 import xyz.aezdek.hush.ui.stories.StoryViewer
+import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.AezTheme
 
 /**
@@ -102,4 +113,21 @@ class ScreenshotTest {
 
     @Test
     fun readiness() = shot("13-readiness") { Readiness() }
+
+    @Test
+    fun admin() = shot("14-admin") { AdminScreen() }
+
+    @Test
+    fun adminLight() = shot("14-admin-light", mode = ThemeMode.LIGHT) { AdminScreen() }
+
+    /** Settings → Admin as the app lays it out, with the fixtures in place of the server's answers. */
+    @Composable
+    private fun AdminScreen() {
+        Column(Modifier.fillMaxSize().background(Aez.colors.grouped)) {
+            TopBar("Admin")
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                AdminPanel(Fixtures.adminStatus, Fixtures.adminUsers, Fixtures.adminInvites)
+            }
+        }
+    }
 }

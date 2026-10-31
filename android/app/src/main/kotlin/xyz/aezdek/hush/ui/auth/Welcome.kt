@@ -1,16 +1,9 @@
 package xyz.aezdek.hush.ui.auth
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,14 +28,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,10 +45,7 @@ import xyz.aezdek.hush.ui.components.AezField
 import xyz.aezdek.hush.ui.components.BrandMark
 import xyz.aezdek.hush.ui.components.ButtonStyle
 import xyz.aezdek.hush.ui.theme.Aez
-import xyz.aezdek.hush.ui.theme.Brand
 import xyz.aezdek.hush.ui.theme.Wordmark
-import kotlin.math.cos
-import kotlin.math.sin
 
 /** Sign in or create an account with an invite. The password never leaves the phone; only a derived key does. */
 @Composable
@@ -95,7 +82,6 @@ fun Welcome() {
     }
 
     Box(Modifier.fillMaxSize().background(Aez.colors.bg)) {
-        Aurora(Modifier.fillMaxSize())
         Column(
             Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -154,19 +140,3 @@ private fun Segmented(creating: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
-/** Slowly drifting brand-coloured light behind the welcome card. */
-@Composable
-private fun Aurora(modifier: Modifier) {
-    val transition = rememberInfiniteTransition(label = "aurora")
-    val t by transition.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(18_000, easing = LinearEasing), RepeatMode.Restart), label = "t")
-    val alpha = if (Aez.colors.isDark) 0.55f else 0.35f
-    Canvas(modifier.blur(90.dp)) {
-        val w = size.width
-        val h = size.height
-        fun blob(color: Color, cx: Float, cy: Float, r: Float) =
-            drawCircle(Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), Offset(cx, cy), r), r, Offset(cx, cy))
-        blob(Brand.violet, w * (0.25f + 0.12f * cos(t)), h * (0.18f + 0.06f * sin(t * 2)), w * 0.7f)
-        blob(Brand.pink, w * (0.8f + 0.1f * sin(t)), h * (0.32f + 0.08f * cos(t)), w * 0.6f)
-        blob(Brand.orange, w * (0.5f + 0.15f * cos(t + 1.5f)), h * (0.08f + 0.05f * sin(t + 1f)), w * 0.45f)
-    }
-}

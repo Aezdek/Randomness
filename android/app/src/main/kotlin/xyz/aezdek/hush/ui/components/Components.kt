@@ -131,10 +131,10 @@ fun Avatar(
     val gap = if (ring == Ring.NONE) 0.dp else ringWidth + 2.dp
     val ringBrush: Brush? = when (ring) {
         Ring.NONE -> null
-        Ring.UNSEEN -> Brand.gradient
+        Ring.UNSEEN -> SolidColor(Aez.colors.accent)
         Ring.SEEN -> SolidColor(Aez.colors.borderStrong)
         Ring.CLOSE_FRIENDS -> SolidColor(Brand.closeFriends)
-        Ring.LIVE -> Brush.linearGradient(listOf(Brand.live, Brand.pink))
+        Ring.LIVE -> SolidColor(Brand.live)
     }
     Box(
         Modifier
@@ -148,13 +148,14 @@ fun Avatar(
             MediaImage(avatar, Modifier.size(inner).clip(CircleShape), maxEdge = 320)
         } else {
             Box(
-                Modifier.size(inner).clip(CircleShape).background(Brush.linearGradient(listOf(Brand.violet.copy(alpha = 0.85f), Brand.pink.copy(alpha = 0.85f)))),
+                // Like Contacts: one quiet grey with a white initial until someone picks a photo.
+                Modifier.size(inner).clip(CircleShape).background(Brush.verticalGradient(listOf(Color(0xFFA5ABB8), Color(0xFF858994)))),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     (username ?: "?").take(1).uppercase(),
                     color = Color.White,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = (inner.value * 0.42f).sp,
                 )
             }
@@ -178,7 +179,7 @@ fun Avatar(
 
 @Composable
 fun VerifiedBadge(size: Dp = 14.dp) {
-    Icon(Icons.Filled.Verified, "Verified", tint = Color(0xFF4C9BFF), modifier = Modifier.size(size))
+    Icon(Icons.Filled.Verified, "Verified", tint = Aez.colors.accent, modifier = Modifier.size(size))
 }
 
 // -------------------------------------------------------------------------------------------------------- buttons
@@ -197,20 +198,20 @@ fun AezButton(
     icon: ImageVector? = null,
 ) {
     val c = Aez.colors
+    // iOS buttons: filled blue for the main action, tinted grey for the rest, red text for destructive ones.
     val (bg, fg) = when (style) {
-        ButtonStyle.PRIMARY -> c.primary to c.onPrimary
-        ButtonStyle.SECONDARY -> c.elev2 to c.text
-        ButtonStyle.BRAND -> Color.Transparent to Color.White
-        ButtonStyle.DANGER -> c.danger to Color.White
-        ButtonStyle.GHOST -> Color.Transparent to c.text
+        ButtonStyle.PRIMARY, ButtonStyle.BRAND -> c.accent to Color.White
+        ButtonStyle.SECONDARY -> c.fill3 to c.text
+        ButtonStyle.DANGER -> c.fill3 to c.danger
+        ButtonStyle.GHOST -> Color.Transparent to c.accent
     }
-    val alpha by animateFloatAsState(if (enabled) 1f else 0.45f, label = "enabled")
-    val shape = RoundedCornerShape(if (small) 10.dp else 12.dp)
+    val alpha by animateFloatAsState(if (enabled) 1f else 0.4f, label = "enabled")
+    val shape = if (small) RoundedCornerShape(50) else RoundedCornerShape(12.dp)
     Box(
         modifier
-            .heightIn(min = if (small) 34.dp else 46.dp)
+            .heightIn(min = if (small) 32.dp else 48.dp)
             .clip(shape)
-            .then(if (style == ButtonStyle.BRAND) Modifier.background(Brand.gradient, shape) else Modifier.background(bg, shape))
+            .background(bg, shape)
             .clickable(enabled = enabled && !busy, onClick = onClick)
             .padding(horizontal = if (small) 14.dp else 18.dp),
         contentAlignment = Alignment.Center,
@@ -220,7 +221,7 @@ fun AezButton(
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (icon != null) Icon(icon, null, tint = fg.copy(alpha = alpha), modifier = Modifier.size(18.dp))
-                Text(text, color = fg.copy(alpha = alpha), fontWeight = FontWeight.SemiBold, fontSize = if (small) 13.sp else 15.sp, maxLines = 1)
+                Text(text, color = fg.copy(alpha = alpha), fontWeight = FontWeight.SemiBold, fontSize = if (small) 14.sp else 16.sp, letterSpacing = (-0.2).sp, maxLines = 1)
             }
         }
     }
@@ -260,16 +261,17 @@ fun AezField(
         minLines = minLines,
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboardType),
-        shape = RoundedCornerShape(14.dp),
+        // iOS fields: a filled grey shape, no outline.
+        shape = RoundedCornerShape(10.dp),
         supportingText = supporting?.let { { Text(it) } },
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = c.text2,
-            unfocusedBorderColor = c.border,
-            focusedContainerColor = c.elev1,
-            unfocusedContainerColor = c.elev1,
+            focusedBorderColor = Color.Transparent,
+            unfocusedBorderColor = Color.Transparent,
+            focusedContainerColor = c.fill3,
+            unfocusedContainerColor = c.fill3,
             focusedLabelColor = c.text2,
             unfocusedLabelColor = c.text3,
-            cursorColor = Brand.pink,
+            cursorColor = c.accent,
         ),
     )
 }

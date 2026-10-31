@@ -213,7 +213,7 @@ private fun ThreadRow(thread: ThreadDto, index: Index, state: AppState, onLongPr
         if (thread.id in index.settings.pinnedThreads) Icon(Icons.Outlined.PushPin, "Pinned", tint = Aez.colors.text3, modifier = Modifier.size(16.dp))
         if (unread > 0) {
             Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(9.dp).background(Color(0xFF3B82F6), CircleShape))
+            Box(Modifier.size(9.dp).background(Aez.colors.accent, CircleShape))
         }
     }
 }

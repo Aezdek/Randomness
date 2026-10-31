@@ -108,6 +108,8 @@ import xyz.aezdek.hush.ui.messages.ToggleRow
 import xyz.aezdek.hush.ui.profile.GridTile
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.Brand
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.heightIn
 
 private class Section(val id: String, val title: String, val icon: ImageVector)
 
@@ -121,7 +123,7 @@ private val SECTIONS = listOf(
     Section("account", "Password and account", Icons.Outlined.Key),
     Section("appearance", "Appearance and app lock", Icons.Outlined.Palette),
     Section("updates", "App updates", Icons.Outlined.SystemUpdate),
-    Section("admin", "Server and invites", Icons.Outlined.Dns),
+    Section("admin", "Admin", Icons.Outlined.Dns),
 )
 
 @Composable
@@ -131,7 +133,7 @@ fun Settings(section: String?) {
         SettingsHome()
         return
     }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(Aez.colors.grouped)) {
         TopBar(found.title)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when (found.id) {
@@ -144,7 +146,7 @@ fun Settings(section: String?) {
                 "account" -> AccountSection()
                 "appearance" -> AppearanceSection()
                 "updates" -> UpdatesSection()
-                "admin" -> AdminSection()
+                "admin" -> AdminPanel()
             }
             Spacer(Modifier.navigationBarsPadding())
         }
@@ -160,44 +162,50 @@ private fun SettingsHome() {
     val ready = rememberReadiness()
     var signingOut by remember { mutableStateOf(false) }
     fun open(id: String) = nav.go(Screen.Settings(id))
-    Column(Modifier.fillMaxSize()) {
-        TopBar("Settings and activity")
+    Column(Modifier.fillMaxSize().background(Aez.colors.grouped)) {
+        TopBar("Settings")
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Aez.colors.elev1).clickable { nav.go(Screen.Profile(me.id)) }.padding(16.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.card).clickable { nav.go(Screen.Profile(me.id)) }.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Avatar(me.id, 54.dp, index, me.username)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(me.username, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Aez.colors.text)
+                    Text(me.username, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, letterSpacing = (-0.4).sp, color = Aez.colors.text)
                     Text(if (me.isAdmin) "Admin · end-to-end encrypted" else "End-to-end encrypted", fontSize = 13.sp, color = Aez.colors.text2)
                 }
                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = Aez.colors.text3)
             }
             Group("How you use Hush") {
-                NavRow(Icons.Outlined.Notifications, "Notifications") { open("notifications") }
-                NavRow(Icons.Outlined.Call, "Calls and ringing", if (ready.all) "Ready" else "Needs attention", warn = !ready.all) { nav.go(Screen.Readiness) }
-                NavRow(Icons.Outlined.Archive, "Archive") { open("archive") }
+                NavRow(Icons.Outlined.Notifications, "Notifications", tint = TileRed) { open("notifications") }
+                RowDivider()
+                NavRow(Icons.Outlined.Call, "Calls and ringing", if (ready.all) "Ready" else "Needs attention", warn = !ready.all, tint = TileGreen) { nav.go(Screen.Readiness) }
+                RowDivider()
+                NavRow(Icons.Outlined.Archive, "Archive", tint = TileOrange) { open("archive") }
             }
             Group("Who can see your content") {
-                NavRow(Icons.Outlined.Lock, "Account privacy", if (me.isPrivate) "Private" else "Public") { open("privacy") }
-                NavRow(Icons.Outlined.StarBorder, "Close friends", index.settings.closeFriends.size.takeIf { it > 0 }?.toString()) { open("close-friends") }
-                NavRow(Icons.Outlined.Block, "Blocked") { open("blocked") }
+                NavRow(Icons.Outlined.Lock, "Account privacy", if (me.isPrivate) "Private" else "Public", tint = TileBlue) { open("privacy") }
+                RowDivider()
+                NavRow(Icons.Outlined.StarBorder, "Close friends", index.settings.closeFriends.size.takeIf { it > 0 }?.toString(), tint = TileGreen) { open("close-friends") }
+                RowDivider()
+                NavRow(Icons.Outlined.Block, "Blocked", tint = TileRed) { open("blocked") }
             }
             Group("Your keys") {
-                NavRow(Icons.Outlined.Shield, "Security and encryption") { open("security") }
-                NavRow(Icons.Outlined.Key, "Password and account") { open("account") }
+                NavRow(Icons.Outlined.Shield, "Security and encryption", tint = TileIndigo) { open("security") }
+                RowDivider()
+                NavRow(Icons.Outlined.Key, "Password and account", tint = TileGrey) { open("account") }
             }
             Group("This phone") {
-                NavRow(Icons.Outlined.Palette, "Appearance and app lock") { open("appearance") }
-                NavRow(Icons.Outlined.SystemUpdate, "App updates", BuildConfig.VERSION_NAME) { open("updates") }
+                NavRow(Icons.Outlined.Palette, "Appearance and app lock", tint = TileBlue) { open("appearance") }
+                RowDivider()
+                NavRow(Icons.Outlined.SystemUpdate, "App updates", BuildConfig.VERSION_NAME, tint = TileGrey) { open("updates") }
             }
             if (me.isAdmin) {
-                Group("Server") { NavRow(Icons.Outlined.Dns, "Server and invites") { open("admin") } }
+                Group("Server") { NavRow(Icons.Outlined.Dns, "Admin", tint = TileDark) { open("admin") } }
             }
             Group(null) {
-                NavRow(Icons.AutoMirrored.Outlined.Logout, "Sign out", danger = true, chevron = false) { signingOut = true }
+                NavRow(Icons.AutoMirrored.Outlined.Logout, "Sign out", danger = true, chevron = false, tint = TileRed) { signingOut = true }
             }
             Text(
                 "Hush ${BuildConfig.VERSION_NAME}\nYour posts, stories and messages are encrypted on this phone. The server only ever stores ciphertext.",
@@ -212,12 +220,33 @@ private fun SettingsHome() {
     }
 }
 
-/** A titled, rounded group of rows. */
+// iOS Settings' icon tile colours.
+internal val TileBlue = Color(0xFF007AFF)
+internal val TileGreen = Color(0xFF34C759)
+internal val TileRed = Color(0xFFFF3B30)
+internal val TileOrange = Color(0xFFFF9500)
+internal val TileIndigo = Color(0xFF5856D6)
+internal val TileGrey = Color(0xFF8E8E93)
+internal val TileDark = Color(0xFF636366)
+
+/** An inset grouped list section: a small uppercase header, then rows on a rounded card. */
 @Composable
 internal fun Group(title: String?, content: @Composable ColumnScope.() -> Unit) {
-    if (title != null) SectionLabel(title, Modifier.padding(start = 4.dp, top = 22.dp, bottom = 8.dp))
-    else Spacer(Modifier.height(22.dp))
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Aez.colors.elev1).padding(vertical = 4.dp), content = content)
+    if (title != null) {
+        Text(
+            title.uppercase(), fontSize = 13.sp, color = Aez.colors.text2, letterSpacing = 0.1.sp,
+            modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 7.dp),
+        )
+    } else {
+        Spacer(Modifier.height(24.dp))
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.card), content = content)
+}
+
+/** The hairline between rows of a group, starting where the text does (after the icon tile). */
+@Composable
+internal fun RowDivider(start: Dp = 59.dp) {
+    Box(Modifier.padding(start = start).fillMaxWidth().height(0.5.dp).background(Aez.colors.border))
 }
 
 @Composable
@@ -228,14 +257,22 @@ internal fun NavRow(
     warn: Boolean = false,
     danger: Boolean = false,
     chevron: Boolean = true,
+    /** The colour of the icon's tile, as in iOS Settings; without one the icon stands on its own. */
+    tint: Color? = null,
     onClick: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = if (danger) Aez.colors.danger else Aez.colors.text, modifier = Modifier.size(22.dp))
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (tint != null) {
+            Box(Modifier.size(29.dp).clip(RoundedCornerShape(7.dp)).background(tint), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+        } else {
+            Icon(icon, null, tint = if (danger) Aez.colors.danger else Aez.colors.accent, modifier = Modifier.size(22.dp))
+        }
         Spacer(Modifier.width(14.dp))
-        Text(title, fontSize = 15.sp, color = if (danger) Aez.colors.danger else Aez.colors.text, modifier = Modifier.weight(1f))
+        Text(title, fontSize = 16.sp, letterSpacing = (-0.2).sp, color = if (danger) Aez.colors.danger else Aez.colors.text, modifier = Modifier.weight(1f))
         if (warn) Box(Modifier.padding(end = 8.dp).size(8.dp).clip(CircleShape).background(Aez.colors.danger))
-        if (value != null) Text(value, fontSize = 14.sp, color = Aez.colors.text2)
+        if (value != null) Text(value, fontSize = 15.sp, color = Aez.colors.text2)
         if (chevron) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = Aez.colors.text3, modifier = Modifier.size(20.dp))
     }
 }
@@ -244,7 +281,7 @@ internal fun NavRow(
 @Composable
 internal fun Card(title: String? = null, note: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Aez.colors.elev1).padding(16.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.card).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (title != null) Text(title, style = MaterialTheme.typography.titleMedium, color = Aez.colors.text)
@@ -545,72 +582,9 @@ private fun AppearanceSection() {
     }
 }
 
-@Composable
-private fun AdminSection() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var status by remember { mutableStateOf<AdminStatus?>(null) }
-    var invites by remember { mutableStateOf<List<InviteDto>?>(null) }
-    suspend fun load() {
-        status = Graph.attempt { Graph.client.api.get<AdminStatus>("/admin/status") } ?: status
-        invites = Graph.attempt { Graph.client.api.get<List<InviteDto>>("/admin/invites") } ?: invites
-    }
-    LaunchedEffect(Unit) { load() }
-    val s = status
-    Card("Server") {
-        if (s == null) Spinner(Modifier.align(Alignment.CenterHorizontally))
-        else {
-            Stat("Version", s.version)
-            Stat("Members", "${s.users} of ${s.maxUsers}")
-            Stat("Stored", Formatter.formatShortFileSize(context, s.dataBytes))
-            Stat("Free disk", Formatter.formatShortFileSize(context, s.diskFreeBytes), warn = s.uploadsBlocked)
-            if (s.uploadsBlocked) Warning("Uploads are paused until the server has more free disk space.")
-            val backupAge = s.lastBackupAt?.let { System.currentTimeMillis() - it }
-            Stat("Last backup", s.lastBackupAt?.let { "${ago(it)} ago" } ?: "Never", warn = backupAge == null || backupAge > 48 * 3_600_000L || s.lastBackupOk == false)
-            if (s.lastBackupOk == false || backupAge == null || backupAge > 48 * 3_600_000L) {
-                Warning(s.backupMessage ?: "No backup in the last 48 hours. See RUNBOOK.md on the server, \"Backups\".")
-            }
-        }
-    }
-    Card("Invites", "Each code lets one person join, within 7 days. Hush holds up to ${s?.maxUsers ?: 10} members.") {
-        AezButton("New invite", {
-            scope.launch {
-                Graph.attempt { Graph.client.api.post<InviteDto>("/admin/invites") }?.let { shareInvite(context, it.code) }
-                load()
-            }
-        }, Modifier.fillMaxWidth(), icon = Icons.Outlined.PersonAdd, enabled = s == null || s.users < s.maxUsers)
-        invites?.sortedByDescending { it.createdAt }?.forEach { invite ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(invite.code, fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = if (invite.usedBy != null) Aez.colors.text3 else Aez.colors.text)
-                    Text(
-                        when {
-                            invite.usedBy != null -> "Used"
-                            invite.expiresAt < System.currentTimeMillis() -> "Expired"
-                            else -> "Made ${ago(invite.createdAt)} ago"
-                        },
-                        fontSize = 12.sp, color = Aez.colors.text2,
-                    )
-                }
-                if (invite.usedBy == null && invite.expiresAt > System.currentTimeMillis()) {
-                    Icon(Icons.Outlined.Share, "Share", tint = Aez.colors.text, modifier = Modifier.clip(CircleShape).clickable { shareInvite(context, invite.code) }.padding(8.dp).size(20.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: String, warn: Boolean = false) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(label, color = Aez.colors.text2, modifier = Modifier.weight(1f))
-        Text(value, color = if (warn) Aez.colors.danger else Aez.colors.text, fontWeight = FontWeight.SemiBold)
-    }
-}
-
 /** A quiet, opaque wash of [color] over the card surface (solid, so it looks the same on every surface beneath). */
 @Composable
-internal fun tint(color: Color): Color = androidx.compose.ui.graphics.lerp(Aez.colors.elev1, color, 0.16f)
+internal fun tint(color: Color): Color = androidx.compose.ui.graphics.lerp(Aez.colors.card, color, 0.16f)
 
 @Composable
 internal fun Warning(text: String) {
@@ -621,7 +595,7 @@ internal fun Warning(text: String) {
     }
 }
 
-private fun shareInvite(context: Context, code: String) {
+internal fun shareInvite(context: Context, code: String) {
     val text = "Join me on Hush: ${BuildConfig.SERVER_URL}\nInvite code: $code"
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Hush invite", text))
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share invite")

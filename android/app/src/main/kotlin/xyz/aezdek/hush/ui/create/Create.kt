@@ -131,7 +131,7 @@ private fun Sharing(label: String, value: Float) {
             Text(label, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(14.dp))
             LinearProgressIndicator(progress = { value.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                color = Brand.pink, trackColor = Aez.colors.elev2)
+                color = Brand.accent, trackColor = Aez.colors.elev2)
         }
     }
 }
@@ -354,7 +354,7 @@ fun CreateReel() {
                         RangeSlider(range, { r ->
                             val maxSpan = 180_000f / duration
                             range = if (r.endInclusive - r.start > maxSpan) r.start..(r.start + maxSpan) else r
-                        }, colors = SliderDefaults.colors(thumbColor = Brand.pink, activeTrackColor = Brand.pink))
+                        }, colors = SliderDefaults.colors(thumbColor = Brand.accent, activeTrackColor = Brand.accent))
                     }
                 }
                 AezField(caption, { caption = it.take(2200) }, "Write a caption…", singleLine = false, minLines = 3)

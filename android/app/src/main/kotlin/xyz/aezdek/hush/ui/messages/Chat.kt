@@ -205,7 +205,7 @@ fun Chat(threadId: String) {
         )
         if (vanish) {
             Text("Vanish mode: seen messages disappear when you leave the chat", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().background(Brand.messageGradient).padding(6.dp))
+                modifier = Modifier.fillMaxWidth().background(Aez.colors.accent).padding(6.dp))
         }
         val listState = rememberLazyListState()
         LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(0) }
@@ -240,7 +240,7 @@ fun Chat(threadId: String) {
         sending?.let {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Text(it, fontSize = 12.sp, color = Aez.colors.text2)
-                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = Brand.pink, trackColor = Aez.colors.elev2)
+                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = Brand.accent, trackColor = Aez.colors.elev2)
             }
         }
         Composer(
@@ -410,7 +410,7 @@ private fun Bubble(
                     for (ref in p.media) MediaBubble(ref)
                     p.text?.takeIf { it.isNotBlank() }?.let { Text(it, modifier = Modifier.background(Aez.colors.bubbleOther).padding(10.dp), color = Aez.colors.text) }
                 }
-                p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) Brand.violet else Aez.colors.bubbleOther)) {
+                p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) Brand.accent else Aez.colors.bubbleOther)) {
                     VoiceBubble(p.media.first(), if (mine) Color.White else Aez.colors.text)
                 }
                 p.type == MessageType.SHARE -> SharedPost(p, state, clickModifier)
@@ -430,7 +430,7 @@ private fun Bubble(
                         }
                         Box(
                             clickModifier.widthIn(max = 280.dp).clip(shape)
-                                .then(if (mine) Modifier.background(Brand.messageGradient) else Modifier.background(Aez.colors.bubbleOther))
+                                .then(if (mine) Modifier.background(Aez.colors.bubbleMe) else Modifier.background(Aez.colors.bubbleOther))
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         ) {
                             RichText(p.text.orEmpty(), style = TextStyle(color = if (mine) Color.White else Aez.colors.text, fontSize = 15.sp, lineHeight = 20.sp))
@@ -607,7 +607,7 @@ private fun Composer(
         }
         Row(
             Modifier.fillMaxWidth().padding(10.dp).clip(RoundedCornerShape(26.dp))
-                .background(if (vanish) Brand.violet.copy(alpha = 0.18f) else Aez.colors.elev1).padding(horizontal = 6.dp, vertical = 4.dp),
+                .background(if (vanish) Brand.accent.copy(alpha = 0.18f) else Aez.colors.elev1).padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (recording) {
@@ -616,7 +616,7 @@ private fun Composer(
                 val s = elapsed / 1000
                 Text("Recording  %d:%02d".format(s / 60, s % 60), color = Aez.colors.text, modifier = Modifier.weight(1f))
                 Text("Cancel", color = Aez.colors.text2, modifier = Modifier.clickable { recorder.cancel(); recording = false }.padding(10.dp))
-                Box(Modifier.size(38.dp).clip(CircleShape).background(Brand.pink).clickable {
+                Box(Modifier.size(38.dp).clip(CircleShape).background(Brand.accent).clickable {
                     recording = false
                     recorder.stop()?.let(onVoice)
                 }, contentAlignment = Alignment.Center) {
@@ -647,15 +647,15 @@ private fun Composer(
                 )
             }
             if (text.isNotBlank()) {
-                Text(if (editing != null) "Save" else "Send", color = Brand.violet, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                Text(if (editing != null) "Save" else "Send", color = Brand.accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
                     onSend(text.trim())
                     text = ""
                 }.padding(horizontal = 12.dp, vertical = 10.dp))
             } else {
                 IconAction(Icons.Outlined.Visibility, if (once) "View once on" else "View once off", onToggleOnce,
-                    tint = if (once) Brand.pink else Aez.colors.text2, size = 22.dp)
+                    tint = if (once) Brand.accent else Aez.colors.text2, size = 22.dp)
                 IconAction(Icons.Filled.Mic, "Voice message", { micPermission.launch(Manifest.permission.RECORD_AUDIO) }, size = 24.dp)
-                IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = Brand.pink, size = 24.dp)
+                IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = Brand.accent, size = 24.dp)
             }
         }
     }

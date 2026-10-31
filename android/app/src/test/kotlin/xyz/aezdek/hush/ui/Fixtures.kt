@@ -13,6 +13,9 @@ import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.client.MemorySecretStore
 import xyz.aezdek.hush.client.Pin
 import xyz.aezdek.hush.data.SqliteTables
+import xyz.aezdek.hush.protocol.AdminStatus
+import xyz.aezdek.hush.protocol.AdminUserDto
+import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.Audience
 import xyz.aezdek.hush.protocol.CommentPayload
 import xyz.aezdek.hush.protocol.DeviceInfo
@@ -156,6 +159,28 @@ object Fixtures {
     }
 
     private fun member(id: String, read: Long) = ThreadMemberDto(id, "member", now - 300 * HOUR, read)
+
+    private const val DAY = 24 * HOUR
+    private const val MB = 1_000_000L
+
+    /** What the admin panel shows for a small, healthy server with an update waiting. */
+    val adminStatus = AdminStatus(
+        users = 4, maxUsers = 10, diskFreeBytes = 182_400 * MB, dataBytes = 3_240 * MB, uploadsBlocked = false,
+        lastBackupAt = now - 7 * HOUR, lastBackupOk = true, version = "1.0.5", commit = "bb0fd49c1e2a",
+        startedAt = now - 3 * DAY, latestVersion = "1.0.6", updateAvailable = true,
+    )
+
+    val adminUsers = listOf(
+        AdminUserDto(ME, "aezdek", isAdmin = true, createdAt = now - 40 * DAY, lastActiveAt = now, storageBytes = 1_120 * MB, posts = 38, sessions = 2),
+        AdminUserDto(MAYA, "maya.lens", isAdmin = false, createdAt = now - 39 * DAY, lastActiveAt = now - 12 * MIN, storageBytes = 1_640 * MB, posts = 61, sessions = 2),
+        AdminUserDto(LEO, "leo_outdoors", isAdmin = false, createdAt = now - 20 * DAY, lastActiveAt = now - 5 * HOUR, storageBytes = 410 * MB, posts = 17, sessions = 1),
+        AdminUserDto(ZARA, "zara", isAdmin = false, createdAt = now - 6 * DAY, lastActiveAt = now - 2 * DAY, storageBytes = 70 * MB, posts = 4, sessions = 1),
+    )
+
+    val adminInvites = listOf(
+        InviteDto("Q7M4X-9HDLA", now - 1 * DAY, now + 6 * DAY),
+        InviteDto("KVN8S-2TPKJ", now - 40 * DAY, now - 33 * DAY, usedBy = MAYA),
+    )
 
     /** Points [Graph] at a client holding [state]; nothing reaches the network (the server address refuses). */
     fun install(context: Context): AezClient {

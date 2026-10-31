@@ -260,7 +260,7 @@ private fun LiveView(call: CallUi, index: Index) {
             if (draft.isNotBlank()) {
                 Text("Send", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { Graph.calls.sendLive(draft.trim()); draft = "" }.padding(8.dp))
             } else {
-                Icon(Icons.Filled.Favorite, "Heart", tint = Brand.pink, modifier = Modifier.size(30.dp).clickable { Graph.calls.sendLive(null) })
+                Icon(Icons.Filled.Favorite, "Heart", tint = Brand.accent, modifier = Modifier.size(30.dp).clickable { Graph.calls.sendLive(null) })
             }
         }
     }

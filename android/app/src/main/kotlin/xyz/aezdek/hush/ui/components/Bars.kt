@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.aezdek.hush.ui.LocalNav
 import xyz.aezdek.hush.ui.theme.Aez
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
 
 /** The glass top bar every pushed screen uses: back, a title, and optional actions on the right. */
 @Composable
@@ -47,15 +48,15 @@ fun TopBar(
 ) {
     val nav = LocalNav.current
     Column(modifier.fillMaxWidth().background(Aez.colors.glass).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (back) IconAction(Icons.AutoMirrored.Outlined.ArrowBack, "Back", { nav.back() })
+        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (back) IconAction(Icons.AutoMirrored.Outlined.ArrowBackIos, "Back", { nav.back() }, tint = Aez.colors.accent, size = 22.dp)
             else Spacer(Modifier.width(12.dp))
             if (leading != null) {
                 leading()
                 Spacer(Modifier.width(10.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             actions()
@@ -67,7 +68,7 @@ fun TopBar(
 /** A bottom sheet of actions (the "…" menus). */
 @Composable
 fun ActionSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.card) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 24.dp)) { content() }
     }
 }

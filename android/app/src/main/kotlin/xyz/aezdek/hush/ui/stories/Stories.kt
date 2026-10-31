@@ -348,11 +348,11 @@ private fun StickerView(sticker: Sticker, story: Entity, index: Index, state: Ap
         StickerType.TEXT -> Text(sticker.text.orEmpty(), color = sticker.color?.let { parseColor(it) } ?: Color.White, style = storyFont("modern").copy(fontSize = 26.sp),
             textAlign = TextAlign.Center)
         StickerType.EMOJI -> Text(sticker.emoji ?: sticker.text.orEmpty(), fontSize = 64.sp)
-        StickerType.MENTION -> Text("@" + (state.users[sticker.userId]?.username ?: sticker.text.orEmpty()), color = Brand.pink, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+        StickerType.MENTION -> Text("@" + (state.users[sticker.userId]?.username ?: sticker.text.orEmpty()), color = Brand.accent, fontWeight = FontWeight.Bold, fontSize = 18.sp,
             modifier = chip.clickable { sticker.userId?.let { nav.go(Screen.Profile(it)) } })
-        StickerType.HASHTAG -> Text("#" + sticker.text.orEmpty().removePrefix("#"), color = Brand.violet, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+        StickerType.HASHTAG -> Text("#" + sticker.text.orEmpty().removePrefix("#"), color = Brand.accent, fontWeight = FontWeight.Bold, fontSize = 18.sp,
             modifier = chip.clickable { nav.go(Screen.Hashtag(sticker.text.orEmpty().removePrefix("#"))) })
-        StickerType.LOCATION -> Text("📍 " + sticker.text.orEmpty(), color = Brand.violet, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = chip)
+        StickerType.LOCATION -> Text("📍 " + sticker.text.orEmpty(), color = Brand.accent, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = chip)
         StickerType.LINK -> Text("🔗 " + (sticker.text ?: sticker.url.orEmpty().removePrefix("https://")), color = Color(0xFF2D5BE3), fontWeight = FontWeight.Bold,
             fontSize = 15.sp, modifier = chip.clickable { sticker.url?.let { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } })
         StickerType.COUNTDOWN -> {
@@ -382,7 +382,7 @@ private fun StickerView(sticker: Sticker, story: Entity, index: Index, state: Ap
                     Box(Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp)).background(bg).clickable(enabled = myVote == null && !mine) {
                         Graph.launch { Graph.client.composer.vote(story.id, VotePayload(sticker.id, option = i)) }
                     }) {
-                        if (reveal && !quiz) Box(Modifier.fillMaxWidth(count.toFloat() / total).height(38.dp).background(Brand.violet.copy(alpha = 0.25f)))
+                        if (reveal && !quiz) Box(Modifier.fillMaxWidth(count.toFloat() / total).height(38.dp).background(Brand.accent.copy(alpha = 0.25f)))
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp)) {
                             Text(option, color = if (bg == Color(0xFFF1F1F4)) Color.Black else Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             if (reveal) Text("${count * 100 / total}%", color = Color.Black.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
@@ -403,7 +403,7 @@ private fun StickerView(sticker: Sticker, story: Entity, index: Index, state: Ap
                         if (myVote == null && !mine) Graph.launch { Graph.client.composer.vote(story.id, VotePayload(sticker.id, value = value)) }
                     },
                     enabled = myVote == null && !mine,
-                    colors = SliderDefaults.colors(thumbColor = Brand.pink, activeTrackColor = Brand.pink),
+                    colors = SliderDefaults.colors(thumbColor = Brand.accent, activeTrackColor = Brand.accent),
                 )
                 Text(sticker.emoji ?: "😍", fontSize = 26.sp)
                 if (average != null && (myVote != null || mine)) Text("Average ${(average * 100).toInt()}%", color = Color.Black.copy(alpha = 0.6f), fontSize = 12.sp)
