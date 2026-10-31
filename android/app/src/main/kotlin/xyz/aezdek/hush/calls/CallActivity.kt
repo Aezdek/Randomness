@@ -129,7 +129,7 @@ fun CallScreen(call: CallUi, onAnswer: () -> Unit) {
     val index by Graph.client.index.collectAsState()
     val calls = Graph.calls
     Box(Modifier.fillMaxSize().background(Color(0xFF050507))) {
-        val remote = call.peers.values.filter { it.state == PeerState.CONNECTED || it.state == PeerState.CONNECTING }
+        val remote = call.peers.values.filter { it.state == PeerState.CONNECTED || it.state == PeerState.CONNECTING || it.state == PeerState.RECONNECTING }
         when {
             call.status == CallStatus.INCOMING -> {
                 val from = call.from
@@ -144,7 +144,7 @@ fun CallScreen(call: CallUi, onAnswer: () -> Unit) {
             }
             call.live != null -> LiveView(call, index)
             remote.isEmpty() || call.status == CallStatus.OUTGOING -> {
-                if (call.local != null && !call.cameraOff) VideoView(call.local, mirror = true, Modifier.fillMaxSize())
+                if (call.local != null && !call.cameraOff) VideoView(call.local, mirror = call.front, Modifier.fillMaxSize())
                 val other = call.peers.keys.firstOrNull()
                 CallerCard(other, index, state.users[other]?.username, if (call.status == CallStatus.OUTGOING) "Ringing…" else "Connecting…")
             }
@@ -152,7 +152,7 @@ fun CallScreen(call: CallUi, onAnswer: () -> Unit) {
                 Grid(remote, index, state.users.mapValues { it.value.username })
                 if (call.local != null && !call.cameraOff) {
                     VideoView(
-                        call.local, mirror = true,
+                        call.local, mirror = call.front,
                         Modifier.align(Alignment.TopEnd).systemBarsPadding().padding(12.dp).width(110.dp).aspectRatio(9f / 16f).clip(RoundedCornerShape(16.dp)),
                     )
                 }
@@ -190,16 +190,22 @@ private fun Grid(peers: List<PeerUi>, index: Index, names: Map<String, String>) 
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 for (peer in row) {
                     Box(Modifier.weight(1f).fillMaxSize().padding(if (peers.size > 1) 2.dp else 0.dp).clip(RoundedCornerShape(if (peers.size > 1) 14.dp else 0.dp))) {
-                        if (peer.video != null) {
+                        // Their video while their camera is on (older apps don't say, so a track counts as on).
+                        if (peer.video != null && peer.camera != false) {
                             VideoView(peer.video, mirror = false, Modifier.fillMaxSize())
                         } else {
                             Box(Modifier.fillMaxSize().background(Color(0xFF15151A)), contentAlignment = Alignment.Center) {
                                 Avatar(peer.userId, 88.dp, index, names[peer.userId])
                             }
                         }
-                        if (peers.size > 1) {
+                        val label = buildString {
+                            if (peer.mic == false) append("🔇 ")
+                            if (peers.size > 1) append("@${names[peer.userId] ?: ""}")
+                            if (peer.state == PeerState.RECONNECTING) append(if (isEmpty()) "Reconnecting…" else " · reconnecting…")
+                        }
+                        if (label.isNotBlank()) {
                             Text(
-                                "@${names[peer.userId] ?: ""}", color = Color.White, fontSize = 12.sp,
+                                label, color = Color.White, fontSize = 12.sp,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(8.dp).background(Color(0x80000000), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 8.dp, vertical = 3.dp),
                             )

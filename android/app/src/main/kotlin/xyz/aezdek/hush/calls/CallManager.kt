@@ -58,9 +58,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 enum class CallStatus { IDLE, OUTGOING, INCOMING, ACTIVE }
-enum class PeerState { RINGING, CONNECTING, CONNECTED, LEFT, DECLINED }
+enum class PeerState { RINGING, CONNECTING, CONNECTED, RECONNECTING, LEFT, DECLINED }
 
-data class PeerUi(val userId: String, val state: PeerState, val video: VideoTrack? = null)
+/** [camera] and [mic] are what they told us (null until they say; older apps never do). */
+data class PeerUi(val userId: String, val state: PeerState, val video: VideoTrack? = null, val camera: Boolean? = null, val mic: Boolean? = null)
 data class LiveComment(val id: Long, val from: String, val text: String)
 data class LiveUi(val host: Boolean, val hostId: String, val objectId: String? = null, val comments: List<LiveComment> = emptyList(), val hearts: Int = 0)
 
@@ -74,6 +75,8 @@ data class CallUi(
     val local: VideoTrack? = null,
     val muted: Boolean = false,
     val cameraOff: Boolean = false,
+    /** The front camera is in use (the self view is mirrored only then). */
+    val front: Boolean = true,
     val speaker: Boolean = true,
     val startedAt: Long? = null,
     val live: LiveUi? = null,
@@ -85,6 +88,10 @@ data class CallUi(
  * (web/src/features/calls/calls.ts): the same signal types, the same who-offers rule, the same Live relay. Signals are
  * sealed to each peer and signed by the sender, so the DTLS fingerprints in the SDP are authenticated end to end and
  * a TURN relay only ever sees SRTP ciphertext.
+ *
+ * Someone signed in on two devices gets every signal on both: signals carry the sending device, and once a device
+ * answers, everything for that call names it, so their other devices stop ringing and stay out. A dropped connection
+ * is restarted by the offering side and given up if it stays down, so a call never sits frozen.
  */
 class CallManager(private val context: Context, private val client: AezClient) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
@@ -116,6 +123,11 @@ class CallManager(private val context: Context, private val client: AezClient) {
     private var captureHelper: SurfaceTextureHelper? = null
     private var ringTimeout: Job? = null
     private var connectedOnce = false
+    /** The device each person is in this call on, once they answered. */
+    private val peerDevice = HashMap<String, String>()
+    private val makingOffer = HashSet<String>()
+    private val watchdogs = HashMap<String, Job>()
+    private val restarts = HashMap<String, Job>()
     private val liveInvites = HashMap<String, String>()
     private var commentSeq = 0L
 
@@ -128,11 +140,23 @@ class CallManager(private val context: Context, private val client: AezClient) {
     // -------------------------------------------------------------------------------------------------- signalling
 
     private fun send(to: String, signal: CallSignal, ring: Boolean = false) {
-        client.sendSignal(to, signal, ring)
+        val self = to == me
+        client.sendSignal(to, signal.copy(device = DEVICE, toDevice = if (self) null else signal.toDevice ?: peerDevice[to]), ring)
     }
 
     private fun broadcast(signal: CallSignal, ring: Boolean = false) {
         for (id in participants) if (id != me) send(id, signal, ring)
+    }
+
+    /** Tells my other devices (they get signals sent to my own id) that this call was answered or declined here. */
+    private fun tellMyDevices(type: String, callId: String) {
+        me?.let { send(it, CallSignal(type, callId)) }
+    }
+
+    /** Whether this side makes the offers to [userId]: the lower id does, and a Live host always does. */
+    private fun offers(userId: String): Boolean {
+        val live = _state.value.live
+        return if (live != null) live.host else (me ?: "") < userId
     }
 
     fun onSignal(frame: WsFrame) {
@@ -143,24 +167,54 @@ class CallManager(private val context: Context, private val client: AezClient) {
     private suspend fun handle(from: String, s: CallSignal) {
         val state = _state.value
         val sameCall = state.callId == s.callId
+        if (s.device == DEVICE) return
+        if (from == me) {
+            // Another of my devices answered or declined: this one stops ringing.
+            if (sameCall && state.status == CallStatus.INCOMING) reset()
+            return
+        }
+        if (s.toDevice != null && s.toDevice != DEVICE) {
+            // Meant for another of my devices, so that one answered this call.
+            if (sameCall && state.status == CallStatus.INCOMING) reset()
+            return
+        }
         when (s.type) {
             CallSignalType.INVITE -> {
-                if (state.status != CallStatus.IDLE && !sameCall) return send(from, CallSignal(CallSignalType.BUSY, s.callId))
                 if (s.live) {
                     liveInvites[from] = s.callId
                     Graph.toast("@${client.state.value.users[from]?.username} started a live video")
                     return
                 }
+                if (sameCall) return
+                if (state.status != CallStatus.IDLE) {
+                    // Busy only when really on a call; ringing for someone else isn't.
+                    if (state.status == CallStatus.ACTIVE || state.status == CallStatus.OUTGOING) send(from, CallSignal(CallSignalType.BUSY, s.callId, toDevice = s.device))
+                    return
+                }
+                peerDevice.clear()
+                s.device?.let { peerDevice[from] = it }
                 participants = s.participants.ifEmpty { listOf(from) }
                 _state.value = CallUi(status = CallStatus.INCOMING, callId = s.callId, threadId = s.threadId, video = s.video, from = from)
                 startRinging(from, s.video)
+                // Unanswered: stop ringing. The caller gives up on its own and logs the missed call.
                 ringTimeout = scope.launch {
-                    delay(45_000)
-                    if (_state.value.status == CallStatus.INCOMING) decline()
+                    delay(RING_MS)
+                    if (_state.value.status == CallStatus.INCOMING && _state.value.callId == s.callId) reset()
                 }
             }
             CallSignalType.ACCEPT -> {
-                if (!sameCall) return
+                if (!sameCall || state.status == CallStatus.IDLE) return
+                if (state.status == CallStatus.INCOMING) {
+                    // Someone else in a group call answered while this phone still rings.
+                    s.device?.let { peerDevice[from] = it }
+                    return
+                }
+                val known = peerDevice[from]
+                if (known != null && s.device != null && known != s.device && pcs.containsKey(from)) {
+                    // They answered on a second device as well: that one stands down.
+                    return send(from, CallSignal(CallSignalType.HANGUP, s.callId, toDevice = s.device))
+                }
+                s.device?.let { peerDevice[from] = it }
                 val live = state.live
                 if (live?.host == true && state.peers[from]?.state.let { it == null || it == PeerState.LEFT }) {
                     val watching = state.peers.values.count { it.state != PeerState.LEFT && it.state != PeerState.DECLINED }
@@ -169,45 +223,54 @@ class CallManager(private val context: Context, private val client: AezClient) {
                 stopRinging()
                 if (state.status == CallStatus.OUTGOING) _state.update { it.copy(status = CallStatus.ACTIVE, startedAt = System.currentTimeMillis()) }
                 setPeer(from, PeerState.CONNECTING)
+                watch(from, CONNECT_TIMEOUT_MS)
                 if (from !in participants) participants = participants + from
-                if ((me ?: "") < from || live?.host == true) offerTo(from) else send(from, CallSignal(CallSignalType.JOIN, s.callId))
+                if (offers(from)) offerTo(from) else send(from, CallSignal(CallSignalType.JOIN, s.callId))
             }
-            CallSignalType.JOIN -> if (sameCall) offerTo(from)
+            CallSignalType.JOIN -> if (sameCall && state.status == CallStatus.ACTIVE) {
+                if (s.device != null && from !in peerDevice) peerDevice[from] = s.device!!
+                offerTo(from)
+            }
             CallSignalType.DECLINE, CallSignalType.BUSY -> {
                 if (!sameCall) return
                 if (state.live?.host == false && from == state.live.hostId) {
                     Graph.toast("This live video is full ($MAX_LIVE_VIEWERS viewers)")
                     return reset()
                 }
+                // Only someone still ringing can decline; a stray decline from another of their devices changes nothing.
+                if (state.peers[from]?.state != PeerState.RINGING) return
                 setPeer(from, PeerState.DECLINED)
                 if (s.type == CallSignalType.BUSY) Graph.toast("@${client.state.value.users[from]?.username} is on another call")
                 maybeEnd()
             }
-            CallSignalType.OFFER -> if (sameCall && s.sdp != null) answerOffer(from, s.sdp!!)
+            CallSignalType.OFFER -> if (sameCall && s.sdp != null && state.status == CallStatus.ACTIVE) {
+                if (s.device != null && from !in peerDevice) peerDevice[from] = s.device!!
+                answerOffer(from, s.sdp!!)
+            }
             CallSignalType.ANSWER -> {
                 val pc = pcs[from] ?: return
-                if (!sameCall || s.sdp == null) return
+                if (!sameCall || s.sdp == null || pc.signalingState() != PeerConnection.SignalingState.HAVE_LOCAL_OFFER) return
                 pc.setRemote(SessionDescription(SessionDescription.Type.ANSWER, s.sdp))
                 flushIce(from)
             }
             CallSignalType.ICE -> {
-                if (!sameCall || s.candidate == null) return
+                if (!sameCall || s.candidate == null || state.status != CallStatus.ACTIVE) return
                 val candidate = IceCandidate(s.sdpMid ?: "", s.sdpMLineIndex ?: 0, s.candidate)
                 val pc = pcs[from]
                 if (pc?.remoteDescription != null) pc.addIceCandidate(candidate) else pendingIce.getOrPut(from) { ArrayList() } += candidate
             }
             CallSignalType.HANGUP -> {
                 if (!sameCall) return
-                if (state.status == CallStatus.INCOMING) {
-                    stopRinging()
-                    return reset()
-                }
+                if (state.status == CallStatus.INCOMING) return reset()
                 closePeer(from)
                 if (state.live?.host == false && from == state.live.hostId) {
                     Graph.toast("The live video ended")
                     return reset()
                 }
                 maybeEnd()
+            }
+            CallSignalType.STATE -> if (sameCall) {
+                _state.update { st -> st.copy(peers = st.peers + (from to (st.peers[from] ?: PeerUi(from, PeerState.CONNECTING)).copy(camera = s.camera, mic = s.mic))) }
             }
             CallSignalType.CHAT -> {
                 if (!sameCall || state.live == null || s.text.isNullOrBlank()) return
@@ -249,7 +312,7 @@ class CallManager(private val context: Context, private val client: AezClient) {
         if (video && videoTrack == null) startCamera(front = true)
         audio.mode = AudioManager.MODE_IN_COMMUNICATION
         setSpeaker(video)
-        _state.update { it.copy(local = videoTrack, cameraOff = videoTrack == null) }
+        _state.update { it.copy(local = videoTrack, cameraOff = videoTrack == null, front = true) }
     }
 
     private fun startCamera(front: Boolean) {
@@ -266,20 +329,24 @@ class CallManager(private val context: Context, private val client: AezClient) {
         videoTrack = factory.createVideoTrack("v0", source)
     }
 
-    /** 720p for two people, 360p up to four, 240p beyond: a mesh sends one stream per peer. */
+    /**
+     * Two people get 720p at up to 2.5 Mbps; a bigger mesh sends one stream per person, so each gets less. Scaling is done
+     * in the encoder: the camera keeps capturing 720p (changing its format mid-call stalled some phones).
+     */
     private fun adapt() {
         val count = pcs.size + 1
-        val (width, height, bitrate) = when {
-            count <= 2 -> Triple(1280, 720, 1_800_000)
-            count <= 4 -> Triple(640, 360, 600_000)
-            else -> Triple(426, 240, 300_000)
+        val (scale, bitrate) = when {
+            count <= 2 -> 1.0 to 2_500_000
+            count <= 4 -> 2.0 to 800_000
+            else -> 3.0 to 400_000
         }
-        runCatching { capturer?.changeCaptureFormat(width, height, 30) }
         for (pc in pcs.values) {
             for (sender in pc.senders) {
                 if (sender.track()?.kind() != MediaStreamTrack.VIDEO_TRACK_KIND) continue
                 val params = sender.parameters
-                params.encodings.firstOrNull()?.maxBitrateBps = bitrate
+                val encoding = params.encodings.firstOrNull() ?: continue
+                encoding.maxBitrateBps = bitrate
+                encoding.scaleResolutionDownBy = scale
                 sender.setParameters(params)
             }
         }
@@ -322,31 +389,102 @@ class CallManager(private val context: Context, private val client: AezClient) {
 
         override fun onTrack(transceiver: RtpTransceiver?) {
             val track = transceiver?.receiver?.track() as? VideoTrack ?: return
-            _state.update { s -> s.copy(peers = s.peers + (userId to PeerUi(userId, PeerState.CONNECTED, track))) }
+            _state.update { s -> s.copy(peers = s.peers + (userId to (s.peers[userId] ?: PeerUi(userId, PeerState.CONNECTING)).copy(video = track))) }
         }
 
         override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {
-            when (newState) {
-                PeerConnection.PeerConnectionState.CONNECTED -> {
-                    connectedOnce = true
-                    setPeer(userId, PeerState.CONNECTED)
-                }
-                PeerConnection.PeerConnectionState.FAILED -> pcs[userId]?.restartIce()
-                PeerConnection.PeerConnectionState.CLOSED -> scope.launch { closePeer(userId) }
-                else -> Unit
-            }
+            scope.launch { connectionChanged(userId, newState) }
         }
+    }
+
+    private suspend fun connectionChanged(userId: String, newState: PeerConnection.PeerConnectionState?) {
+        if (pcs[userId] == null) return
+        when (newState) {
+            PeerConnection.PeerConnectionState.CONNECTED -> {
+                connectedOnce = true
+                unwatch(userId)
+                setPeer(userId, PeerState.CONNECTED)
+                sendState(userId)
+                adapt()
+            }
+            PeerConnection.PeerConnectionState.DISCONNECTED -> {
+                // Often a network change that heals by itself; if not, restart ICE.
+                setPeer(userId, PeerState.RECONNECTING)
+                restarts.remove(userId)?.cancel()
+                restarts[userId] = scope.launch {
+                    delay(RECONNECT_AFTER_MS)
+                    restart(userId)
+                }
+                watch(userId, LOST_AFTER_MS)
+            }
+            PeerConnection.PeerConnectionState.FAILED -> {
+                setPeer(userId, PeerState.RECONNECTING)
+                restart(userId)
+                watch(userId, LOST_AFTER_MS)
+            }
+            PeerConnection.PeerConnectionState.CLOSED -> closePeer(userId)
+            else -> Unit
+        }
+    }
+
+    /** ICE restart, from the side that makes offers (the other side's restart arrives as an offer). */
+    private suspend fun restart(userId: String) {
+        val pc = pcs[userId] ?: return
+        if (pc.connectionState() == PeerConnection.PeerConnectionState.CONNECTED || !offers(userId)) return
+        pc.restartIce()
+        runCatching { offerTo(userId) }
+    }
+
+    /** Gives up on someone who isn't connected by the time this fires. */
+    private fun watch(userId: String, ms: Long) {
+        watchdogs.remove(userId)?.cancel()
+        watchdogs[userId] = scope.launch {
+            delay(ms)
+            watchdogs.remove(userId)
+            if (pcs[userId]?.connectionState() == PeerConnection.PeerConnectionState.CONNECTED) return@launch
+            val callId = _state.value.callId ?: return@launch
+            Graph.toast("Lost the connection to @${client.state.value.users[userId]?.username ?: "them"}", error = true)
+            send(userId, CallSignal(CallSignalType.HANGUP, callId))
+            closePeer(userId)
+            maybeEnd()
+        }
+    }
+
+    private fun unwatch(userId: String) {
+        watchdogs.remove(userId)?.cancel()
+        restarts.remove(userId)?.cancel()
+    }
+
+    /** Tells one person, or everyone connected, whether my camera and microphone are on. */
+    private fun sendState(to: String? = null) {
+        val state = _state.value
+        val callId = state.callId ?: return
+        if (state.live?.host == false) return
+        val signal = CallSignal(CallSignalType.STATE, callId, camera = videoTrack != null && !state.cameraOff, mic = !state.muted)
+        if (to != null) send(to, signal) else for (id in pcs.keys) send(id, signal)
     }
 
     private suspend fun offerTo(userId: String) {
         val pc = connection(userId)
-        val offer = pc.create(offer = true)
-        pc.setLocal(offer)
-        send(userId, CallSignal(CallSignalType.OFFER, _state.value.callId ?: return, sdp = offer.description))
+        if (pc.signalingState() != PeerConnection.SignalingState.STABLE) return
+        makingOffer += userId
+        try {
+            val offer = pc.create(offer = true)
+            if (pc.signalingState() != PeerConnection.SignalingState.STABLE) return
+            pc.setLocal(offer)
+            send(userId, CallSignal(CallSignalType.OFFER, _state.value.callId ?: return, sdp = offer.description))
+        } finally {
+            makingOffer -= userId
+        }
     }
 
     private suspend fun answerOffer(userId: String, sdp: String) {
         val pc = connection(userId)
+        if (userId in makingOffer || pc.signalingState() != PeerConnection.SignalingState.STABLE) {
+            // Both sides offered at once: the offering side's wins, this side drops its own and answers.
+            if (offers(userId)) return
+            runCatching { pc.setLocal(SessionDescription(SessionDescription.Type.ROLLBACK, "")) }
+        }
         pc.setRemote(SessionDescription(SessionDescription.Type.OFFER, sdp))
         flushIce(userId)
         val answer = pc.create(offer = false)
@@ -375,9 +513,25 @@ class CallManager(private val context: Context, private val client: AezClient) {
         broadcast(CallSignal(CallSignalType.INVITE, callId, threadId = threadId, video = video, participants = participants), ring = true)
         CallService.start(context)
         openCallScreen()
+        peerDevice.clear()
         ringTimeout = scope.launch {
-            delay(45_000)
-            if (_state.value.status == CallStatus.OUTGOING) hangup()
+            delay(RING_MS)
+            ringingOver(callId)
+        }
+    }
+
+    /** Nobody answered in time: hang up. In a call that's under way, stop ringing whoever never answered. */
+    private fun ringingOver(callId: String) {
+        val state = _state.value
+        if (state.callId != callId) return
+        if (state.status == CallStatus.OUTGOING) {
+            hangup()
+            return
+        }
+        for (peer in state.peers.values) {
+            if (peer.state != PeerState.RINGING) continue
+            send(peer.userId, CallSignal(CallSignalType.HANGUP, callId))
+            setPeer(peer.userId, PeerState.DECLINED)
         }
     }
 
@@ -395,14 +549,19 @@ class CallManager(private val context: Context, private val client: AezClient) {
         val me = me ?: return@launch
         val peers = participants.filter { it != me }.associateWith { PeerUi(it, PeerState.CONNECTING) }
         _state.update { it.copy(status = CallStatus.ACTIVE, startedAt = System.currentTimeMillis(), peers = peers, local = videoTrack) }
+        for (id in peers.keys) watch(id, CONNECT_TIMEOUT_MS)
         CallService.start(context)
+        tellMyDevices(CallSignalType.ACCEPT, state.callId)
         broadcast(CallSignal(CallSignalType.ACCEPT, state.callId))
     }
 
     fun decline() = scope.launch {
         val state = _state.value
         stopRinging()
-        if (state.callId != null && state.from != null) send(state.from, CallSignal(CallSignalType.DECLINE, state.callId))
+        if (state.callId != null && state.from != null) {
+            send(state.from, CallSignal(CallSignalType.DECLINE, state.callId))
+            tellMyDevices(CallSignalType.DECLINE, state.callId)
+        }
         reset()
     }
 
@@ -434,6 +593,7 @@ class CallManager(private val context: Context, private val client: AezClient) {
         val muted = !_state.value.muted
         audioTrack?.setEnabled(!muted)
         _state.update { it.copy(muted = muted) }
+        sendState()
     }
 
     fun toggleCamera() = scope.launch {
@@ -442,16 +602,30 @@ class CallManager(private val context: Context, private val client: AezClient) {
             runCatching { startCamera(front = true) }.onFailure { return@launch Graph.toast("Camera unavailable", error = true) }
             val fresh = videoTrack ?: return@launch
             for (pc in pcs.values) pc.addTrack(fresh, listOf("s0"))
+            _state.update { it.copy(cameraOff = false, video = true, local = fresh, front = true) }
             for (id in pcs.keys.toList()) offerTo(id)
-            _state.update { it.copy(cameraOff = false, video = true, local = fresh) }
+            adapt()
+            sendState()
             return@launch
         }
         val off = !_state.value.cameraOff
         track.setEnabled(!off)
         _state.update { it.copy(cameraOff = off) }
+        sendState()
     }
 
-    fun flip() = scope.launch { capturer?.switchCamera(null) }
+    fun flip() = scope.launch {
+        val cam = capturer ?: return@launch
+        cam.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
+            override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                _state.update { it.copy(front = isFrontCamera) }
+            }
+
+            override fun onCameraSwitchError(error: String?) {
+                Graph.toast("Could not switch camera", error = true)
+            }
+        })
+    }
 
     fun toggleSpeaker() = scope.launch { setSpeaker(!_state.value.speaker) }
 
@@ -499,7 +673,9 @@ class CallManager(private val context: Context, private val client: AezClient) {
         setSpeaker(true)
         _state.value = CallUi(status = CallStatus.ACTIVE, callId = callId, video = true, startedAt = System.currentTimeMillis(),
             live = LiveUi(host = false, hostId = hostId), peers = mapOf(hostId to PeerUi(hostId, PeerState.CONNECTING)))
+        peerDevice.clear()
         openCallScreen()
+        watch(hostId, CONNECT_TIMEOUT_MS)
         send(hostId, CallSignal(CallSignalType.ACCEPT, callId))
     }
 
@@ -513,7 +689,7 @@ class CallManager(private val context: Context, private val client: AezClient) {
     }
 
     private fun relayLive(from: String, s: CallSignal) {
-        for (id in participants) if (id != me && id != from) send(id, s.copy(participants = listOf(from)))
+        for (id in participants) if (id != me && id != from) send(id, s.copy(participants = listOf(from), device = null, toDevice = null))
     }
 
     private fun addComment(from: String, text: String) {
@@ -574,16 +750,19 @@ class CallManager(private val context: Context, private val client: AezClient) {
     }
 
     private fun closePeer(userId: String) {
+        unwatch(userId)
         pcs.remove(userId)?.dispose()
+        pendingIce.remove(userId)
         _state.update { s -> s.copy(peers = s.peers + (userId to PeerUi(userId, PeerState.LEFT))) }
         adapt()
     }
 
     private fun maybeEnd() {
         val state = _state.value
-        if (state.live?.host == true) return
-        val anyone = state.peers.values.any { it.state == PeerState.CONNECTED || it.state == PeerState.CONNECTING || it.state == PeerState.RINGING }
+        if (state.status == CallStatus.IDLE || state.live?.host == true) return
+        val anyone = state.peers.values.any { it.state != PeerState.LEFT && it.state != PeerState.DECLINED }
         if (!anyone) {
+            state.callId?.let { broadcast(CallSignal(CallSignalType.HANGUP, it)) }
             logCall()
             reset()
         }
@@ -592,6 +771,11 @@ class CallManager(private val context: Context, private val client: AezClient) {
     private fun reset() {
         stopRinging()
         ringTimeout?.cancel()
+        ringTimeout = null
+        for (job in watchdogs.values + restarts.values) job.cancel()
+        watchdogs.clear()
+        restarts.clear()
+        makingOffer.clear()
         for (pc in pcs.values) pc.dispose()
         pcs.clear()
         pendingIce.clear()
@@ -619,6 +803,15 @@ class CallManager(private val context: Context, private val client: AezClient) {
     companion object {
         /** The host uploads one stream per viewer, so Live stays small: the host plus 9 is the same mesh size as a call. */
         const val MAX_LIVE_VIEWERS = 9
+        const val RING_MS = 45_000L
+        /** Accepted but never connected: give up on that person. */
+        const val CONNECT_TIMEOUT_MS = 40_000L
+        /** A connection that drops is restarted after this, and given up if it isn't back within LOST_AFTER_MS. */
+        const val RECONNECT_AFTER_MS = 4_000L
+        const val LOST_AFTER_MS = 30_000L
+
+        /** This phone, for this run of the app. */
+        val DEVICE: String = java.util.UUID.randomUUID().toString().replace("-", "").take(18)
     }
 }
 
