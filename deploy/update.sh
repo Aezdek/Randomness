@@ -11,6 +11,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=deploy/lib.sh
 . "$HERE/lib.sh"
+set -E
+trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 ROOT=${HUSH_ROOT:-$HERE}
 ENV_FILE=$ROOT/.env

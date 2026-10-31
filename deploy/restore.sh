@@ -11,6 +11,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=deploy/lib.sh
 . "$HERE/lib.sh"
+set -E
+trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 ROOT=${HUSH_ROOT:-/opt/hl/hush}
 REMOTE=${RCLONE_REMOTE:-}
@@ -45,7 +47,8 @@ if [ -f "$ROOT/compose.yml" ] && [ -f "$ROOT/.env" ] && command -v docker >/dev/
   compose stop >/dev/null 2>&1 || true
 fi
 
-snapshots=$(rclone lsf "$SRC/snapshots" --include 'hush-*.db' | sort)
+listing=$(rclone lsf "$SRC/snapshots" --include 'hush-*.db') || die "could not list $SRC/snapshots (is the rclone remote set up?)"
+snapshots=$(sort <<<"$listing")
 [ -n "$snapshots" ] || die "no snapshots found in $SRC/snapshots"
 if [ -n "$date" ]; then
   snapshot="hush-$date.db"

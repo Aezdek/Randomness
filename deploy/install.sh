@@ -40,6 +40,8 @@ else
 fi
 # shellcheck source=deploy/lib.sh
 . "$SRC/lib.sh"
+set -E
+trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 [ "$(id -u)" = 0 ] || [ -n "${HUSH_TEST:-}" ] || die "run with sudo"
 
@@ -116,8 +118,9 @@ remote=$(env_get "$ENV_FILE" RCLONE_REMOTE)
 if [ -z "$remote" ] && command -v rclone >/dev/null; then
   for config in "${RCLONE_CONFIG:-}" "" "$(getent passwd "${SUDO_USER:-}" 2>/dev/null | cut -d: -f6)/.config/rclone/rclone.conf"; do
     [ -n "$config" ] && [ ! -f "$config" ] && continue
-    crypts=$(RCLONE_CONFIG=${config:-${RCLONE_CONFIG:-}} rclone listremotes --long 2>/dev/null | awk '$2 == "crypt" { print $1 }')
-    remote=${RCLONE_REMOTE:-$(grep -Ei 'g(oogle)?drive' <<<"$crypts" | head -n1)}
+    # `|| true`: finding nothing (no config, or no crypt remote in it) is a normal answer, not a failure.
+    crypts=$(RCLONE_CONFIG=${config:-${RCLONE_CONFIG:-}} rclone listremotes --long 2>/dev/null | awk '$2 == "crypt" { print $1 }' || true)
+    remote=${RCLONE_REMOTE:-$(grep -Ei 'g(oogle)?drive' <<<"$crypts" | head -n1 || true)}
     [ -n "$remote" ] || [ "$(grep -c . <<<"$crypts")" != 1 ] || remote=$crypts
     if [ -n "$remote" ]; then
       rclone_config=$config

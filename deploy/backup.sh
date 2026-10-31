@@ -14,6 +14,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=deploy/lib.sh
 . "$HERE/lib.sh"
+set -E
+trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 ROOT=${HUSH_ROOT:-$HERE}
 ENV_FILE=$ROOT/.env
@@ -60,7 +62,7 @@ if [[ $REMOTE == *:* ]] && [[ $REMOTE != /* ]]; then
 fi
 
 today=$(date +%F)
-newest=$(find "$DATA/snapshots" -maxdepth 1 -name 'hush-*.db' -type f 2>/dev/null | sort | tail -n1)
+newest=$(find "$DATA/snapshots" -maxdepth 1 -name 'hush-*.db' -type f 2>/dev/null | sort | tail -n1 || true)
 [ -n "$newest" ] || fail "no database snapshot yet (the server writes one at 03:00)"
 
 log "Snapshots -> $DEST/snapshots"

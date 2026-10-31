@@ -137,6 +137,26 @@ sandbox nocatch no-catchall.yml
 out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "a tunnel config without a catch-all is left alone" bash -c "[ $? -ne 0 ] && diff -q '$FIX/no-catchall.yml' '$BOX/etc/cloudflared/config.yml'"
 
+if command -v rclone >/dev/null; then
+  # As on Resolute: rclone installed, no remote named in the environment, and root's own config has no crypt remote.
+  sandbox noremote
+  unset RCLONE_REMOTE
+  : >"$BOX/root-rclone.conf"
+  out=$(RCLONE_CONFIG=$BOX/root-rclone.conf bash "$DEPLOY/install.sh" 2>&1)
+  status=$?
+  check "with no backup remote anywhere, install still finishes" test $status -eq 0
+  [ $status -eq 0 ] || echo "$out" | tail -n 5 | sed 's/^/      /'
+  check "... and says backups are off until the remote exists" grep -q 'backups are OFF' <<<"$out"
+
+  # The remote found in the config rclone uses, even when it isn't called gdrive.
+  sandbox foundremote
+  unset RCLONE_REMOTE
+  printf '[disk]\ntype = local\n\n[vault]\ntype = crypt\nremote = disk:%s\npassword = unused\n' "$BOX/crypt" >"$BOX/user-rclone.conf"
+  out=$(RCLONE_CONFIG=$BOX/user-rclone.conf bash "$DEPLOY/install.sh" 2>&1)
+  check "the only crypt remote is picked up for backups" \
+    bash -c "grep -qx 'RCLONE_REMOTE=vault:' '$HUSH_ROOT/.env' && grep -qx 'RCLONE_CONFIG=$BOX/user-rclone.conf' '$HUSH_ROOT/.env' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
+fi
+
 echo "update.sh"
 sandbox update
 bash "$DEPLOY/install.sh" >/dev/null 2>&1

@@ -12,6 +12,12 @@ die() {
   exit 1
 }
 
+# Each script's ERR trap: under `set -e` a failure nobody planned for would otherwise end the script without a word.
+# Not set here, because deploy/tests/run.sh sources this file too.
+stopped() {
+  printf '\033[31merror:\033[0m %s stopped at line %s, running: %s\n' "${0##*/}" "$1" "$2" >&2
+}
+
 # env_get FILE KEY: the value of KEY in a KEY=VALUE file, without sourcing it.
 env_get() {
   [ -f "$1" ] || return 0
