@@ -209,7 +209,14 @@ configure_tunnel() {
   local tunnel
   tunnel=$(sed -n 's/^tunnel:[[:space:]]*//p' "$CF_CONFIG" | tr -d "\"' ")
   if [ -n "$tunnel" ]; then
-    if out=$(cloudflared tunnel route dns "$tunnel" "$HOST" 2>&1); then
+    # Under sudo, cloudflared looks for its login (cert.pem) in root's home; `cloudflared tunnel login` usually put it in
+    # the invoking user's. Use that one when it's there and nothing else was chosen.
+    local login=() home
+    home=$(getent passwd "${SUDO_USER:-}" 2>/dev/null | cut -d: -f6 || true)
+    if [ -z "${TUNNEL_ORIGIN_CERT:-}" ] && [ -n "$home" ] && [ -f "$home/.cloudflared/cert.pem" ]; then
+      login=(env "TUNNEL_ORIGIN_CERT=$home/.cloudflared/cert.pem")
+    fi
+    if out=$("${login[@]}" cloudflared tunnel route dns "$tunnel" "$HOST" 2>&1); then
       note "DNS: $HOST -> tunnel $tunnel"
     elif grep -qi 'already' <<<"$out"; then
       note "DNS for $HOST already exists"
@@ -220,7 +227,9 @@ configure_tunnel() {
         creds=$(sed -n 's/^credentials-file:[[:space:]]*//p' "$CF_CONFIG" | tr -d "\"' ")
         id=$(sed -n 's/.*"TunnelID"[[:space:]]*:[[:space:]]*"\([0-9a-f-]*\)".*/\1/p' "$creds" 2>/dev/null || true)
       fi
-      warn "could not create the DNS record: cloudflared isn't logged in to Cloudflare here (no cert.pem). Add it in the dashboard instead:"
+      warn "could not create the DNS record: cloudflared isn't logged in to Cloudflare here (no cert.pem). Either run, as yourself:"
+      note "  cloudflared tunnel route dns $tunnel $HOST     (after \`cloudflared tunnel login\` if it asks)"
+      note "or add it in the dashboard:"
       if [ -n "$id" ]; then
         note "  DNS for ${HOST#*.}: add a CNAME named ${HOST%%.*}, target $id.cfargotunnel.com, proxied (orange cloud)."
       else
