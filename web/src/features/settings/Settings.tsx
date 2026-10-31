@@ -32,17 +32,16 @@ import { StoryThumb } from '../stories/StoryThumb';
 import { MyQr } from './Verify';
 import { safetyCode, groupDigits } from '../../crypto/safety';
 
-// Each row's icon sits on a coloured tile, as in iOS Settings.
 const SECTIONS = [
-  { id: 'account', label: 'Account', icon: KeyRound, tint: '#8e8e93' },
-  { id: 'privacy', label: 'Privacy', icon: ShieldCheck, tint: '#007aff' },
-  { id: 'close-friends', label: 'Close Friends', icon: Star, tint: '#34c759' },
-  { id: 'blocked', label: 'Blocked', icon: UserX, tint: '#ff3b30' },
-  { id: 'notifications', label: 'Notifications and calls', icon: Bell, tint: '#ff3b30' },
-  { id: 'security', label: 'Encryption and devices', icon: Laptop, tint: '#5856d6' },
-  { id: 'archive', label: 'Archive', icon: Archive, tint: '#ff9500' },
-  { id: 'appearance', label: 'Appearance', icon: Palette, tint: '#007aff' },
-  { id: 'data', label: 'Your data', icon: Download, tint: '#30b0c7' },
+  { id: 'account', label: 'Account', icon: KeyRound },
+  { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
+  { id: 'close-friends', label: 'Close Friends', icon: Star },
+  { id: 'blocked', label: 'Blocked', icon: UserX },
+  { id: 'notifications', label: 'Notifications and calls', icon: Bell },
+  { id: 'security', label: 'Encryption and devices', icon: Laptop },
+  { id: 'archive', label: 'Archive', icon: Archive },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'data', label: 'Your data', icon: Download },
 ] as const;
 
 function Row({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
@@ -361,7 +360,6 @@ function DataSection() {
   );
 }
 
-
 export function Settings() {
   const { section } = useParams();
   const me = useApp((s) => s.me!);
@@ -385,36 +383,21 @@ export function Settings() {
     <div className={`settings ${section ? 'has-section' : ''}`}>
       <nav className="settings-nav">
         <h1 className="page-title" style={{ padding: '0 12px' }}>Settings</h1>
-        <div className="settings-group">
-          {sections.map((s) => (
-            <Link key={s.id} to={`/settings/${s.id}`} className={`settings-link ${section === s.id ? 'active' : ''}`}>
-              <span className="tile" style={{ background: s.tint }}>
-                <s.icon size={16} strokeWidth={2.2} />
-              </span>
-              <span className="settings-link-label">{s.label}</span>
-              <ChevronRight size={16} className="chevron" />
-            </Link>
-          ))}
-        </div>
+        {sections.map((s) => (
+          <Link key={s.id} to={`/settings/${s.id}`} className={`settings-link ${section === s.id ? 'active' : ''}`}>
+            <s.icon size={20} /> {s.label}
+            <ChevronRight size={16} className="faint only-mobile" style={{ marginLeft: 'auto' }} />
+          </Link>
+        ))}
         {me.isAdmin && (
-          <div className="settings-group">
-            <Link to="/admin" className="settings-link">
-              <span className="tile" style={{ background: '#636366' }}>
-                <HardDrive size={16} strokeWidth={2.2} />
-              </span>
-              <span className="settings-link-label">Admin</span>
-              <ChevronRight size={16} className="chevron" />
-            </Link>
-          </div>
+          <Link to="/admin" className="settings-link">
+            <HardDrive size={20} /> Admin
+            <ChevronRight size={16} className="faint only-mobile" style={{ marginLeft: 'auto' }} />
+          </Link>
         )}
-        <div className="settings-group">
-          <button className="settings-link danger" onClick={() => void signOut()}>
-            <span className="tile" style={{ background: '#ff3b30' }}>
-              <LogOut size={16} strokeWidth={2.2} />
-            </span>
-            <span className="settings-link-label">Log out</span>
-          </button>
-        </div>
+        <button className="settings-link danger" onClick={() => void signOut()}>
+          <LogOut size={20} /> Log out
+        </button>
         <p className="settings-foot faint">
           <Moon size={12} /> Hush · end-to-end encrypted
         </p>

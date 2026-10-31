@@ -23,8 +23,9 @@ body {
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
-  line-height: 1.4;
-  letter-spacing: -0.012em;
+  line-height: 1.45;
+  /* San Francisco tracks itself for each size; extra letter-spacing would fight it. */
+  letter-spacing: 0;
   overscroll-behavior-y: none;
 }
 
@@ -58,13 +59,13 @@ canvas {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--link);
   outline-offset: 2px;
   border-radius: var(--r-xs);
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: rgba(124, 92, 255, 0.35);
 }
 
 * {
@@ -130,5 +131,23 @@ canvas {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Apple Human Interface Guidelines, on touch screens. */
+@media (pointer: coarse) {
+  /* Controls you tap are at least 44 × 44 points. */
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .btn:not(.btn-sm) {
+    --h: 44px;
+  }
+  /* Safari on iPhone zooms the page into any text field under 16 px; at 16 px focusing a field leaves it be. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select {
+    font-size: 16px;
   }
 }

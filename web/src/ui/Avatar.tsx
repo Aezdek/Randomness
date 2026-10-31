@@ -2,8 +2,22 @@ import { useApp } from '../core/store';
 import { useIndex } from '../core/selectors';
 import { useMediaUrl } from './Media';
 
-/** Like Contacts: one quiet grey with white initials until someone picks a photo. */
-const MONOGRAM = 'linear-gradient(180deg, #a5abb8, #858994)';
+const GRADIENTS = [
+  'linear-gradient(135deg,#7c5cff,#e84393)',
+  'linear-gradient(135deg,#ff8a3d,#e84393)',
+  'linear-gradient(135deg,#00c2a8,#4f8bff)',
+  'linear-gradient(135deg,#ffb547,#ff5e62)',
+  'linear-gradient(135deg,#8e54e9,#4776e6)',
+  'linear-gradient(135deg,#11998e,#38ef7d)',
+  'linear-gradient(135deg,#f953c6,#b91d73)',
+  'linear-gradient(135deg,#fc4a1a,#f7b733)',
+];
+
+function gradientFor(id: string) {
+  let hash = 0;
+  for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) | 0;
+  return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
+}
 
 interface AvatarProps {
   userId: string | undefined;
@@ -20,7 +34,7 @@ export function Avatar({ userId, size = 40, presence, className = '' }: AvatarPr
   const url = useMediaUrl(profile?.avatar ?? null);
   const label = (profile?.displayName || user?.username || '?').trim();
   return (
-    <span className={`avatar ${className}`} style={{ ['--size' as string]: `${size}px`, background: url ? undefined : MONOGRAM }}>
+    <span className={`avatar ${className}`} style={{ ['--size' as string]: `${size}px`, background: url ? undefined : gradientFor(userId ?? label) }}>
       {url ? <img src={url} alt="" draggable={false} /> : <span className="initial">{label.charAt(0).toUpperCase()}</span>}
       {presence && online && <span className="presence-dot" />}
     </span>

@@ -82,7 +82,7 @@ function NavItem({ to, icon, label, badge, end }: { to: string; icon: (active: b
   );
 }
 
-const stroke = (active: boolean) => (active ? 2.3 : 1.75);
+const stroke = (active: boolean) => (active ? 2.6 : 1.8);
 
 function SideNav() {
   const me = useApp((s) => s.me);
@@ -93,23 +93,23 @@ function SideNav() {
       <Link to="/" className="brand" aria-label="Hush home">
         <Wordmark className="word" />
         <span className="mark">
-          <BrandMark size={30} />
+          <BrandMark size={28} />
         </span>
       </Link>
-      <NavItem to="/" end label="Home" icon={(a) => <Home size={22} strokeWidth={stroke(a)} />} />
-      <NavItem to="/search" label="Search" icon={(a) => <Search size={22} strokeWidth={stroke(a)} />} />
-      <NavItem to="/explore" label="Explore" icon={(a) => <Compass size={22} strokeWidth={stroke(a)} />} />
-      <NavItem to="/reels" label="Reels" icon={(a) => <Clapperboard size={22} strokeWidth={stroke(a)} />} />
-      <NavItem to="/direct" label="Messages" badge={unread} icon={(a) => <MessageCircle size={22} strokeWidth={stroke(a)} />} />
-      <NavItem to="/activity" label="Notifications" badge={activity} icon={(a) => <Heart size={22} strokeWidth={stroke(a)} fill={a ? 'currentColor' : 'none'} />} />
+      <NavItem to="/" end label="Home" icon={(a) => <Home size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/search" label="Search" icon={(a) => <Search size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/explore" label="Explore" icon={(a) => <Compass size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/reels" label="Reels" icon={(a) => <Clapperboard size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/direct" label="Messages" badge={unread} icon={(a) => <MessageCircle size={26} strokeWidth={stroke(a)} />} />
+      <NavItem to="/activity" label="Notifications" badge={activity} icon={(a) => <Heart size={26} strokeWidth={stroke(a)} fill={a ? 'currentColor' : 'none'} />} />
       <button className="nav-item" onClick={() => useUi.setState({ createMenu: true })}>
-        <PlusSquare size={22} strokeWidth={1.75} />
+        <PlusSquare size={26} strokeWidth={1.8} />
         <span className="label">Create</span>
       </button>
-      {me && <NavItem to={`/u/${me.username}`} label="Profile" icon={() => <Avatar userId={me.id} size={22} />} />}
+      {me && <NavItem to={`/u/${me.username}`} label="Profile" icon={() => <Avatar userId={me.id} size={26} />} />}
       <span className="spacer" />
-      {me?.isAdmin && <NavItem to="/admin" label="Admin" icon={(a) => <ShieldCheck size={22} strokeWidth={stroke(a)} />} />}
-      <NavItem to="/settings" label="More" icon={(a) => <Menu size={22} strokeWidth={stroke(a)} />} />
+      {me?.isAdmin && <NavItem to="/admin" label="Admin" icon={(a) => <ShieldCheck size={26} strokeWidth={stroke(a)} />} />}
+      <NavItem to="/settings" label="More" icon={(a) => <Menu size={26} strokeWidth={stroke(a)} />} />
     </nav>
   );
 }
@@ -194,38 +194,21 @@ function BottomBar() {
   if (pathname.startsWith('/direct/') || pathname.startsWith('/stories/')) return null;
   return (
     <nav className="bottombar only-mobile" aria-label="Main">
-      <NavLink to="/" end className="tab">
-        {({ isActive }) => (
-          <>
-            <Home size={24} strokeWidth={stroke(isActive)} />
-            <span>Home</span>
-          </>
-        )}
+      <NavLink to="/" end aria-label="Home">
+        {({ isActive }) => <Home size={26} strokeWidth={stroke(isActive)} />}
       </NavLink>
-      <NavLink to="/explore" className="tab">
-        {({ isActive }) => (
-          <>
-            <Search size={24} strokeWidth={stroke(isActive)} />
-            <span>Search</span>
-          </>
-        )}
+      <NavLink to="/explore" aria-label="Search">
+        {({ isActive }) => <Search size={26} strokeWidth={stroke(isActive)} />}
       </NavLink>
-      <button className="tab" onClick={() => useUi.setState({ createMenu: true })}>
-        <PlusSquare size={24} strokeWidth={1.75} />
-        <span>Create</span>
+      <button aria-label="Create" onClick={() => useUi.setState({ createMenu: true })}>
+        <PlusSquare size={26} strokeWidth={1.8} />
       </button>
-      <NavLink to="/reels" className="tab">
-        {({ isActive }) => (
-          <>
-            <Clapperboard size={24} strokeWidth={stroke(isActive)} />
-            <span>Reels</span>
-          </>
-        )}
+      <NavLink to="/reels" aria-label="Reels">
+        {({ isActive }) => <Clapperboard size={26} strokeWidth={stroke(isActive)} />}
       </NavLink>
       {me && (
-        <NavLink to={`/u/${me.username}`} className="tab">
-          <Avatar userId={me.id} size={24} />
-          <span>Profile</span>
+        <NavLink to={`/u/${me.username}`} aria-label="Profile" className={({ isActive }) => (isActive ? 'active' : '')}>
+          <Avatar userId={me.id} size={26} />
         </NavLink>
       )}
     </nav>

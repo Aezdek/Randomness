@@ -1,147 +1,108 @@
 /*
- * Hush design tokens, after Apple's Human Interface Guidelines: San Francisco (the system font on Apple devices,
- * the platform's own elsewhere), iOS system colours with blue as the one accent, grouped backgrounds, hairline
- * separators and translucent bars. Dark by default, with light following the system or Settings → Appearance.
+ * Hush design tokens. Dark-first, with a light theme that follows the system (or the user's choice in
+ * Settings → Appearance via [data-theme]).
  */
 :root {
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', system-ui, 'Segoe UI Variable Text', 'Segoe UI',
+  /* The system font, as Apple's Human Interface Guidelines ask: San Francisco on iPhone, iPad and Mac (Text and
+     Display optical sizes are picked automatically), Segoe UI on Windows, Roboto on Android. */
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Segoe UI Variable Display', 'Segoe UI',
     Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', system-ui, 'Segoe UI Variable Display',
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --grad: linear-gradient(135deg, #7c5cff 0%, #e84393 48%, #ff8a3d 100%);
+  --grad-soft: linear-gradient(135deg, rgba(124, 92, 255, 0.18), rgba(232, 67, 147, 0.14) 50%, rgba(255, 138, 61, 0.12));
+  --grad-close: linear-gradient(135deg, #2ee59d, #0bb87a);
+  --heart: #ff3b5c;
+  --link: #6ea8ff;
+  --verified: #4f8bff;
+  --success: #2fd38a;
+  --warning: #ffb547;
+  --danger: #ff4d5e;
 
   --r-xs: 6px;
   --r-sm: 10px;
-  --r: 12px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
   --r-full: 999px;
 
-  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --t-fast: 120ms;
-  --t: 240ms;
+  --t: 220ms;
 
-  --nav-w: 248px;
+  --nav-w: 244px;
   --nav-w-rail: 76px;
   --feed-w: 470px;
-  --top-h: 44px;
-  --bottom-h: 50px;
+  --top-h: 56px;
+  --bottom-h: 58px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 
-  /* Dark (iOS dark appearance). */
   color-scheme: dark;
-  --accent: #0a84ff;
-  --link: #0a84ff;
-  --verified: #0a84ff;
-  --success: #30d158;
-  --warning: #ff9f0a;
-  --danger: #ff453a;
-  --heart: #ff375f;
-
-  --bg: #000000;
-  --bg-elev: #1c1c1e;
-  --bg-elev-2: #2c2c2e;
-  --bg-elev-3: #3a3a3c;
-  --bg-grouped: #000000;
-  --bg-sheet: #1c1c1e;
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-press: rgba(255, 255, 255, 0.1);
-  --fill: rgba(120, 120, 128, 0.36);
-  --fill-2: rgba(120, 120, 128, 0.32);
-  --fill-3: rgba(118, 118, 128, 0.24);
-  --fill-4: rgba(118, 118, 128, 0.18);
-  --glass: rgba(22, 22, 24, 0.72);
-  --border: rgba(84, 84, 88, 0.5);
-  --border-strong: rgba(84, 84, 88, 0.85);
-  --text: #ffffff;
-  --text-2: rgba(235, 235, 245, 0.6);
-  --text-3: rgba(235, 235, 245, 0.32);
-  --primary: var(--accent);
-  --on-primary: #ffffff;
-  --segment: #636366;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.8);
-  --scrim: rgba(0, 0, 0, 0.5);
-  --bubble-me: #0a84ff;
-  --bubble-them: #26252a;
-
-  /* The old brand gradient now resolves to the accent, so every place that used it reads as one calm colour. */
-  --grad: linear-gradient(var(--accent), var(--accent));
-  --grad-soft: linear-gradient(rgba(10, 132, 255, 0.14), rgba(10, 132, 255, 0.14));
-  --grad-close: linear-gradient(var(--success), var(--success));
+  --bg: #08080a;
+  --bg-elev: #111114;
+  --bg-elev-2: #18181c;
+  --bg-elev-3: #212126;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-press: rgba(255, 255, 255, 0.09);
+  --glass: rgba(10, 10, 12, 0.72);
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #f5f5f7;
+  --text-2: #a7a7b0;
+  --text-3: #6e6e78;
+  --on-primary: #08080a;
+  --primary: #f5f5f7;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 40px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 30px 80px -20px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --scrim: rgba(0, 0, 0, 0.62);
+  --bubble-them: #1d1d22;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
     color-scheme: light;
-    --accent: #007aff;
-    --link: #007aff;
-    --verified: #007aff;
-    --success: #34c759;
-    --warning: #ff9500;
-    --danger: #ff3b30;
-    --heart: #ff2d55;
     --bg: #ffffff;
-    --bg-elev: #f2f2f7;
-    --bg-elev-2: #e5e5ea;
-    --bg-elev-3: #d1d1d6;
-    --bg-grouped: #f2f2f7;
-    --bg-sheet: #ffffff;
+    --bg-elev: #fafafa;
+    --bg-elev-2: #f3f3f5;
+    --bg-elev-3: #e9e9ed;
     --bg-hover: rgba(0, 0, 0, 0.04);
     --bg-press: rgba(0, 0, 0, 0.08);
-    --fill: rgba(120, 120, 128, 0.2);
-    --fill-2: rgba(120, 120, 128, 0.16);
-    --fill-3: rgba(118, 118, 128, 0.12);
-    --fill-4: rgba(116, 116, 128, 0.08);
-    --glass: rgba(249, 249, 249, 0.8);
-    --border: rgba(60, 60, 67, 0.18);
-    --border-strong: rgba(60, 60, 67, 0.36);
-    --text: #000000;
-    --text-2: rgba(60, 60, 67, 0.6);
-    --text-3: rgba(60, 60, 67, 0.3);
-    --segment: #ffffff;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.16);
-    --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.28);
-    --scrim: rgba(0, 0, 0, 0.32);
-    --bubble-me: #007aff;
-    --bubble-them: #e9e9eb;
-    --grad-soft: linear-gradient(rgba(0, 122, 255, 0.1), rgba(0, 122, 255, 0.1));
+    --glass: rgba(255, 255, 255, 0.78);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --text: #0b0b0e;
+    --text-2: #5d5d66;
+    --text-3: #9a9aa3;
+    --on-primary: #ffffff;
+    --primary: #0b0b0e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px -16px rgba(0, 0, 0, 0.18);
+    --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    --scrim: rgba(0, 0, 0, 0.45);
+    --bubble-them: #efeff2;
   }
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --accent: #007aff;
-  --link: #007aff;
-  --verified: #007aff;
-  --success: #34c759;
-  --warning: #ff9500;
-  --danger: #ff3b30;
-  --heart: #ff2d55;
   --bg: #ffffff;
-  --bg-elev: #f2f2f7;
-  --bg-elev-2: #e5e5ea;
-  --bg-elev-3: #d1d1d6;
-  --bg-grouped: #f2f2f7;
-  --bg-sheet: #ffffff;
+  --bg-elev: #fafafa;
+  --bg-elev-2: #f3f3f5;
+  --bg-elev-3: #e9e9ed;
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-press: rgba(0, 0, 0, 0.08);
-  --fill: rgba(120, 120, 128, 0.2);
-  --fill-2: rgba(120, 120, 128, 0.16);
-  --fill-3: rgba(118, 118, 128, 0.12);
-  --fill-4: rgba(116, 116, 128, 0.08);
-  --glass: rgba(249, 249, 249, 0.8);
-  --border: rgba(60, 60, 67, 0.18);
-  --border-strong: rgba(60, 60, 67, 0.36);
-  --text: #000000;
-  --text-2: rgba(60, 60, 67, 0.6);
-  --text-3: rgba(60, 60, 67, 0.3);
-  --segment: #ffffff;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.16);
-  --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.28);
-  --scrim: rgba(0, 0, 0, 0.32);
-  --bubble-me: #007aff;
-  --bubble-them: #e9e9eb;
-  --grad-soft: linear-gradient(rgba(0, 122, 255, 0.1), rgba(0, 122, 255, 0.1));
+  --glass: rgba(255, 255, 255, 0.78);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text: #0b0b0e;
+  --text-2: #5d5d66;
+  --text-3: #9a9aa3;
+  --on-primary: #ffffff;
+  --primary: #0b0b0e;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 40px -16px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --scrim: rgba(0, 0, 0, 0.45);
+  --bubble-them: #efeff2;
 }
