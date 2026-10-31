@@ -59,11 +59,6 @@ import xyz.aezdek.hush.ui.components.Avatar
 import xyz.aezdek.hush.ui.components.Hairline
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.Brand
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.material.icons.outlined.AddBox
-import xyz.aezdek.hush.ui.components.noRipple
 
 /** The signed-in app: the current screen, and the glass tab bar on the main screens. */
 @Composable
@@ -129,7 +124,6 @@ object Routes {
     }
 }
 
-/** An iOS tab bar: icon over a small label, blue when selected, grey otherwise. */
 @Composable
 private fun BottomBar(screen: Screen, onCreate: () -> Unit) {
     val nav = LocalNav.current
@@ -138,39 +132,35 @@ private fun BottomBar(screen: Screen, onCreate: () -> Unit) {
     val me = state.me
     Column(Modifier.fillMaxWidth().background(Aez.colors.glass).navigationBarsPadding()) {
         Hairline()
-        Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-            Tab(if (screen == Screen.Home) Icons.Filled.Home else Icons.Outlined.Home, "Home", screen == Screen.Home) { nav.go(Screen.Home) }
-            Tab(Icons.Outlined.Search, "Search", screen is Screen.Explore) { nav.go(Screen.Explore()) }
-            Tab(Icons.Outlined.AddBox, "Create", false, onCreate)
-            Tab(if (screen is Screen.Reels) Icons.Filled.Movie else Icons.Outlined.Movie, "Reels", screen is Screen.Reels) { nav.go(Screen.Reels()) }
-            val selected = screen is Screen.Profile && screen.userId == me?.id
-            Column(
-                Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = noRipple(), indication = null) { me?.let { nav.root(Screen.Profile(it.id)) } },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+        Row(Modifier.fillMaxWidth().height(54.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+            Tab(if (screen == Screen.Home) Icons.Filled.Home else Icons.Outlined.Home, "Home") { nav.go(Screen.Home) }
+            Tab(if (screen is Screen.Explore) Icons.Filled.Search else Icons.Outlined.Search, "Search") { nav.go(Screen.Explore()) }
+            Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onCreate), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 36.dp, height = 28.dp).clip(RoundedCornerShape(10.dp)).background(Brand.gradient), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Add, "Create", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
+            Tab(if (screen is Screen.Reels) Icons.Filled.Movie else Icons.Outlined.Movie, "Reels") { nav.go(Screen.Reels()) }
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).clickable { me?.let { nav.root(Screen.Profile(it.id)) } },
+                contentAlignment = Alignment.Center,
             ) {
+                val selected = screen is Screen.Profile && screen.userId == me?.id
                 Box(
-                    Modifier.size(27.dp).then(if (selected) Modifier.border(1.5.dp, Aez.colors.accent, CircleShape) else Modifier),
+                    Modifier.size(30.dp).then(if (selected) Modifier.background(Aez.colors.text, CircleShape).padding(2.dp) else Modifier),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Avatar(me?.id, if (selected) 22.dp else 25.dp, index, me?.username)
+                    Avatar(me?.id, if (selected) 26.dp else 28.dp, index, me?.username)
                 }
-                Text("Profile", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = if (selected) Aez.colors.accent else Aez.colors.text2)
             }
         }
     }
 }
 
 @Composable
-private fun RowScope.Tab(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
-    val tint = if (selected) Aez.colors.accent else Aez.colors.text2
-    Column(
-        Modifier.weight(1f).fillMaxHeight().clickable(interactionSource = noRipple(), indication = null, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
-        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = tint)
+private fun Tab(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = Aez.colors.text, modifier = Modifier.size(28.dp))
     }
 }
 

@@ -15,16 +15,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.aezdek.hush.data.ThemeMode
 
-/**
- * The same tokens as web/src/styles/tokens.css: Apple's iOS system colours (dark and light), blue as the one accent,
- * grouped backgrounds and hairline separators. Text uses the phone's own font: Apple's San Francisco can't ship in an
- * Android app, so the type follows iOS's scale and weights instead.
- */
+/** The same tokens as web/src/styles/tokens.css, so both clients look like one product. */
 @Immutable
 data class AezColors(
     val isDark: Boolean,
@@ -41,84 +39,62 @@ data class AezColors(
     val link: Color,
     val danger: Color,
     val success: Color,
-    /** Filled buttons: the accent, with white on top. */
+    /** Primary actions are monochrome: white on dark, black on light. */
     val primary: Color,
     val onPrimary: Color,
     val bubbleOther: Color,
-    val accent: Color,
-    val bubbleMe: Color,
-    /** iOS fills: tinted greys for controls on any background. */
-    val fill: Color,
-    val fill3: Color,
-    /** Grouped lists: the page behind, and the rounded group on it. */
-    val grouped: Color,
-    val card: Color,
-    /** The selected segment of a segmented control. */
-    val segment: Color,
 )
 
 val DarkColors = AezColors(
     isDark = true,
-    bg = Color(0xFF000000),
-    elev1 = Color(0xFF1C1C1E),
-    elev2 = Color(0xFF2C2C2E),
-    elev3 = Color(0xFF3A3A3C),
-    text = Color(0xFFFFFFFF),
-    text2 = Color(0x99EBEBF5),
-    text3 = Color(0x52EBEBF5),
-    border = Color(0x80545458),
-    borderStrong = Color(0xD9545458),
-    glass = Color(0xB8161618),
-    link = Color(0xFF0A84FF),
-    danger = Color(0xFFFF453A),
-    success = Color(0xFF30D158),
-    primary = Color(0xFF0A84FF),
-    onPrimary = Color(0xFFFFFFFF),
-    bubbleOther = Color(0xFF26252A),
-    accent = Color(0xFF0A84FF),
-    bubbleMe = Color(0xFF0A84FF),
-    fill = Color(0x5C787880),
-    fill3 = Color(0x3D767680),
-    grouped = Color(0xFF000000),
-    card = Color(0xFF1C1C1E),
-    segment = Color(0xFF636366),
+    bg = Color(0xFF08080A),
+    elev1 = Color(0xFF111114),
+    elev2 = Color(0xFF18181D),
+    elev3 = Color(0xFF222229),
+    text = Color(0xFFF5F5F7),
+    text2 = Color(0xFFB4B4BE),
+    text3 = Color(0xFF7A7A86),
+    border = Color(0x1FFFFFFF),
+    borderStrong = Color(0x33FFFFFF),
+    glass = Color(0xCC08080A),
+    link = Color(0xFF8AB4FF),
+    danger = Color(0xFFFF4D67),
+    success = Color(0xFF2FD07D),
+    primary = Color(0xFFF5F5F7),
+    onPrimary = Color(0xFF08080A),
+    bubbleOther = Color(0xFF1E1E24),
 )
 
 val LightColors = AezColors(
     isDark = false,
     bg = Color(0xFFFFFFFF),
-    elev1 = Color(0xFFF2F2F7),
-    elev2 = Color(0xFFE5E5EA),
-    elev3 = Color(0xFFD1D1D6),
-    text = Color(0xFF000000),
-    text2 = Color(0x993C3C43),
-    text3 = Color(0x4D3C3C43),
-    border = Color(0x2E3C3C43),
-    borderStrong = Color(0x5C3C3C43),
-    glass = Color(0xCCF9F9F9),
-    link = Color(0xFF007AFF),
-    danger = Color(0xFFFF3B30),
-    success = Color(0xFF34C759),
-    primary = Color(0xFF007AFF),
+    elev1 = Color(0xFFF6F6F8),
+    elev2 = Color(0xFFEFEFF3),
+    elev3 = Color(0xFFE5E5EB),
+    text = Color(0xFF0B0B10),
+    text2 = Color(0xFF4A4A55),
+    text3 = Color(0xFF8A8A96),
+    border = Color(0x14000000),
+    borderStrong = Color(0x26000000),
+    glass = Color(0xD9FFFFFF),
+    link = Color(0xFF2D5BE3),
+    danger = Color(0xFFE5294A),
+    success = Color(0xFF14A85F),
+    primary = Color(0xFF0B0B10),
     onPrimary = Color(0xFFFFFFFF),
-    bubbleOther = Color(0xFFE9E9EB),
-    accent = Color(0xFF007AFF),
-    bubbleMe = Color(0xFF007AFF),
-    fill = Color(0x33787880),
-    fill3 = Color(0x1F767680),
-    grouped = Color(0xFFF2F2F7),
-    card = Color(0xFFFFFFFF),
-    segment = Color(0xFFFFFFFF),
+    bubbleOther = Color(0xFFEFEFF3),
 )
 
-/** One accent, as in iOS: system blue where the old purple-pink-orange gradient was. Green and red keep their iOS meanings. */
 object Brand {
-    val accent = Color(0xFF0A84FF)
-    val closeFriends = Color(0xFF30D158)
-    val live = Color(0xFFFF453A)
-    /** The app icon's blue, a touch lighter at the top. */
-    val iconColors = listOf(Color(0xFF2B95FF), Color(0xFF0066E0))
-    val gradient: Brush get() = Brush.verticalGradient(iconColors)
+    val violet = Color(0xFF7C5CFF)
+    val pink = Color(0xFFE84393)
+    val orange = Color(0xFFFF8A3D)
+    val closeFriends = Color(0xFF1DBF73)
+    val live = Color(0xFFFF2D55)
+    val colors = listOf(violet, pink, orange)
+    val gradient: Brush get() = Brush.linearGradient(colors)
+    val sweep: Brush get() = Brush.sweepGradient(listOf(violet, pink, orange, pink, violet))
+    val messageGradient: Brush get() = Brush.linearGradient(listOf(Color(0xFF8A5CFF), Color(0xFFC04BD8)))
 }
 
 val LocalAez = staticCompositionLocalOf { DarkColors }
@@ -128,31 +104,31 @@ object Aez {
         @Composable @ReadOnlyComposable get() = LocalAez.current
 }
 
-/** The wordmark: the system sans, bold and tightly tracked, the way Apple sets its product names. */
-val Wordmark = TextStyle(fontWeight = FontWeight.Bold, fontSize = 27.sp, letterSpacing = (-1.1).sp)
+/** The wordmark: a serif italic, like the web's Instrument Serif. */
+/** The "Hush" wordmark: the system font, bold and tightly set (the italic serif read as out of place). */
+val Wordmark = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-1.0).sp)
 
 private fun typography(c: AezColors) = Typography(
-    // iOS: Large Title 34, Title 1 28, Title 2 22, Title 3 20, Headline 17, Body 17 (16 here), Subhead 15, Footnote 13.
-    headlineLarge = TextStyle(fontSize = 34.sp, lineHeight = 41.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.8).sp, color = c.text),
-    headlineMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp, color = c.text),
-    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = c.text),
-    titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp, color = c.text),
-    titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp, color = c.text),
-    titleSmall = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp, color = c.text),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, letterSpacing = (-0.2).sp, color = c.text),
-    bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = (-0.15).sp, color = c.text),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, color = c.text2),
-    labelLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.text),
-    labelMedium = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.text2),
+    headlineLarge = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp, color = c.text),
+    headlineMedium = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = c.text),
+    headlineSmall = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp, color = c.text),
+    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp, color = c.text),
+    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.text),
+    titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.text),
+    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = c.text),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 19.sp, color = c.text),
+    bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, color = c.text2),
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.text),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.text2),
     labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, color = c.text3),
 )
 
 val AezShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(22.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable
@@ -165,14 +141,14 @@ fun AezTheme(mode: ThemeMode, content: @Composable () -> Unit) {
     val c = if (dark) DarkColors else LightColors
     val scheme = if (dark) {
         darkColorScheme(
-            primary = c.primary, onPrimary = c.onPrimary, secondary = c.accent, background = c.bg, onBackground = c.text,
+            primary = c.primary, onPrimary = c.onPrimary, secondary = Brand.pink, background = c.bg, onBackground = c.text,
             surface = c.bg, onSurface = c.text, surfaceVariant = c.elev2, onSurfaceVariant = c.text2, surfaceContainer = c.elev1,
             surfaceContainerHigh = c.elev2, surfaceContainerHighest = c.elev3, surfaceContainerLow = c.elev1, outline = c.borderStrong,
             outlineVariant = c.border, error = c.danger,
         )
     } else {
         lightColorScheme(
-            primary = c.primary, onPrimary = c.onPrimary, secondary = c.accent, background = c.bg, onBackground = c.text,
+            primary = c.primary, onPrimary = c.onPrimary, secondary = Brand.pink, background = c.bg, onBackground = c.text,
             surface = c.bg, onSurface = c.text, surfaceVariant = c.elev2, onSurfaceVariant = c.text2, surfaceContainer = c.elev1,
             surfaceContainerHigh = c.elev2, surfaceContainerHighest = c.elev3, surfaceContainerLow = c.elev1, outline = c.borderStrong,
             outlineVariant = c.border, error = c.danger,

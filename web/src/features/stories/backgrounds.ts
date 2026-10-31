@@ -14,7 +14,8 @@ export const backgroundOf = (name?: string | null) => BACKGROUNDS[name ?? 'sunse
 
 export const FONTS: Record<string, { family: string; style?: string; weight?: number; transform?: string; tracking?: string }> = {
   modern: { family: 'var(--font)', weight: 750, tracking: '-0.02em' },
-  classic: { family: 'var(--font-display)', style: 'italic', weight: 400 },
+  // Apple's serif (New York) where there is one, a classic book face elsewhere.
+  classic: { family: "ui-serif, 'New York', 'Iowan Old Style', Georgia, serif", style: 'italic', weight: 400 },
   strong: { family: 'var(--font)', weight: 900, transform: 'uppercase', tracking: '0.02em' },
   typewriter: { family: 'ui-monospace, SFMono-Regular, Menlo, monospace', weight: 500 },
 };

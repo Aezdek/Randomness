@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -62,8 +64,16 @@ import xyz.aezdek.hush.ui.components.SheetItem
 import xyz.aezdek.hush.ui.components.Spinner
 import xyz.aezdek.hush.ui.components.ago
 import xyz.aezdek.hush.ui.theme.Aez
+import xyz.aezdek.hush.ui.theme.Brand
 
 private const val DAY = 86_400_000L
+private val WARNING = Color(0xFFFFB547)
+
+/** The hairline between rows of a group. */
+@Composable
+private fun RowDivider(start: Dp = 59.dp) {
+    Box(Modifier.padding(start = start).fillMaxWidth().height(1.dp).background(Aez.colors.border))
+}
 
 /** The admin panel: how the server is doing, who's on it, invites, backups and the commands that run it. */
 @Composable
@@ -103,10 +113,10 @@ internal fun AdminPanel(
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (s.updateAvailable && s.latestVersion != null) {
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.accent.copy(alpha = 0.14f)).padding(14.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(tint(Brand.violet)).padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Outlined.SystemUpdate, null, tint = Aez.colors.accent, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Outlined.SystemUpdate, null, tint = Brand.pink, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
                     Text("Hush ${s.latestVersion} is ready. Run update.sh on the server to install it.", color = Aez.colors.text, fontSize = 15.sp)
                 }
@@ -146,7 +156,7 @@ internal fun AdminPanel(
                                 Spacer(Modifier.width(6.dp))
                                 Text(
                                     "Admin", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Aez.colors.text2,
-                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Aez.colors.fill3).padding(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Aez.colors.elev3).padding(horizontal = 6.dp, vertical = 2.dp),
                                 )
                             }
                         }
@@ -177,7 +187,7 @@ internal fun AdminPanel(
                 val open = invite.usedBy == null && invite.expiresAt > now
                 val usedBy = invite.usedBy?.let { id -> users.firstOrNull { it.id == id }?.username }
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(9.dp).clip(CircleShape).background(if (open) Aez.colors.success else Aez.colors.fill))
+                    Box(Modifier.size(9.dp).clip(CircleShape).background(if (open) Aez.colors.success else Aez.colors.elev3))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(invite.code, fontFamily = FontFamily.Monospace, fontSize = 16.sp, color = if (open) Aez.colors.text else Aez.colors.text3)
@@ -192,7 +202,7 @@ internal fun AdminPanel(
                     }
                     if (open) {
                         Icon(
-                            Icons.Outlined.Share, "Share", tint = Aez.colors.accent,
+                            Icons.Outlined.Share, "Share", tint = Aez.colors.text,
                             modifier = Modifier.clip(CircleShape).clickable { shareInvite(context, invite.code) }.padding(8.dp).size(20.dp),
                         )
                         Text(
@@ -212,7 +222,7 @@ internal fun AdminPanel(
         Group("Backups") {
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(29.dp).clip(RoundedCornerShape(7.dp)).background(if (backupOk) TileGreen else TileOrange),
+                    Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(if (backupOk) Aez.colors.success else WARNING),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Outlined.Backup, null, tint = Color.White, modifier = Modifier.size(18.dp)) }
                 Spacer(Modifier.width(14.dp))
@@ -274,7 +284,7 @@ internal fun AdminPanel(
         var typed by remember(user.id) { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { removing = null },
-            containerColor = Aez.colors.card,
+            containerColor = Aez.colors.elev2,
             title = { Text("Remove @${user.username}?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -292,19 +302,19 @@ internal fun AdminPanel(
                     }
                 }) { Text("Remove", color = if (typed.trim() == user.username) Aez.colors.danger else Aez.colors.text3, fontWeight = FontWeight.SemiBold) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel", color = Aez.colors.accent) } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel", color = Aez.colors.text) } },
         )
     }
 }
 
 @Composable
 private fun StatTile(label: String, value: String, sub: String, modifier: Modifier, warn: Boolean = false, ok: Boolean = false) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(Aez.colors.card).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(modifier.clip(RoundedCornerShape(18.dp)).background(Aez.colors.elev1).padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, fontSize = 13.sp, color = Aez.colors.text2)
         Text(
             value, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp, maxLines = 1,
             color = when {
-                warn -> Color(0xFFFF9F0A)
+                warn -> WARNING
                 ok -> Aez.colors.success
                 else -> Aez.colors.text
             },
@@ -326,6 +336,6 @@ private fun CommandRow(context: Context, label: String, command: String) {
             Text(label, fontSize = 16.sp, color = Aez.colors.text)
             Text(command, fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Aez.colors.text2, maxLines = 1)
         }
-        Icon(Icons.Outlined.ContentCopy, "Copy", tint = Aez.colors.accent, modifier = Modifier.size(20.dp))
+        Icon(Icons.Outlined.ContentCopy, "Copy", tint = Aez.colors.text2, modifier = Modifier.size(20.dp))
     }
 }

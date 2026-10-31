@@ -410,7 +410,7 @@ private fun NewHighlight(index: Index, state: AppState, onDone: () -> Unit) {
                     else Box(Modifier.fillMaxSize().background(Brand.gradient), contentAlignment = Alignment.Center) {
                         Text(p?.text?.text.orEmpty(), color = Color.White, fontSize = 9.sp, textAlign = TextAlign.Center, maxLines = 4)
                     }
-                    if (selected) Box(Modifier.fillMaxSize().background(Aez.colors.accent.copy(alpha = 0.4f)))
+                    if (selected) Box(Modifier.fillMaxSize().background(Color(0x663B82F6)))
                 }
             }
         }

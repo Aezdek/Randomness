@@ -72,7 +72,7 @@ internal fun UpdatesSection() {
                 Text("Hush ${l.versionName} is ready (${Formatter.formatShortFileSize(context, l.size)}).", color = Aez.colors.text)
                 val p = progress
                 if (p != null) {
-                    LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth(), color = Brand.accent, trackColor = Aez.colors.elev2)
+                    LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth(), color = Brand.pink, trackColor = Aez.colors.elev2)
                 }
                 AezButton(if (p != null) "Downloading…" else "Update", {
                     scope.launch {

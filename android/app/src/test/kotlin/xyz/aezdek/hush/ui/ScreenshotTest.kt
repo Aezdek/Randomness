@@ -123,7 +123,7 @@ class ScreenshotTest {
     /** Settings → Admin as the app lays it out, with the fixtures in place of the server's answers. */
     @Composable
     private fun AdminScreen() {
-        Column(Modifier.fillMaxSize().background(Aez.colors.grouped)) {
+        Column(Modifier.fillMaxSize().background(Aez.colors.bg)) {
             TopBar("Admin")
             Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
                 AdminPanel(Fixtures.adminStatus, Fixtures.adminUsers, Fixtures.adminInvites)

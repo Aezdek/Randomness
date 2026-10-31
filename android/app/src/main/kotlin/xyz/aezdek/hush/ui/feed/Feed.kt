@@ -187,7 +187,7 @@ fun StoriesTray(index: Index, state: AppState) {
                     }
                     if (mine.isEmpty()) {
                         Box(
-                            Modifier.align(Alignment.BottomEnd).size(22.dp).background(Aez.colors.bg, CircleShape).padding(2.dp).background(Aez.colors.accent, CircleShape),
+                            Modifier.align(Alignment.BottomEnd).size(22.dp).background(Aez.colors.bg, CircleShape).padding(2.dp).background(Color(0xFF3B82F6), CircleShape),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Add, null, tint = Color.White, modifier = Modifier.size(14.dp)) }
                     }

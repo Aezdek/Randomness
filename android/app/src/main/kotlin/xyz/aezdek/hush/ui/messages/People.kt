@@ -81,7 +81,7 @@ fun PersonRow(user: UserDto, index: Index, selected: Boolean? = null, subtitle: 
         }
         if (selected != null) {
             Box(
-                Modifier.size(24.dp).then(if (selected) Modifier.background(Aez.colors.accent, CircleShape) else Modifier.border(1.5.dp, Aez.colors.borderStrong, CircleShape)),
+                Modifier.size(24.dp).then(if (selected) Modifier.background(Color(0xFF3B82F6), CircleShape) else Modifier.border(1.5.dp, Aez.colors.borderStrong, CircleShape)),
                 contentAlignment = Alignment.Center,
             ) { if (selected) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
         }
@@ -255,11 +255,7 @@ fun ToggleRow(icon: androidx.compose.ui.graphics.vector.ImageVector?, title: Str
         }
         Switch(
             checked = checked, onCheckedChange = { onToggle() },
-            // iOS switch colours: green when on, a grey fill when off, a white knob either way.
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = Aez.colors.success, checkedThumbColor = Color.White, checkedBorderColor = Color.Transparent,
-                uncheckedTrackColor = Aez.colors.fill, uncheckedThumbColor = Color.White, uncheckedBorderColor = Color.Transparent,
-            ),
+            colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF3B82F6), checkedThumbColor = Color.White),
         )
     }
 }
@@ -287,7 +283,7 @@ fun ShareSheet(entity: Entity, onDismiss: () -> Unit) {
                     Text(index.threadTitle(thread, state.users, me.id), Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
                     val selected = thread.id in picked
                     Box(
-                        Modifier.size(24.dp).then(if (selected) Modifier.background(Aez.colors.accent, CircleShape) else Modifier.border(1.5.dp, Aez.colors.borderStrong, CircleShape)),
+                        Modifier.size(24.dp).then(if (selected) Modifier.background(Color(0xFF3B82F6), CircleShape) else Modifier.border(1.5.dp, Aez.colors.borderStrong, CircleShape)),
                         contentAlignment = Alignment.Center,
                     ) { if (selected) Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
                 }
