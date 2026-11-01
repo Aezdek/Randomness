@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wheelhouse · Restored iPods</title>
+  <meta name="description" content="Restored and upgraded iPods. Every one is opened up, fixed, tested end to end and graded honestly.">
+  <meta property="og:title" content="Wheelhouse · Restored iPods">
+  <meta property="og:description" content="Restored and upgraded iPods, tested and graded honestly.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="inventory.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#shop">Skip to the shop</a>
+
+  <div class="setup-banner" id="setup-banner" hidden>
+    <div class="wrap">
+      <strong>Setup mode:</strong> these are sample listings. Edit <code>inventory.js</code> to add your contact details and real stock, and this banner disappears.
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="Home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="15" fill="currentColor"/>
+          <circle cx="16" cy="16" r="5.5" fill="var(--bg)"/>
+        </svg>
+        <span data-shop-name>Wheelhouse</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#shop">Shop</a>
+        <a href="#process">How I restore</a>
+        <a href="#grading">Grading</a>
+        <a href="#sell">Sell yours</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn btn-small" href="#contact">Contact</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">Restored · Upgraded · Tested</p>
+          <h1>Old iPods, brought <span class="nowrap">back to life.</span></h1>
+          <p class="lede">
+            Every iPod here gets opened up, fixed, upgraded where it counts, tested end to end and graded honestly.
+            You get the click wheel without the gamble.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-accent" href="#shop">Browse the shelf</a>
+            <a class="btn btn-ghost" href="#sell">Sell me your old one</a>
+          </div>
+          <dl class="hero-stats">
+            <div><dt>In stock</dt><dd data-stat="available">0</dd></div>
+            <div><dt>Sold</dt><dd data-stat="sold">0</dd></div>
+            <div><dt>Warranty</dt><dd data-stat="warranty">30 days</dd></div>
+          </dl>
+        </div>
+        <div class="hero-art" id="hero-art" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <!-- SHOP -->
+    <section class="section" id="shop">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>On the shelf</h2>
+          <p>Tap any iPod for photos, upgrades and exactly what condition it's in.</p>
+        </div>
+
+        <div class="toolbar">
+          <div class="chips" id="filters" role="group" aria-label="Filter by model"></div>
+          <div class="toolbar-right">
+            <label class="switch">
+              <input type="checkbox" id="show-sold" checked>
+              <span class="switch-track" aria-hidden="true"></span>
+              <span>Show sold</span>
+            </label>
+            <label class="select">
+              <span class="visually-hidden">Sort by</span>
+              <select id="sort">
+                <option value="featured">Featured</option>
+                <option value="newest">Newest</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+                <option value="storage">Most storage</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <p class="result-count" id="result-count" aria-live="polite"></p>
+        <ul class="grid" id="grid"></ul>
+        <div class="empty" id="empty" hidden>
+          <p>Nothing matches right now. New iPods land every week.</p>
+          <a class="btn btn-ghost btn-small" data-mail="request" href="#contact">Tell me what you're after</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROCESS -->
+    <section class="section section-alt" id="process">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>What every iPod goes through</h2>
+          <p>Most of these are 15 to 20 years old. Here's how they get back to "just works".</p>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <span class="step-num">01</span>
+            <h3>Diagnose</h3>
+            <p>Boot into diagnostics, scan the storage, check the battery and try every button before anything gets opened.</p>
+          </li>
+          <li>
+            <span class="step-num">02</span>
+            <h3>Rebuild</h3>
+            <p>Tired hard drives become silent flash storage. Batteries are replaced, often with bigger ones. Worn faceplates and backs get swapped.</p>
+          </li>
+          <li>
+            <span class="step-num">03</span>
+            <h3>Clean</h3>
+            <p>Ports cleaned out, wheel and screen polished, every surface wiped down.</p>
+          </li>
+          <li>
+            <span class="step-num">04</span>
+            <h3>Test</h3>
+            <p>The full checklist below, including a battery run-down and a sync test on both Mac and Windows.</p>
+          </li>
+          <li>
+            <span class="step-num">05</span>
+            <h3>Reset</h3>
+            <p>Restored to the latest Apple firmware and wiped. It arrives empty and ready for your music.</p>
+          </li>
+        </ol>
+
+        <div class="checklist-card">
+          <h3>The checklist</h3>
+          <ul class="checklist">
+            <li>Boots cleanly, no error icons</li>
+            <li>Full capacity shows in Settings › About</li>
+            <li>Storage scanned for errors</li>
+            <li>Holds charge through a run-down test</li>
+            <li>Charges from USB and a wall adapter</li>
+            <li>Syncs with Mac (Finder) and Windows (iTunes)</li>
+            <li>Wheel scrolls smoothly, no dead spots</li>
+            <li>Menu, play, back, forward and centre buttons</li>
+            <li>Hold switch locks and unlocks</li>
+            <li>Headphone jack: both channels, no crackle when wiggled</li>
+            <li>Screen: no dead pixels, even backlight</li>
+            <li>Dock connector clean and seated</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRADING -->
+    <section class="section" id="grading">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>How I grade</h2>
+          <p>Grades are about looks only. Every grade passes the same checklist and gets the same warranty.</p>
+        </div>
+        <div class="grades" id="grades"></div>
+      </div>
+    </section>
+
+    <!-- SELL -->
+    <section class="section" id="sell">
+      <div class="wrap">
+        <div class="sell-card">
+          <div class="sell-copy">
+            <p class="eyebrow">Got one in a drawer?</p>
+            <h2>I buy iPods, even broken ones.</h2>
+            <p>
+              Dead battery, sad-face icon, folder with an exclamation mark, cracked screen: send a few photos and I'll make you an offer.
+              Lots and bundles welcome.
+            </p>
+            <a class="btn btn-accent" data-mail="sell" href="#contact">Get an offer</a>
+          </div>
+          <ul class="sell-list">
+            <li><strong>iPod classic &amp; video</strong><span>any generation, any condition</span></li>
+            <li><strong>iPod nano</strong><span>especially 7th gen</span></li>
+            <li><strong>iPod mini</strong><span>working or not</span></li>
+            <li><strong>Parts</strong><span>faceplates, backs, click wheels</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section-alt" id="faq">
+      <div class="wrap narrow">
+        <div class="section-head">
+          <h2>Questions</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Will it work with my computer?</summary>
+            <p>Yes. On a Mac it shows up in Finder (macOS Catalina and later), or in iTunes on older Macs. On Windows, use iTunes. Every iPod is sync-tested on both before it's listed.</p>
+          </details>
+          <details>
+            <summary>Does it come with music on it?</summary>
+            <p>No. Every iPod is wiped and restored to factory settings, so it arrives empty and ready for your own library.</p>
+          </details>
+          <details>
+            <summary>What's a flash or SD upgrade?</summary>
+            <p>iPod classics originally used tiny spinning hard drives, which are now the number one thing that fails. Swapping the drive for SD-card flash storage makes the iPod silent, lighter, much more shock-proof and often far bigger. It also frees up room inside for a larger battery.</p>
+          </details>
+          <details>
+            <summary>How long does the battery last?</summary>
+            <p>Every iPod either gets a new battery or passes a run-down test before it's listed, and the listing says which. Upgraded classics with high-capacity batteries can go several days of normal listening between charges.</p>
+          </details>
+          <details>
+            <summary>What if something goes wrong?</summary>
+            <p>Every iPod comes with a <span data-warranty-days>30</span>-day warranty. If it develops a fault, message me and I'll repair it, replace it or refund you.</p>
+          </details>
+          <details>
+            <summary>How do payment and shipping work?</summary>
+            <p>If an iPod is also listed on eBay you can buy it there with eBay's buyer protection. For direct orders I send a secure invoice, then ship it tracked, padded and boxed within two business days.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="section" id="contact">
+      <div class="wrap narrow">
+        <div class="contact-card">
+          <h2>Say hi</h2>
+          <p>Questions about a listing, looking for something specific, or want an offer on yours? <span data-ships-from></span></p>
+          <div class="contact-links" id="contact-links"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>© <span data-year>2026</span> <span data-shop-name>Wheelhouse</span>. Independent reseller of used and restored iPods.</p>
+      <p class="fine">iPod is a trademark of Apple Inc., registered in the U.S. and other countries. <span data-shop-name>Wheelhouse</span> is not affiliated with or endorsed by Apple.</p>
+    </div>
+  </footer>
+
+  <dialog class="detail" id="detail" aria-labelledby="detail-title">
+    <button class="detail-close" type="button" data-close aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="detail-grid" id="detail-content"></div>
+  </dialog>
+</body>
+</html>

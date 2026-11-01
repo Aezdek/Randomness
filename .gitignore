@@ -1,12 +1,3 @@
-.gradle/
-build/
-local.properties
-.idea/
-*.iml
 .DS_Store
-captures/
-.kotlin/
-*.jks
-*.keystore
-keystore.properties
-signing/
+Thumbs.db
+.wrangler/
