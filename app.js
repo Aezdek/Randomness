@@ -693,7 +693,19 @@
       </div>`;
   }
 
+  let currentId = null;
+
+  // Some hosts (like sandboxed previews) refuse history changes; the dialog works either way.
+  function setHash(hash) {
+    try {
+      history.replaceState(null, "", hash || location.pathname + location.search);
+    } catch {
+      /* leave the address as it is */
+    }
+  }
+
   function openDetail(it) {
+    currentId = it.id;
     $("#detail-content").innerHTML = detailHTML(it);
     if (!dialog.open) dialog.showModal();
     dialog.scrollTop = 0;
@@ -714,12 +726,16 @@
 
   function syncDialogToHash() {
     const it = itemFromHash();
-    if (it) openDetail(it);
-    else if (dialog.open) dialog.close();
+    if (it) {
+      if (!(dialog.open && currentId === it.id)) openDetail(it);
+    } else if (dialog.open) {
+      dialog.close();
+    }
   }
 
   dialog.addEventListener("close", () => {
-    if (/^#ipod-/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
+    currentId = null;
+    if (/^#ipod-/.test(location.hash)) setHash("");
   });
 
   dialog.addEventListener("click", async (e) => {
@@ -741,13 +757,23 @@
         await navigator.clipboard.writeText(location.href);
         copy.textContent = "Link copied";
       } catch {
-        window.prompt("Copy this link:", location.href);
+        copy.textContent = "Couldn't copy. Use the link in your address bar.";
       }
-      setTimeout(() => (copy.textContent = "Copy link to this iPod"), 1800);
+      setTimeout(() => (copy.textContent = "Copy link to this iPod"), 2400);
     }
   });
 
   /* ------------------------------------------------------------------ events */
+
+  $("#grid").addEventListener("click", (e) => {
+    const link = e.target.closest(".card-link");
+    if (!link) return;
+    const it = ITEMS.find((x) => `#ipod-${encodeURIComponent(x.id)}` === link.getAttribute("href"));
+    if (!it) return;
+    e.preventDefault();
+    openDetail(it);
+    setHash(`#ipod-${encodeURIComponent(it.id)}`);
+  });
 
   $("#filters").addEventListener("click", (e) => {
     const chip = e.target.closest(".chip");
