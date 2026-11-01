@@ -118,6 +118,13 @@ the rolling `hush-latest` release that `install.sh` and `update.sh` read.
 
 **What the server sees:** usernames, who follows and messages whom, when, and how big things are.
 
+**What the admin can see and do** (Admin in the web sidebar, Settings → Admin on Android): exactly that metadata, per
+member: their devices, which chats they're in and with whom, how many messages each has and when the last came,
+followers and following, and how much they post. Never content: messages, posts and profiles are encrypted for their
+readers only. The admin can block an account (it can read but not post, message, comment, like, follow or call),
+disable it (it can't sign in), sign it out everywhere, take it out of a chat (the chat disappears from its messages),
+or remove it. Signing in *as* someone isn't possible: their password is the only key to their account.
+
 **Trade-offs, chosen on purpose:**
 
 - **The web app trusts the server, Cloudflare and GitHub each time it loads.** Resolute serves the JavaScript and
