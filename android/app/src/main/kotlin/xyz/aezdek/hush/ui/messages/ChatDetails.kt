@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -172,12 +173,26 @@ internal fun ThemeSheet(threadId: String, current: String, onDismiss: () -> Unit
                         }.padding(vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        // A little chat in the theme, as Instagram's picker shows them.
                         Box(
-                            Modifier.size(56.dp).then(if (on) Modifier.border(2.dp, Aez.colors.text, CircleShape).padding(4.dp) else Modifier)
-                                .clip(CircleShape).background(theme.brush()),
-                            contentAlignment = Alignment.Center,
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp).aspectRatio(3f / 4f)
+                                .then(if (on) Modifier.border(2.dp, Aez.colors.text, RoundedCornerShape(14.dp)) else Modifier)
+                                .padding(if (on) 3.dp else 0.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (theme.hasBackground) Brush.verticalGradient(theme.background.map { Color(it) }) else Brush.verticalGradient(listOf(Aez.colors.bg, Aez.colors.bg)))
+                                .border(1.dp, Aez.colors.border, RoundedCornerShape(12.dp)),
                         ) {
-                            if (on) Icon(Icons.Filled.Check, "Current", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val them = if (theme.hasBackground) Color(theme.received) else Aez.colors.bubbleOther
+                                Box(Modifier.fillMaxWidth(0.62f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(them))
+                                Box(Modifier.align(Alignment.End).fillMaxWidth(0.7f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(theme.brush()))
+                                Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(them))
+                            }
+                            if (on) {
+                                Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(20.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Filled.Check, "Current", tint = Color.Black, modifier = Modifier.size(14.dp))
+                                }
+                            }
                         }
                         Spacer(Modifier.size(6.dp))
                         Text(theme.name, fontSize = 12.sp, color = Aez.colors.text)

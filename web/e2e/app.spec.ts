@@ -218,6 +218,7 @@ test('three people use Hush end to end', async ({ browser }) => {
   await alice.page.getByRole('button', { name: 'Details' }).click();
   await shot(alice.page, 'chat-details-desktop');
   await alice.page.getByRole('button', { name: /^Theme/ }).click();
+  await shot(alice.page, 'chat-theme-picker');
   await alice.page.getByRole('button', { name: 'Ocean' }).click();
   await expect(bob.page.locator('.chat-event', { hasText: 'changed the theme to Ocean' })).toBeVisible({ timeout: 20_000 });
   await alice.page.getByRole('button', { name: /^Nicknames/ }).click();

@@ -2,7 +2,7 @@ import { ArrowLeft, Camera, CornerUpLeft, Eye, Ghost, Heart, ImagePlus, Info, Mi
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { chatCustom, DEFAULT_REACTION, eventText, themeGradient, themeOf, type ChatCustom } from '../../core/chat';
+import { chatCustom, DEFAULT_REACTION, eventText, themeBackground, themeGradient, themeOf, type ChatCustom } from '../../core/chat';
 import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { prepare, prepareVoice, upload } from '../../core/media';
@@ -427,7 +427,16 @@ export function Chat() {
         </header>
         <ThreadList activeId={threadId} />
       </aside>
-      <section className="chat" style={{ '--chat-bubble': themeGradient(theme), '--chat-accent': theme.colors[1] } as React.CSSProperties}>
+      <section
+        className={`chat ${theme.background ? 'themed' : ''}`}
+        style={
+          {
+            '--chat-bubble': themeGradient(theme),
+            '--chat-accent': theme.accent ?? theme.colors[1],
+            ...(theme.background ? { '--chat-bg': themeBackground(theme), '--chat-received': theme.received } : {}),
+          } as React.CSSProperties
+        }
+      >
         <header className="chat-head">
           <button className="icon-btn only-mobile" onClick={() => navigate('/direct')} aria-label="Back">
             <ArrowLeft size={24} />

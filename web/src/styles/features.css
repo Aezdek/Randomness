@@ -4008,8 +4008,55 @@ button.info-row:hover {
 }
 .theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 14px 10px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 16px 12px;
+}
+.theme-preview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: transform var(--t-fast) var(--ease);
+}
+.theme-option:hover .theme-preview {
+  transform: scale(1.03);
+}
+.theme-option.on .theme-preview {
+  box-shadow: 0 0 0 2px var(--bg-sheet, var(--bg-elev)), 0 0 0 4px var(--text);
+}
+.theme-preview-them,
+.theme-preview-me {
+  height: 14px;
+  border-radius: 8px;
+}
+.theme-preview-them {
+  width: 62%;
+}
+.theme-preview-them.short {
+  width: 40%;
+}
+.theme-preview-me {
+  width: 70%;
+  align-self: flex-end;
+}
+.theme-preview-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
 }
 .theme-option {
   display: flex;
@@ -4107,4 +4154,60 @@ button.info-row:hover {
   background: transparent;
   color: var(--text);
   font-weight: 700;
+}
+
+/* ============================================================================================= themed chats */
+/* A theme with a background turns the whole chat into its palette, as on Instagram: the background behind everything,
+   the header and message box see-through over it, their messages a light tint, your messages the theme's gradient. */
+.chat.themed {
+  background: var(--chat-bg);
+  color: #fff;
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.5);
+  --border: rgba(255, 255, 255, 0.1);
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-elev: rgba(255, 255, 255, 0.08);
+  --bg-elev-2: rgba(255, 255, 255, 0.12);
+  --bubble-them: var(--chat-received);
+  color-scheme: dark;
+}
+.chat.themed .chat-head,
+.chat.themed .composer-bar,
+.chat.themed .pinned-bar,
+.chat.themed .reply-bar {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.chat.themed .chat-scroll {
+  background: transparent;
+}
+.chat.themed .chat-composer {
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.chat.themed .chat-head .icon-btn,
+.chat.themed .chat-composer .icon-btn,
+.chat.themed .chat-composer .btn-link {
+  color: var(--chat-accent);
+}
+.chat.themed .msg.theirs .bubble:not(.plain) {
+  background: var(--chat-received);
+  color: #fff;
+}
+.chat.themed .reactions {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: transparent;
+}
+.chat.themed .day,
+.chat.themed .seen,
+.chat.themed .chat-event,
+.chat.themed .e2ee-note {
+  color: rgba(255, 255, 255, 0.66);
+}
+.chat.themed .btn-secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }

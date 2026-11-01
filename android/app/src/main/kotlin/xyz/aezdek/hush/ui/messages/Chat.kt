@@ -54,6 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -116,6 +117,7 @@ import xyz.aezdek.hush.ui.components.TopBar
 import xyz.aezdek.hush.ui.components.ago
 import xyz.aezdek.hush.ui.feed.post
 import xyz.aezdek.hush.ui.theme.Aez
+import xyz.aezdek.hush.ui.theme.LocalAez
 import xyz.aezdek.hush.ui.theme.Brand
 import java.text.DateFormat
 import java.util.Date
@@ -199,7 +201,16 @@ fun Chat(threadId: String, focus: String? = null) {
         else -> null
     }
 
-    Column(Modifier.fillMaxSize().background(Aez.colors.bg)) {
+    // A theme with a background turns the whole chat into its palette, as on Instagram.
+    val base = Aez.colors
+    val palette = if (!theme.hasBackground) base else base.copy(
+        isDark = true, bg = Color.Transparent, elev1 = Color(0x1AFFFFFF), elev2 = Color(0x26FFFFFF), elev3 = Color(0x33FFFFFF),
+        text = Color.White, text2 = Color(0xB8FFFFFF), text3 = Color(0x80FFFFFF), border = Color(0x1AFFFFFF), borderStrong = Color(0x33FFFFFF),
+        glass = Color(0x33000000), bubbleOther = Color(theme.received),
+    )
+    val chatBackground = if (theme.hasBackground) Modifier.background(Brush.verticalGradient(theme.background.map { Color(it) })) else Modifier.background(base.bg)
+    CompositionLocalProvider(LocalAez provides palette) {
+    Column(Modifier.fillMaxSize().then(chatBackground)) {
         TopBar(
             title, subtitle = subtitle,
             leading = {
@@ -309,7 +320,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             },
             quickReaction = custom.quickReaction,
-            accent = Color(theme.colors[1]),
+            accent = Color(theme.accent),
             onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
             onVoice = { media ->
                 scope.launch {
@@ -323,6 +334,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             },
         )
+    }
     }
     menu?.let { message ->
         val mine = message.dto.authorId == me.id
