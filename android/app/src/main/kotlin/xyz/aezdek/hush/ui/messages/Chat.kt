@@ -321,6 +321,7 @@ fun Chat(threadId: String, focus: String? = null) {
             },
             quickReaction = custom.quickReaction,
             accent = Color(theme.accent),
+            themed = theme.hasBackground,
             onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
             onVoice = { media ->
                 scope.launch {
@@ -651,6 +652,8 @@ private fun Composer(
     onSend: (String) -> Unit,
     quickReaction: String,
     accent: Color,
+    /** In a chat with a theme the buttons take its accent, as on Instagram. */
+    themed: Boolean,
     onHeart: () -> Unit,
     onVoice: (xyz.aezdek.hush.client.PreparedMedia) -> Unit,
 ) {
@@ -704,7 +707,7 @@ private fun Composer(
                 }
                 return@Row
             }
-            Box(Modifier.size(38.dp).clip(CircleShape).background(Brand.gradient).clickable(onClick = onPick), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(38.dp).clip(CircleShape).then(if (themed) Modifier.background(accent) else Modifier.background(Brand.gradient)).clickable(onClick = onPick), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Image, "Photos", tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(10.dp))
@@ -735,7 +738,7 @@ private fun Composer(
                 IconAction(Icons.Outlined.Visibility, if (once) "View once on" else "View once off", onToggleOnce,
                     tint = if (once) Brand.pink else Aez.colors.text2, size = 22.dp)
                 IconAction(Icons.Filled.Mic, "Voice message", { micPermission.launch(Manifest.permission.RECORD_AUDIO) }, size = 24.dp)
-                if (quickReaction == ChatCustom.DEFAULT_REACTION) IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = Brand.pink, size = 24.dp)
+                if (quickReaction == ChatCustom.DEFAULT_REACTION) IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = if (themed) accent else Brand.pink, size = 24.dp)
                 else Text(quickReaction, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onHeart).padding(8.dp))
             }
         }
