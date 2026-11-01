@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonRemove
@@ -51,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
+import xyz.aezdek.hush.protocol.SetStatusRequest
+import xyz.aezdek.hush.protocol.AccountStatus
 import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.InviteDto
@@ -92,6 +98,7 @@ internal fun AdminPanel(
     var invites by remember { mutableStateOf(initialInvites) }
     var managing by remember { mutableStateOf<AdminUserDto?>(null) }
     var removing by remember { mutableStateOf<AdminUserDto?>(null) }
+    var viewing by remember { mutableStateOf<String?>(null) }
     suspend fun load() {
         status = Graph.attempt { Graph.client.api.get<AdminStatus>("/admin/status") } ?: status
         users = Graph.attempt { Graph.client.api.get<List<AdminUserDto>>("/admin/users") } ?: users
@@ -144,7 +151,7 @@ internal fun AdminPanel(
                 val name = index.profile(user.id)?.displayName?.takeIf { it.isNotBlank() } ?: user.username
                 val canManage = user.id != state.me?.id && !user.isAdmin
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(enabled = canManage) { managing = user }.padding(horizontal = 16.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable { if (canManage) managing = user else viewing = user.id }.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Avatar(user.id, 38.dp, index, user.username)
@@ -152,13 +159,9 @@ internal fun AdminPanel(
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Aez.colors.text)
-                            if (user.isAdmin) {
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Admin", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Aez.colors.text2,
-                                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Aez.colors.elev3).padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
+                            if (user.isAdmin) StatusTag("Admin", Aez.colors.text2)
+                            if (user.status == AccountStatus.BLOCKED) StatusTag("Blocked", WARNING)
+                            if (user.status == AccountStatus.DISABLED) StatusTag("Disabled", Aez.colors.danger)
                         }
                         Text(
                             "@${user.username} · ${user.posts} posts · ${Formatter.formatShortFileSize(context, user.storageBytes)} · " +
@@ -264,6 +267,29 @@ internal fun AdminPanel(
     managing?.let { user ->
         ActionSheet({ managing = null }) {
             Text("@${user.username}", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Aez.colors.text, modifier = Modifier.padding(12.dp))
+            SheetItem("View activity", Icons.Outlined.Visibility) {
+                managing = null
+                viewing = user.id
+            }
+            fun setStatus(status: String, done: String) {
+                managing = null
+                scope.launch {
+                    if (Graph.attempt { Graph.client.api.post<OkResponse, SetStatusRequest>("/admin/users/${user.id}/status", SetStatusRequest(status)) } != null) {
+                        Graph.toast(done)
+                    }
+                    load()
+                }
+            }
+            if (user.status == AccountStatus.BLOCKED) {
+                SheetItem("Unblock", Icons.Outlined.PlayCircle) { setStatus(AccountStatus.ACTIVE, "@${user.username} can post again") }
+            } else {
+                SheetItem("Block posting and messages", Icons.Outlined.PauseCircle) { setStatus(AccountStatus.BLOCKED, "@${user.username} can't post or message now") }
+            }
+            if (user.status == AccountStatus.DISABLED) {
+                SheetItem("Enable account", Icons.Outlined.Block) { setStatus(AccountStatus.ACTIVE, "@${user.username} can sign in again") }
+            } else {
+                SheetItem("Disable account", Icons.Outlined.Block, danger = true) { setStatus(AccountStatus.DISABLED, "@${user.username} is disabled and signed out") }
+            }
             SheetItem("Sign out on all devices", Icons.AutoMirrored.Outlined.Logout) {
                 managing = null
                 scope.launch {
@@ -279,6 +305,8 @@ internal fun AdminPanel(
             }
         }
     }
+
+    viewing?.let { id -> MemberSheet(id, users, onDismiss = { viewing = null }, onChanged = { scope.launch { load() } }) }
 
     removing?.let { user ->
         var typed by remember(user.id) { mutableStateOf("") }
@@ -338,4 +366,13 @@ private fun CommandRow(context: Context, label: String, command: String) {
         }
         Icon(Icons.Outlined.ContentCopy, "Copy", tint = Aez.colors.text2, modifier = Modifier.size(20.dp))
     }
+}
+
+@Composable
+private fun StatusTag(label: String, color: Color) {
+    Spacer(Modifier.width(6.dp))
+    Text(
+        label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color,
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.16f)).padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
