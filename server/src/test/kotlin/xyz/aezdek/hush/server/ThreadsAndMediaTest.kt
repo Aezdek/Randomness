@@ -1,6 +1,7 @@
 package xyz.aezdek.hush.server
 
 import io.ktor.client.call.body
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -23,7 +24,11 @@ import xyz.aezdek.hush.crypto.B64
 import xyz.aezdek.hush.crypto.MediaCipher
 import xyz.aezdek.hush.crypto.ObjectCrypto
 import xyz.aezdek.hush.crypto.SignalCrypto
+import xyz.aezdek.hush.protocol.AccountStatus
 import xyz.aezdek.hush.protocol.AddMembersRequest
+import xyz.aezdek.hush.protocol.AdminMemberDto
+import xyz.aezdek.hush.protocol.AdminUserDto
+import xyz.aezdek.hush.protocol.SetStatusRequest
 import xyz.aezdek.hush.protocol.BlobDto
 import xyz.aezdek.hush.protocol.CreateThreadRequest
 import xyz.aezdek.hush.protocol.ReadRequest
@@ -104,6 +109,50 @@ class ThreadsAndMediaTest {
         // Carol leaves: she loses the chat entirely.
         carol.delete("/api/v1/threads/${chat.threadId}/members/${carol.id}")
         assertEquals(HttpStatusCode.NotFound, carol.get("/api/v1/objects/${after.id}").status)
+    }
+
+    @Test
+    fun theAdminSeesMetadataNotContentAndCanBlockDisableOrTakeSomeoneOutOfAChat() = serverTest {
+        val (admin, bob, cara) = members("admin", "bob", "cara")
+        val chat = startChat(bob, listOf(cara), group = false)
+        val (first) = bob.message(chat, "secret plans")
+        assertEquals(HttpStatusCode.Created, bob.create(first).status)
+        val (reply) = cara.message(chat, "ok")
+        assertEquals(HttpStatusCode.Created, cara.create(reply).status)
+
+        // What the server knows about bob: his device and who he talks to, how much. Not what was said.
+        val response = admin.get("/api/v1/admin/users/${bob.id}")
+        val info = response.body<AdminMemberDto>()
+        assertEquals(1, info.devices.size)
+        val seen = info.chats.single()
+        assertEquals(chat.threadId, seen.id)
+        assertEquals(setOf(bob.id, cara.id), seen.members.toSet())
+        assertEquals(2, seen.messages)
+        assertEquals(1, seen.sentByThem)
+        assertFalse("secret" in response.bodyAsText())
+        assertEquals(HttpStatusCode.Forbidden, bob.get("/api/v1/admin/users/${cara.id}").status)
+
+        // Blocked: bob can still read, but can't send.
+        assertEquals(HttpStatusCode.OK, admin.post("/api/v1/admin/users/${bob.id}/status", SetStatusRequest(AccountStatus.BLOCKED)).status)
+        assertEquals(HttpStatusCode.OK, bob.get("/api/v1/me").status)
+        val (paused) = bob.message(chat, "anyone?")
+        assertEquals(HttpStatusCode.Forbidden, bob.create(paused).status)
+        assertEquals(AccountStatus.BLOCKED, admin.get("/api/v1/admin/users").body<List<AdminUserDto>>().first { it.id == bob.id }.status)
+        admin.post("/api/v1/admin/users/${bob.id}/status", SetStatusRequest(AccountStatus.ACTIVE))
+        val (back) = bob.message(chat, "back")
+        assertEquals(HttpStatusCode.Created, bob.create(back).status)
+
+        // Disabled: signed out everywhere and can't sign back in. Admins can't be blocked or disabled.
+        admin.post("/api/v1/admin/users/${bob.id}/status", SetStatusRequest(AccountStatus.DISABLED))
+        assertEquals(HttpStatusCode.Unauthorized, bob.get("/api/v1/me").status)
+        assertEquals(HttpStatusCode.Forbidden, bob.loginFresh().status)
+        assertEquals(HttpStatusCode.BadRequest, admin.post("/api/v1/admin/users/${admin.id}/status", SetStatusRequest(AccountStatus.DISABLED)).status)
+
+        // Taking cara out of the chat hides it from her messages; members can't do this to each other.
+        assertEquals(HttpStatusCode.Forbidden, cara.delete("/api/v1/admin/threads/${chat.threadId}/members/${bob.id}").status)
+        assertEquals(HttpStatusCode.OK, admin.delete("/api/v1/admin/threads/${chat.threadId}/members/${cara.id}").status)
+        assertFalse(cara.get("/api/v1/threads").body<List<ThreadDto>>().any { it.id == chat.threadId })
+        assertEquals(HttpStatusCode.NotFound, cara.get("/api/v1/objects/${first.id}").status)
     }
 
     @Test

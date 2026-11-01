@@ -124,13 +124,14 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
     }
 
     /** Leaving (userId == me) or removing someone (creator only). Their wraps on the thread's keys go too. */
-    fun removeMember(me: String, threadId: String, userId: String, fx: Effects) = db.tx {
+    /** [asAdmin]: the server's admin takes [userId] out of any chat (it disappears from their messages). */
+    fun removeMember(me: String, threadId: String, userId: String, fx: Effects, asAdmin: Boolean = false) = db.tx {
         val now = clock.now()
         val thread = thread(threadId) ?: notFound()
         val current = thread.members.map { it.userId }
-        if (me !in current || userId !in current) notFound()
-        if (userId != me && thread.createdBy != me) forbidden("Only the chat's creator can remove people")
-        if (!thread.isGroup && userId != me) badRequest("Leave the chat instead")
+        if (userId !in current || (!asAdmin && me !in current)) notFound()
+        if (!asAdmin && userId != me && thread.createdBy != me) forbidden("Only the chat's creator can remove people")
+        if (!asAdmin && !thread.isGroup && userId != me) badRequest("Leave the chat instead")
         exec("DELETE FROM thread_members WHERE thread_id = ? AND user_id = ?", threadId, userId)
         exec(
             "DELETE FROM wraps WHERE recipient_id = ? AND object_id IN (SELECT id FROM objects WHERE thread_id = ?)", userId, threadId,

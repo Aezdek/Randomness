@@ -178,6 +178,10 @@ object Schema {
         """
         ALTER TABLE wrap_tasks ADD COLUMN fetched_at INTEGER;
         """.trimIndent(),
+        // 4: an admin can block an account (it can read but not post or message) or disable it (it can't sign in).
+        """
+        ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

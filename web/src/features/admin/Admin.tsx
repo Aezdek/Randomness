@@ -1,4 +1,4 @@
-import { Check, Copy, HardDrive, LogOut, MoreHorizontal, Server, Ticket, UserMinus, Users } from 'lucide-react';
+import { Ban, Check, Copy, Eye, HardDrive, LogOut, MoreHorizontal, PauseCircle, PlayCircle, Server, Ticket, UserMinus, Users } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../../core/api';
@@ -6,10 +6,10 @@ import { messageOf } from '../../core/errors';
 import { bytesLabel } from '../../core/media';
 import { useIndex } from '../../core/selectors';
 import { toast, useApp } from '../../core/store';
-import type { AdminStatus, AdminUserDto, InviteDto } from '../../core/types';
+import type { AdminMemberDto, AdminStatus, AdminUserDto, InviteDto } from '../../core/types';
 import { Avatar } from '../../ui/Avatar';
 import { Ago, Center, Spinner } from '../../ui/bits';
-import { Sheet } from '../../ui/Sheet';
+import { Confirm, Sheet } from '../../ui/Sheet';
 
 const DAY = 86_400_000;
 const run = (p: Promise<unknown>, done?: string) => p.then(() => done && toast(done, 'success')).catch((e) => toast(messageOf(e), 'error'));
@@ -67,6 +67,7 @@ export function Admin() {
   const [invites, setInvites] = useState<InviteDto[]>([]);
   const [menu, setMenu] = useState<AdminUserDto | null>(null);
   const [removing, setRemoving] = useState<AdminUserDto | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
 
   const load = useCallback(() => {
@@ -117,12 +118,15 @@ export function Admin() {
         {users.map((u) => {
           const profile = index.profiles[u.id]?.payload;
           return (
-            <div className="admin-row member" key={u.id}>
+            // A tap on the row opens what the server knows about them; the ⋯ menu has the same as "View activity".
+            <div className="admin-row member clickable" key={u.id} onClick={() => setViewing(u.id)}>
               <Avatar userId={u.id} size={40} />
               <span className="admin-row-main">
                 <b>
                   {profile?.displayName?.trim() || u.username}
                   {u.isAdmin && <span className="admin-tag">Admin</span>}
+                  {u.status === 'restricted' && <span className="admin-tag warn">Blocked</span>}
+                  {u.status === 'disabled' && <span className="admin-tag danger">Disabled</span>}
                 </b>
                 <span className="faint">
                   @{u.username} · joined {new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -145,7 +149,7 @@ export function Admin() {
                 <span className="faint">active</span>
               </span>
               {u.id !== me?.id && !u.isAdmin ? (
-                <button className="icon-btn sm" aria-label={`Manage ${u.username}`} onClick={() => setMenu(u)}>
+                <button className="icon-btn sm" aria-label={`Manage ${u.username}`} onClick={(e) => (e.stopPropagation(), setMenu(u))}>
                   <MoreHorizontal size={18} />
                 </button>
               ) : (
@@ -238,6 +242,30 @@ export function Admin() {
               <b>@{menu.username}</b>
             </div>
             <div className="menu">
+              <button onClick={() => (setMenu(null), setViewing(menu.id))}>
+                <Eye size={18} /> View activity
+              </button>
+              <button
+                onClick={() => {
+                  const target = menu;
+                  setMenu(null);
+                  const next = target.status === 'restricted' ? 'active' : 'restricted';
+                  void run(api.post(`/admin/users/${target.id}/status`, { status: next }), next === 'restricted' ? `@${target.username} can't post or message now` : `@${target.username} can post again`).then(load);
+                }}
+              >
+                {menu.status === 'restricted' ? <PlayCircle size={18} /> : <PauseCircle size={18} />} {menu.status === 'restricted' ? 'Unblock' : 'Block posting and messages'}
+              </button>
+              <button
+                className={menu.status === 'disabled' ? '' : 'danger'}
+                onClick={() => {
+                  const target = menu;
+                  setMenu(null);
+                  const next = target.status === 'disabled' ? 'active' : 'disabled';
+                  void run(api.post(`/admin/users/${target.id}/status`, { status: next }), next === 'disabled' ? `@${target.username} is disabled and signed out` : `@${target.username} can sign in again`).then(load);
+                }}
+              >
+                <Ban size={18} /> {menu.status === 'disabled' ? 'Enable account' : 'Disable account'}
+              </button>
               <button
                 onClick={() => {
                   const target = menu;
@@ -265,6 +293,8 @@ export function Admin() {
         )}
       </Sheet>
 
+      {viewing && <MemberView userId={viewing} users={users} onClose={() => setViewing(null)} onChanged={load} />}
+
       <Sheet open={!!removing} onClose={() => setRemoving(null)} title="Remove member">
         {removing && (
           <div className="admin-remove">
@@ -291,5 +321,157 @@ export function Admin() {
         )}
       </Sheet>
     </div>
+  );
+}
+
+const KINDS: [string, string][] = [
+  ['post', 'Posts'],
+  ['reel', 'Reels'],
+  ['story', 'Stories'],
+  ['comment', 'Comments'],
+  ['like', 'Likes'],
+  ['message', 'Messages'],
+];
+
+/**
+ * A member as the server sees them: account, devices, chats, people and how much they post. Never content: messages,
+ * posts and profiles are end-to-end encrypted, so neither the admin nor the server can read them.
+ */
+function MemberView({ userId, users, onClose, onChanged }: { userId: string; users: AdminUserDto[]; onClose: () => void; onChanged: () => void }) {
+  const me = useApp((s) => s.me);
+  const [info, setInfo] = useState<AdminMemberDto | null>(null);
+  const [hiding, setHiding] = useState<string | null>(null);
+  const load = useCallback(() => void api.get<AdminMemberDto>(`/admin/users/${userId}`).then(setInfo).catch((e) => toast(messageOf(e), 'error')), [userId]);
+  useEffect(load, [load]);
+  const name = (id: string) => (id === me?.id ? 'you' : `@${users.find((u) => u.id === id)?.username ?? 'someone'}`);
+  const people = (ids: string[]) => (ids.length ? ids.map(name).join(', ') : 'Nobody');
+  const u = info?.user;
+  return (
+    <Sheet open onClose={onClose} title={u ? `@${u.username}` : 'Member'} size="wide">
+      {!info || !u ? (
+        <Center style={{ minHeight: 200 }}>
+          <Spinner />
+        </Center>
+      ) : (
+        <div className="member-view">
+          <div className="member-head">
+            <Avatar userId={u.id} size={64} />
+            <div>
+              <b>
+                @{u.username} {u.isAdmin && <span className="admin-tag">Admin</span>}
+                {u.status === 'restricted' && <span className="admin-tag warn">Blocked</span>}
+                {u.status === 'disabled' && <span className="admin-tag danger">Disabled</span>}
+              </b>
+              <span className="faint">
+                Joined {new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {u.lastActiveAt ? <> · active <Ago at={u.lastActiveAt} className="" /> ago</> : null}
+                {info.invitedBy ? ` · invited by ${name(info.invitedBy)}` : ''}
+              </span>
+            </div>
+          </div>
+          <p className="member-note">
+            <HardDrive size={14} /> Only what the server can see. Messages, posts and profiles are end-to-end encrypted, so nobody else can read them, the admin
+            included.
+          </p>
+
+          <h3>Activity</h3>
+          <div className="member-counts">
+            {KINDS.map(([kind, label]) => (
+              <span key={kind}>
+                <b>{info.counts[kind] ?? 0}</b>
+                {label}
+              </span>
+            ))}
+            <span>
+              <b>{bytesLabel(u.storageBytes)}</b>Media
+            </span>
+          </div>
+
+          <h3>Chats · {info.chats.length}</h3>
+          <div className="admin-list">
+            {info.chats.length === 0 && (
+              <div className="admin-row">
+                <span className="faint">No chats.</span>
+              </div>
+            )}
+            {info.chats.map((c) => (
+              <div className="admin-row" key={c.id}>
+                <span className="admin-row-main">
+                  <b>{c.isGroup ? `Group · ${c.members.length} people` : `With ${people(c.members.filter((id) => id !== u.id))}`}</b>
+                  <span className="faint">
+                    {c.isGroup ? `${people(c.members.filter((id) => id !== u.id))} · ` : ''}
+                    {c.messages} messages, {c.sentByThem} from them{c.lastMessageAt ? ' · last ' : ''}
+                    {c.lastMessageAt ? <Ago at={c.lastMessageAt} className="" /> : null}
+                    {c.lastMessageAt ? ' ago' : ''}
+                  </span>
+                </span>
+                {!u.isAdmin && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => setHiding(c.id)}>
+                    Remove from chat
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <h3>Devices · {info.devices.length}</h3>
+          <div className="admin-list">
+            {info.devices.length === 0 && (
+              <div className="admin-row">
+                <span className="faint">Signed out everywhere.</span>
+              </div>
+            )}
+            {info.devices.map((d, i) => (
+              <div className="admin-row" key={i}>
+                <span className="admin-row-main">
+                  <b>{d.name}</b>
+                  <span className="faint">
+                    {d.platform === 'android' ? 'Android app' : 'Web'} · signed in {new Date(d.createdAt).toLocaleDateString()} · last used <Ago at={d.lastSeenAt} className="" /> ago
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <h3>People</h3>
+          <div className="admin-list">
+            <div className="admin-row">
+              <span className="admin-row-main">
+                <b>Followers · {info.followers.length}</b>
+                <span className="faint">{people(info.followers)}</span>
+              </span>
+            </div>
+            <div className="admin-row">
+              <span className="admin-row-main">
+                <b>Following · {info.following.length}</b>
+                <span className="faint">{people(info.following)}</span>
+              </span>
+            </div>
+            <div className="admin-row">
+              <span className="admin-row-main">
+                <b>Account</b>
+                <span className="faint">
+                  {info.isPrivate ? 'Private' : 'Public'} · activity status {info.showActivity ? 'on' : 'off'} · {info.pendingRequests} follow requests waiting · blocks{' '}
+                  {info.blocking} {info.blocking === 1 ? 'person' : 'people'} · made {info.invitesCreated} invites
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      <Confirm
+        open={!!hiding}
+        title="Remove from this chat?"
+        message={`The chat disappears from ${u ? `@${u.username}` : 'their'}’s messages and they get nothing new from it. The others keep it.`}
+        confirm="Remove"
+        danger
+        onConfirm={() => {
+          const threadId = hiding;
+          setHiding(null);
+          if (threadId && u) void run(api.delete(`/admin/threads/${threadId}/members/${u.id}`), 'Removed from the chat').then(() => (load(), onChanged()));
+        }}
+        onClose={() => setHiding(null)}
+      />
+    </Sheet>
   );
 }

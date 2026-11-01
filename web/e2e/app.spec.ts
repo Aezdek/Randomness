@@ -293,6 +293,25 @@ test('three people use Hush end to end', async ({ browser }) => {
   await alice.page.goto('/admin');
   await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
   await shot(alice.page, 'admin-desktop');
+
+  // The admin sees what the server knows about Bob (his chat with her, his devices), never what was said; she pauses
+  // his posting and messaging, his next message is refused, and she lifts it again.
+  await alice.page.locator('.admin-row.member', { hasText: '@bob' }).click();
+  await expect(alice.page.locator('.member-view')).toContainText('Chats · 1', { timeout: 15_000 });
+  await expect(alice.page.locator('.member-view')).not.toContainText(MARK);
+  await shot(alice.page, 'admin-member-desktop');
+  await alice.page.keyboard.press('Escape');
+  await alice.page.getByRole('button', { name: 'Manage bob', exact: true }).click();
+  await alice.page.getByRole('button', { name: /Block posting/ }).click();
+  await expect(alice.page.locator('.admin-row.member', { hasText: '@bob' })).toContainText('Blocked', { timeout: 15_000 });
+  await bob.page.goto('/direct');
+  await bob.page.locator('.thread-row').first().click();
+  await bob.page.locator('#chat-input').fill('can I still send?');
+  await bob.page.keyboard.press('Enter');
+  await expect(bob.page.getByText('An admin has paused posting')).toBeVisible({ timeout: 15_000 });
+  await alice.page.getByRole('button', { name: 'Manage bob', exact: true }).click();
+  await alice.page.getByRole('button', { name: 'Unblock' }).click();
+  await expect(alice.page.locator('.admin-row.member', { hasText: '@bob' })).not.toContainText('Blocked', { timeout: 15_000 });
   await bob.page.goto('/settings');
   await expect(bob.page.getByText('Close Friends')).toBeVisible();
   await expect(bob.page.getByText('Admin', { exact: true })).toHaveCount(0);

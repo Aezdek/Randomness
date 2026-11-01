@@ -4211,3 +4211,81 @@ button.info-row:hover {
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
+
+/* ============================================================================================= admin: a member */
+.admin-row.clickable {
+  cursor: pointer;
+}
+.admin-row.clickable:hover {
+  background: var(--bg-hover);
+}
+.admin-tag.warn {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning);
+}
+.admin-tag.danger {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+.member-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.member-view h3 {
+  margin: 14px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.member-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.member-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.member-head b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+.member-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--bg-elev-2);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.member-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.member-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.member-counts span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.member-counts b {
+  font-size: 18px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,6 +1,10 @@
 package xyz.aezdek.hush.server
 
 import org.slf4j.LoggerFactory
+import xyz.aezdek.hush.protocol.AccountStatus
+import xyz.aezdek.hush.protocol.AdminChatDto
+import xyz.aezdek.hush.protocol.AdminDeviceDto
+import xyz.aezdek.hush.protocol.AdminMemberDto
 import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.AuthResponse
 import xyz.aezdek.hush.protocol.ChangePasswordRequest
@@ -21,7 +25,8 @@ import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-data class Session(val id: String, val userId: String)
+/** [blocked]: an admin has paused this account's posting and messaging; it can still sign in and read. */
+data class Session(val id: String, val userId: String, val blocked: Boolean = false)
 
 /** Default Argon2id cost handed to new accounts; matches KdfParams.DEFAULT in shared:crypto. */
 const val DEFAULT_OPS_LIMIT = 3L
@@ -118,13 +123,17 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
     fun login(req: LoginRequest): AuthResponse = db.tx {
         checkDevice(req.device)
         val authKey = B64u.dec(req.authKey, "authKey", size = 32)
-        val row = one("SELECT id, auth_hash, vault FROM users WHERE username = ? AND deleted = 0", req.username.trim().lowercase()) {
-            Triple(it.str("id"), it.bytes("auth_hash"), it.bytes("vault"))
+        val row = one("SELECT id, auth_hash, vault, status FROM users WHERE username = ? AND deleted = 0", req.username.trim().lowercase()) {
+            LoginRow(it.str("id"), it.bytes("auth_hash"), it.bytes("vault"), it.str("status"))
         }
-        if (row == null || !MessageDigest.isEqual(row.second, sha256(authKey))) unauthorized("Wrong username or password")
-        val token = newSession(row.first, req.device, clock.now())
-        AuthResponse(token, me(row.first), B64u.enc(row.third))
+        if (row == null || !MessageDigest.isEqual(row.authHash, sha256(authKey))) unauthorized("Wrong username or password")
+        // Only after the password checks out, so the message can't be used to probe which accounts exist.
+        if (row.status == AccountStatus.DISABLED) forbidden("This account has been disabled. Ask the admin.")
+        val token = newSession(row.id, req.device, clock.now())
+        AuthResponse(token, me(row.id), B64u.enc(row.vault))
     }
+
+    private class LoginRow(val id: String, val authHash: ByteArray, val vault: ByteArray, val status: String)
 
     private fun checkDevice(device: DeviceInfo) {
         if (device.name.length > 80 || device.platform !in setOf("android", "web")) badRequest("Unknown device")
@@ -149,10 +158,10 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         val session = db.tx {
             val hash = sha256(token.encodeToByteArray())
             one(
-                """SELECT s.id, s.user_id FROM sessions s JOIN users u ON u.id = s.user_id
-                   WHERE s.token_hash = ? AND u.deleted = 0""",
+                """SELECT s.id, s.user_id, u.status FROM sessions s JOIN users u ON u.id = s.user_id
+                   WHERE s.token_hash = ? AND u.deleted = 0 AND u.status != 'disabled'""",
                 hash,
-            ) { Session(it.str("id"), it.str("user_id")) }?.also {
+            ) { Session(it.str("id"), it.str("user_id"), blocked = it.str("status") == AccountStatus.BLOCKED) }?.also {
                 exec("UPDATE sessions SET last_seen_at = ? WHERE id = ?", now, it.id)
                 exec("UPDATE users SET last_active_at = ? WHERE id = ?", now, it.userId)
             }
@@ -302,8 +311,12 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
     /** Members with what running the server needs to know about them (never their content). */
     fun adminUsers(session: Session): List<AdminUserDto> = db.tx {
         requireAdmin(session.userId)
+        adminUserRows()
+    }
+
+    private fun Tx.adminUserRows(): List<AdminUserDto> =
         query(
-            """SELECT u.id, u.username, u.is_admin, u.created_at, u.last_active_at,
+            """SELECT u.id, u.username, u.is_admin, u.status, u.created_at, u.last_active_at,
                  (SELECT COALESCE(SUM(size), 0) FROM blobs b WHERE b.uploader_id = u.id) AS storage,
                  (SELECT COUNT(*) FROM objects o WHERE o.author_id = u.id AND o.deleted = 0 AND o.kind IN ('post', 'reel')) AS posts,
                  (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS sessions
@@ -311,10 +324,9 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         ) {
             AdminUserDto(
                 it.str("id"), it.str("username"), it.bool("is_admin"), it.getLong("created_at"), it.longOrNull("last_active_at"),
-                it.getLong("storage"), it.getInt("posts"), it.getInt("sessions"),
+                it.getLong("storage"), it.getInt("posts"), it.getInt("sessions"), it.str("status"),
             )
         }
-    }
 
     /** An admin removes someone else's account and everything they posted. Admins can't be removed this way. */
     fun removeMember(session: Session, userId: String, objects: Objects, fx: Effects) {
@@ -337,6 +349,70 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         }
         sessionCache.entries.removeIf { it.value.first.userId == userId }
         ended.forEach(presence::disconnectSession)
+    }
+
+    /**
+     * Blocks an account (it can sign in and read, but not post, message, comment, like, follow or call), disables it (it
+     * can't sign in, and every device is signed out), or makes it active again. Admins can't be blocked or disabled.
+     */
+    fun setStatus(session: Session, userId: String, status: String) {
+        if (status !in AccountStatus.all) badRequest("Unknown status")
+        val sessions = db.tx {
+            requireAdmin(session.userId)
+            if (userId == session.userId) badRequest("You can't change your own account's status")
+            val isAdmin = one("SELECT is_admin FROM users WHERE id = ? AND deleted = 0", userId) { it.bool("is_admin") } ?: notFound("No such member")
+            if (isAdmin) forbidden("Admins can't be blocked or disabled")
+            exec("UPDATE users SET status = ? WHERE id = ?", status, userId)
+            val ids = strings("SELECT id FROM sessions WHERE user_id = ?", userId)
+            if (status == AccountStatus.DISABLED) {
+                exec("DELETE FROM sessions WHERE user_id = ?", userId)
+                exec("DELETE FROM push_subscriptions WHERE user_id = ?", userId)
+            }
+            ids
+        }
+        // Their open connections drop; the apps reconnect under the new status (or, disabled, can't).
+        sessionCache.entries.removeIf { it.value.first.userId == userId }
+        sessions.forEach(presence::disconnectSession)
+    }
+
+    /** Everything the server knows about a member, for the admin. Metadata only: the server holds no readable content. */
+    fun member(session: Session, userId: String): AdminMemberDto = db.tx {
+        requireAdmin(session.userId)
+        val user = adminUserRows().firstOrNull { it.id == userId } ?: notFound("No such member")
+        val (isPrivate, showActivity) = one("SELECT is_private, show_activity FROM users WHERE id = ?", userId) { it.bool("is_private") to it.bool("show_activity") }!!
+        val chats = query(
+            """SELECT t.id, t.is_group, t.created_at, m.joined_at,
+                 (SELECT COUNT(*) FROM objects o WHERE o.thread_id = t.id AND o.kind = 'message' AND o.deleted = 0) AS messages,
+                 (SELECT COUNT(*) FROM objects o WHERE o.thread_id = t.id AND o.kind = 'message' AND o.deleted = 0 AND o.author_id = ?) AS mine,
+                 (SELECT MAX(o.received_at) FROM objects o WHERE o.thread_id = t.id AND o.kind = 'message' AND o.deleted = 0) AS last
+               FROM thread_members m JOIN threads t ON t.id = m.thread_id WHERE m.user_id = ? ORDER BY last DESC""",
+            userId, userId,
+        ) {
+            AdminChatDto(
+                it.str("id"), it.bool("is_group"), emptyList(), it.getLong("created_at"), it.getLong("joined_at"),
+                it.getInt("messages"), it.getInt("mine"), it.longOrNull("last"),
+            )
+        }.map { chat -> chat.copy(members = strings("SELECT user_id FROM thread_members WHERE thread_id = ? ORDER BY joined_at", chat.id)) }
+        val counts = HashMap<String, Int>()
+        query("SELECT kind, COUNT(*) AS n FROM objects WHERE author_id = ? AND deleted = 0 GROUP BY kind", userId) { it.str("kind") to it.getInt("n") }
+            .forEach { (kind, n) -> counts[kind] = n }
+        AdminMemberDto(
+            user = user,
+            isPrivate = isPrivate,
+            showActivity = showActivity,
+            invitedBy = one("SELECT created_by FROM invites WHERE used_by = ?", userId) { it.strOrNull("created_by") },
+            invitesCreated = long("SELECT COUNT(*) FROM invites WHERE created_by = ?", userId)?.toInt() ?: 0,
+            devices = query("SELECT device_name, platform, created_at, last_seen_at FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC", userId) {
+                AdminDeviceDto(it.str("device_name"), it.str("platform"), it.getLong("created_at"), it.getLong("last_seen_at"))
+            },
+            followers = strings("SELECT follower_id FROM follows WHERE followee_id = ? AND state = 'following'", userId),
+            following = strings("SELECT followee_id FROM follows WHERE follower_id = ? AND state = 'following'", userId),
+            pendingRequests = long("SELECT COUNT(*) FROM follows WHERE followee_id = ? AND state = 'requested'", userId)?.toInt() ?: 0,
+            blocking = long("SELECT COUNT(*) FROM blocks WHERE blocker_id = ?", userId)?.toInt() ?: 0,
+            chats = chats,
+            counts = counts,
+            lastPostAt = long("SELECT MAX(received_at) FROM objects WHERE author_id = ? AND deleted = 0 AND kind IN ('post', 'reel')", userId),
+        )
     }
 
     /** Withdraws an invite nobody has used yet. */

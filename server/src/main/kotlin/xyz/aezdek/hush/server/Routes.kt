@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import xyz.aezdek.hush.protocol.AddMembersRequest
 import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.AppVersion
+import xyz.aezdek.hush.protocol.SetStatusRequest
 import xyz.aezdek.hush.protocol.ArchiveRequest
 import xyz.aezdek.hush.protocol.ChangePasswordRequest
 import xyz.aezdek.hush.protocol.CreateThreadRequest
@@ -76,6 +77,10 @@ private fun ApplicationCall.bearer(): String? =
     request.headers[HttpHeaders.Authorization]?.takeIf { it.startsWith("Bearer ") }?.removePrefix("Bearer ")?.trim()
 
 private suspend fun ApplicationCall.session(s: Services): Session = blocking { s.accounts.authenticate(bearer()) } ?: unauthorized()
+
+/** For anything that posts, messages, comments, likes or follows: refused while an admin has blocked the account. */
+private suspend fun ApplicationCall.poster(s: Services): Session =
+    session(s).also { if (it.blocked) forbidden("An admin has paused posting and messaging on this account") }
 
 private fun ApplicationCall.param(name: String): String = parameters[name] ?: badRequest("Missing $name")
 
@@ -174,7 +179,7 @@ fun Route.api(s: Services) = route("/api/v1") {
 
     // ------------------------------------------------------------------------------------------------- follows
     post("/follows/{id}") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val fx = Effects()
         val state = blocking { s.social.follow(session.userId, call.param("id"), fx) }
         s.realtime.apply(fx)
@@ -233,7 +238,7 @@ fun Route.api(s: Services) = route("/api/v1") {
 
     // ------------------------------------------------------------------------------------------------- objects
     post("/objects") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val req = call.receive<ObjectUpload>()
         val fx = Effects()
         val dto = blocking { s.objects.create(session.userId, req, fx) }
@@ -245,7 +250,7 @@ fun Route.api(s: Services) = route("/api/v1") {
         call.respond(blocking { s.objects.get(session.userId, call.param("id")) })
     }
     put("/objects/{id}") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val req = call.receive<ObjectUpload>()
         val fx = Effects()
         val dto = blocking { s.objects.update(session.userId, call.param("id"), req, fx) }
@@ -312,7 +317,7 @@ fun Route.api(s: Services) = route("/api/v1") {
         call.respond(blocking { s.threads.list(session.userId) })
     }
     post("/threads") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val req = call.receive<CreateThreadRequest>()
         val fx = Effects()
         val thread = blocking { s.threads.create(session.userId, req, fx) }
@@ -324,7 +329,7 @@ fun Route.api(s: Services) = route("/api/v1") {
         call.respond(blocking { s.threads.get(session.userId, call.param("id")) })
     }
     post("/threads/{id}/members") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val req = call.receive<AddMembersRequest>()
         val fx = Effects()
         val thread = blocking { s.threads.addMembers(session.userId, call.param("id"), req, fx) }
@@ -357,7 +362,7 @@ fun Route.api(s: Services) = route("/api/v1") {
 
     // --------------------------------------------------------------------------------------------------- media
     post("/uploads") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val req = call.receive<StartUploadRequest>()
         call.respond(blocking { s.blobs.start(session.userId, req.size) })
     }
@@ -366,7 +371,7 @@ fun Route.api(s: Services) = route("/api/v1") {
         call.respond(blocking { s.blobs.state(session.userId, call.param("id")) })
     }
     put("/uploads/{id}") {
-        val session = call.session(s)
+        val session = call.poster(s)
         val offset = call.request.queryParameters["offset"]?.toLongOrNull() ?: badRequest("Missing offset")
         val body = call.receiveStream()
         call.respond(blocking { s.blobs.append(session.userId, call.param("id"), offset, body) })
@@ -458,6 +463,24 @@ fun Route.api(s: Services) = route("/api/v1") {
         blocking { s.accounts.signOutEverywhere(session, call.param("id")) }
         call.respond(OkResponse())
     }
+    get("/admin/users/{id}") {
+        val session = call.session(s)
+        call.respond(blocking { s.accounts.member(session, call.param("id")) })
+    }
+    post("/admin/users/{id}/status") {
+        val session = call.session(s)
+        val req = call.receive<SetStatusRequest>()
+        blocking { s.accounts.setStatus(session, call.param("id"), req.status) }
+        call.respond(OkResponse())
+    }
+    delete("/admin/threads/{id}/members/{userId}") {
+        val session = call.session(s)
+        if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
+        val fx = Effects()
+        blocking { s.threads.removeMember(session.userId, call.param("id"), call.param("userId"), fx, asAdmin = true) }
+        s.realtime.apply(fx)
+        call.respond(OkResponse())
+    }
     delete("/admin/users/{id}") {
         val session = call.session(s)
         val fx = Effects()
@@ -520,7 +543,7 @@ fun Route.realtimeRoutes(s: Services) {
             for (frame in incoming) {
                 if (frame !is Frame.Text) continue
                 val message = runCatching { Wire.json.decodeFromString(WsFrame.serializer(), frame.readText()) }.getOrNull() ?: continue
-                handleFrame(s, me, message, connection)
+                handleFrame(s, me, message, connection, blocked = session.blocked)
             }
         } finally {
             s.presence.unregister(connection)
@@ -532,7 +555,9 @@ fun Route.realtimeRoutes(s: Services) {
     }
 }
 
-private suspend fun handleFrame(s: Services, me: String, frame: WsFrame, connection: Presence.Connection) {
+private suspend fun handleFrame(s: Services, me: String, frame: WsFrame, connection: Presence.Connection, blocked: Boolean = false) {
+    // A blocked account can't call or show typing; it still gets pings answered.
+    if (blocked && (frame.t == WsType.SIGNAL || frame.t == WsType.TYPING)) return
     when (frame.t) {
         WsType.PING -> connection.socket.outgoing.trySend(Frame.Text(Wire.json.encodeToString(WsFrame.serializer(), WsFrame(WsType.PONG))))
         WsType.TYPING -> {

@@ -66,6 +66,16 @@ export interface AdminStatus {
 export interface AdminUserDto {
   id: string; username: string; isAdmin: boolean; createdAt: number; lastActiveAt?: number | null;
   storageBytes: number; posts: number; sessions: number;
+  /** 'active', 'restricted' (blocked: can read, can't post or message) or 'disabled' (can't sign in). */
+  status?: 'active' | 'restricted' | 'disabled';
+}
+/** What the server knows about a member, for the admin: metadata only (see AdminMemberDto in Api.kt). */
+export interface AdminMemberDto {
+  user: AdminUserDto; isPrivate: boolean; showActivity: boolean; invitedBy?: string | null; invitesCreated: number;
+  devices: { name: string; platform: string; createdAt: number; lastSeenAt: number }[];
+  followers: string[]; following: string[]; pendingRequests: number; blocking: number;
+  chats: { id: string; isGroup: boolean; members: string[]; createdAt: number; joinedAt: number; messages: number; sentByThem: number; lastMessageAt?: number | null }[];
+  counts: Record<string, number>; lastPostAt?: number | null;
 }
 export interface AppVersion { versionCode: number; versionName: string; sha256: string; size: number; url: string }
 export interface IdList { ids: string[] }

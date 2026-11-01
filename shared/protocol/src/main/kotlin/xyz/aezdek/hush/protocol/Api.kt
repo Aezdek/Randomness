@@ -388,6 +388,57 @@ data class AdminUserDto(
     val storageBytes: Long,
     val posts: Int,
     val sessions: Int,
+    /** [AccountStatus]: active, blocked (can read, can't post or message) or disabled (can't sign in). */
+    val status: String = AccountStatus.ACTIVE,
+)
+
+object AccountStatus {
+    const val ACTIVE = "active"
+    const val BLOCKED = "restricted"
+    const val DISABLED = "disabled"
+    val all = setOf(ACTIVE, BLOCKED, DISABLED)
+}
+
+@Serializable
+data class SetStatusRequest(val status: String)
+
+/**
+ * Everything the server knows about a member, for the admin: their account, devices, who they follow and talk to, and
+ * how much they post. Never content: messages, posts and profiles are end-to-end encrypted, so the server can't read them.
+ */
+@Serializable
+data class AdminMemberDto(
+    val user: AdminUserDto,
+    val isPrivate: Boolean,
+    val showActivity: Boolean,
+    val invitedBy: String? = null,
+    val invitesCreated: Int = 0,
+    val devices: List<AdminDeviceDto> = emptyList(),
+    val followers: List<String> = emptyList(),
+    val following: List<String> = emptyList(),
+    val pendingRequests: Int = 0,
+    /** How many people they have blocked. */
+    val blocking: Int = 0,
+    val chats: List<AdminChatDto> = emptyList(),
+    /** What they have made, by kind (post, reel, story, comment, like, message…), not counting deleted things. */
+    val counts: Map<String, Int> = emptyMap(),
+    val lastPostAt: Long? = null,
+)
+
+@Serializable
+data class AdminDeviceDto(val name: String, val platform: String, val createdAt: Long, val lastSeenAt: Long)
+
+/** A chat as the server sees it: who is in it and how busy it is. The messages themselves are ciphertext. */
+@Serializable
+data class AdminChatDto(
+    val id: String,
+    val isGroup: Boolean,
+    val members: List<String>,
+    val createdAt: Long,
+    val joinedAt: Long,
+    val messages: Int,
+    val sentByThem: Int,
+    val lastMessageAt: Long? = null,
 )
 
 @Serializable
