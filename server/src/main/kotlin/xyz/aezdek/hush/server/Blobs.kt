@@ -18,7 +18,8 @@ import java.security.MessageDigest
 class Blobs(private val db: Db, private val clock: Clock, private val config: ServerConfig, private val objects: Objects) {
 
     companion object {
-        const val CHUNK = 8 * 1024 * 1024
+        /** The largest piece one PUT may carry. Big pieces mean fewer round trips through the tunnel (Cloudflare allows 100 MB). */
+        const val CHUNK = 32 * 1024 * 1024
         private const val DAY = 24L * 60 * 60 * 1000
         private val BLOB_ID = Regex("^[0-9a-f]{64}$")
     }

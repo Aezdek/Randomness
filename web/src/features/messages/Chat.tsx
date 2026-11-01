@@ -20,6 +20,49 @@ import { ThreadList } from './Inbox';
 import { ThreadInfo } from './ThreadInfo';
 
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+/** The "+" in the reaction row: the emojis people react with most, as on Instagram. */
+const MORE_EMOJI = [
+  '😀', '😃', '😄', '😁', '😆', '🥹', '😅', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘',
+  '😋', '😜', '🤪', '😎', '🤩', '🥳', '😏', '😒', '😔', '😟', '🥺', '😭', '😤', '🤯', '😳', '😱',
+  '🤔', '🫡', '🤭', '🫢', '😶', '🙄', '😬', '😴', '🤤', '🤢', '🤮', '🤧', '😵', '🤠', '😈', '💀',
+  '👏', '🙌', '🙏', '🤝', '👌', '✌️', '🤞', '🫶', '💪', '👀', '🔥', '✨', '💯', '🎉', '💔', '💕',
+];
+
+/** Opens a message's menu on a long press (phones have no right-click, and Safari never fires one). */
+function useLongPress(onLong: () => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'mouse') return;
+      start.current = { x: e.clientX, y: e.clientY };
+      cancel();
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        navigator.vibrate?.(10);
+        onLong();
+      }, 430);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+  };
+}
+
+/** A photo, video or voice note on its way (converting, then encrypting and uploading). */
+interface Outgoing {
+  id: string;
+  label: string;
+  preview: string | null;
+  phase: 'converting' | 'sending';
+  progress: number;
+}
 
 function useVanish(threadId: string) {
   const key = `hush.vanish.${threadId}`;
@@ -46,7 +89,7 @@ function Voice({ message }: { message: Entity<MessagePayload> }) {
         onClick={() => {
           const el = audio.current;
           if (!el) return;
-          if (el.paused) void el.play();
+          if (el.paused) void el.play().catch(() => toast('This browser can’t play that voice message', 'error'));
           else el.pause();
         }}
         disabled={!url}
@@ -61,7 +104,7 @@ function Voice({ message }: { message: Entity<MessagePayload> }) {
       </span>
       <span className="voice-time tabular">{duration(ref?.durationMs ?? 0)}</span>
       {url && (
-        <audio ref={audio} src={url} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => (setPlaying(false), setProgress(0))} onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime / (e.currentTarget.duration || 1))} />
+        <audio ref={audio} src={url} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => (setPlaying(false), setProgress(0))} onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime / (e.currentTarget.duration || 1))} />
       )}
     </div>
   );
@@ -116,7 +159,9 @@ function Bubble({
   const users = useApp((s) => s.users);
   const me = useApp((s) => s.me!);
   const [menu, setMenu] = useState(false);
+  const [moreEmoji, setMoreEmoji] = useState(false);
   const [opened, setOpened] = useState(false);
+  const longPress = useLongPress(() => setMenu(true));
   const p = message.payload;
   const reactions = (index.children[message.dto.id] ?? []).filter((e) => e.dto.kind === Kind.REACTION) as Entity<ReactionPayload>[];
   const replyTarget = p.replyTo ? (entities[p.replyTo] as Entity<MessagePayload> | undefined) : undefined;
@@ -165,6 +210,12 @@ function Bubble({
       {!mine && <span className="msg-avatar">{showAvatar && <Avatar userId={message.dto.authorId} size={28} />}</span>}
       <div className="msg-col">
         {showName && !mine && <span className="msg-sender">{name(message.dto.authorId)}</span>}
+        {p.type === MessageType.NOTE_REPLY && (
+          <div className="story-ref note-ref">
+            <span className="faint">{mine ? 'You replied to their note' : 'Replied to your note'}</span>
+            {p.quote && <span className="note-bubble">{p.quote}</span>}
+          </div>
+        )}
         {(p.type === MessageType.STORY_REPLY || p.type === MessageType.STORY_REACTION) && (
           <div className="story-ref">
             <span className="faint">{mine ? 'You replied to their story' : `Replied to your story`}</span>
@@ -177,12 +228,17 @@ function Bubble({
           </div>
         )}
         <div className="msg-row">
-          <div className={`bubble ${plainBubble ? 'plain' : ''} ${vanish ? 'vanish' : ''}`} onContextMenu={(e) => (e.preventDefault(), setMenu(true))} onDoubleClick={() => void reactTo(message, '❤️')}>
+          <div
+            className={`bubble ${plainBubble ? 'plain' : ''} ${vanish ? 'vanish' : ''}`}
+            onContextMenu={(e) => (e.preventDefault(), setMenu(true))}
+            onDoubleClick={() => void reactTo(message, '❤️')}
+            {...longPress}
+          >
             {content}
             {p.edited && <span className="edited">Edited</span>}
           </div>
           <span className="msg-actions">
-            <button className="icon-btn sm" onClick={() => void reactTo(message, '❤️')} aria-label="React">
+            <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="React">
               <Smile size={16} />
             </button>
             <button className="icon-btn sm" onClick={onReply} aria-label="Reply">
@@ -200,14 +256,26 @@ function Bubble({
           </div>
         )}
       </div>
-      <Sheet open={menu} onClose={() => setMenu(false)} hideHeader bottom bodyClass="flush">
+      <Sheet open={menu} onClose={() => (setMenu(false), setMoreEmoji(false))} hideHeader bottom bodyClass="flush">
         <div className="quick-react">
           {QUICK.map((e) => (
             <motion.button key={e} whileHover={{ scale: 1.25 }} whileTap={{ scale: 0.9 }} onClick={() => (setMenu(false), void reactTo(message, e))}>
               {e}
             </motion.button>
           ))}
+          <button className={`quick-react-more ${moreEmoji ? 'on' : ''}`} onClick={() => setMoreEmoji((v) => !v)} aria-label="More emojis" aria-expanded={moreEmoji}>
+            +
+          </button>
         </div>
+        {moreEmoji && (
+          <div className="emoji-grid react-grid">
+            {MORE_EMOJI.map((e) => (
+              <button key={e} onClick={() => (setMenu(false), setMoreEmoji(false), void reactTo(message, e))}>
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="menu">
           <button onClick={() => (setMenu(false), onReply())}>Reply</button>
           {p.text && <button onClick={() => (setMenu(false), void navigator.clipboard.writeText(p.text ?? ''))}>Copy</button>}
@@ -310,7 +378,9 @@ export function Chat() {
   const [replyTo, setReplyTo] = useState<Entity<MessagePayload> | null>(null);
   const [editing, setEditing] = useState<Entity<MessagePayload> | null>(null);
   const [recording, setRecording] = useState(false);
-  const [sending, setSending] = useState(false);
+  // Photos, videos and voice notes on their way: each uploads in the background with its own bubble, so the chat stays
+  // usable meanwhile (several can go at once).
+  const [outbox, setOutbox] = useState<Outgoing[]>([]);
   const [info, setInfo] = useState(false);
   const [once, setOnce] = useState(false);
   const [vanish, setVanish] = useVanish(threadId);
@@ -321,7 +391,7 @@ export function Chat() {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, threadId]);
+  }, [messages.length, outbox.length, threadId]);
 
   const lastId = messages.at(-1)?.dto.id;
   useEffect(() => {
@@ -346,14 +416,24 @@ export function Chat() {
   const audience = vanish ? Audience.VANISH : Audience.THREAD;
 
   const send = async (payload: MessagePayload, opts: { audience?: string; blobIds?: string[] } = {}) => {
-    setSending(true);
     try {
       await sendMessage(threadId, payload, { audience: opts.audience ?? audience, blobIds: opts.blobIds });
     } catch (e) {
       toast(messageOf(e), 'error');
-    } finally {
-      setSending(false);
     }
+  };
+
+  /** Runs one outgoing attachment in the background: convert, encrypt and upload (with progress), then send. */
+  const dispatch = (item: Outgoing, work: (progress: (phase: Outgoing['phase'], fraction: number) => void) => Promise<void>) => {
+    setOutbox((o) => [...o, item]);
+    const progress = (phase: Outgoing['phase'], fraction: number) =>
+      setOutbox((o) => o.map((x) => (x.id === item.id ? { ...x, phase, progress: Math.max(0, Math.min(1, fraction)) } : x)));
+    void work(progress)
+      .catch((e) => toast(messageOf(e), 'error'))
+      .finally(() => {
+        setOutbox((o) => o.filter((x) => x.id !== item.id));
+        if (item.preview) URL.revokeObjectURL(item.preview);
+      });
   };
 
   const submit = async (e?: React.FormEvent) => {
@@ -375,29 +455,37 @@ export function Chat() {
     await send({ type: MessageType.TEXT, text: value, replyTo: reply });
   };
 
-  const attach = async (files: FileList) => {
-    setSending(true);
-    try {
-      const refs = [];
-      for (const f of [...files].slice(0, 10)) refs.push(await upload(await prepare(f, 'message')));
-      await send({ type: MessageType.MEDIA, media: refs }, { audience: once ? Audience.ONCE : audience });
-      setOnce(false);
-    } catch (e) {
-      toast(messageOf(e), 'error');
-      setSending(false);
-    }
+  const attach = (list: FileList) => {
+    const files = [...list].slice(0, 10);
+    if (!files.length) return;
+    const viewOnce = once;
+    setOnce(false);
+    const first = files[0];
+    dispatch(
+      {
+        id: crypto.randomUUID(),
+        label: files.length > 1 ? `${files.length} photos and videos` : first.type.startsWith('video/') ? 'Video' : 'Photo',
+        preview: first.type.startsWith('image/') ? URL.createObjectURL(first) : null,
+        phase: 'converting',
+        progress: 0,
+      },
+      async (progress) => {
+        const refs = [];
+        for (const [i, f] of files.entries()) {
+          const prepared = await prepare(f, 'message', (p) => progress('converting', (i + p) / files.length));
+          refs.push(await upload(prepared, (p) => progress('sending', (i + p) / files.length)));
+        }
+        await sendMessage(threadId, { type: MessageType.MEDIA, media: refs }, { audience: viewOnce ? Audience.ONCE : audience });
+      },
+    );
   };
 
-  const voice = async (blob: Blob, ms: number) => {
+  const voice = (blob: Blob, ms: number) => {
     setRecording(false);
-    setSending(true);
-    try {
-      const ref = await upload(await prepareVoice(blob, ms));
-      await send({ type: MessageType.VOICE, media: [ref] });
-    } catch (e) {
-      toast(messageOf(e), 'error');
-      setSending(false);
-    }
+    dispatch({ id: crypto.randomUUID(), label: 'Voice message', preview: null, phase: 'converting', progress: 0 }, async (progress) => {
+      const ref = await upload(await prepareVoice(blob, ms), (p) => progress('sending', p));
+      await sendMessage(threadId, { type: MessageType.VOICE, media: [ref] }, { audience });
+    });
   };
 
   /** Scrolls to a message (a pin, a search result) and flashes it. */
@@ -538,6 +626,24 @@ export function Chat() {
               </Fragment>
             );
           })}
+          {outbox.map((item) => (
+            <div className="msg mine outgoing" key={item.id}>
+              <div className="msg-col">
+                <div className="outgoing-bubble">
+                  {item.preview ? <img src={item.preview} alt="" /> : <span className="outgoing-icon">{item.label === 'Voice message' ? <Mic size={18} /> : <ImagePlus size={18} />}</span>}
+                  <span className="outgoing-text">
+                    <b>{item.label}</b>
+                    <span>
+                      {item.phase === 'converting' ? 'Preparing' : 'Sending'} · {Math.round(item.progress * 100)}%
+                    </span>
+                    <span className="outgoing-bar">
+                      <span style={{ width: `${Math.round(item.progress * 100)}%` }} />
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
           <AnimatePresence>
             {typers.length > 0 && (
               <motion.div className="msg theirs" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -595,7 +701,7 @@ export function Chat() {
                 }}
               />
               {text.trim() ? (
-                <button className="btn btn-link" disabled={sending}>
+                <button className="btn btn-link">
                   {editing ? 'Save' : 'Send'}
                 </button>
               ) : (
@@ -619,8 +725,7 @@ export function Chat() {
                   </button>
                 </>
               )}
-              {sending && <Spinner size={16} />}
-              <input ref={file} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => e.target.files && attach(e.target.files)} />
+              <input ref={file} type="file" accept="image/*,video/*,.heic,.heif" multiple hidden onChange={(e) => e.target.files && attach(e.target.files)} />
             </form>
           )}
         </div>

@@ -124,6 +124,13 @@ import java.util.Date
 
 private val EMOJI = Regex("^(\\p{So}|\\p{Cn}|[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u200D\\uFE0F\\u2600-\\u27BF]){1,8}$")
 private val QUICK = listOf("❤️", "😂", "😮", "😢", "😡", "👍")
+/** The "+" in the reaction row: the emojis people react with most, as on Instagram (same list as the web app). */
+private val MORE_EMOJI = listOf(
+    "😀", "😃", "😄", "😁", "😆", "🥹", "😅", "🤣", "😊", "😇", "🙂", "😉", "😌", "😍", "🥰", "😘",
+    "😋", "😜", "🤪", "😎", "🤩", "🥳", "😏", "😒", "😔", "😟", "🥺", "😭", "😤", "🤯", "😳", "😱",
+    "🤔", "🫡", "🤭", "🫢", "😶", "🙄", "😬", "😴", "🤤", "🤢", "🤮", "🤧", "😵", "🤠", "😈", "💀",
+    "👏", "🙌", "🙏", "🤝", "👌", "✌️", "🤞", "🫶", "💪", "👀", "🔥", "✨", "💯", "🎉", "💔", "💕",
+)
 
 @Composable
 fun Chat(threadId: String, focus: String? = null) {
@@ -340,13 +347,30 @@ fun Chat(threadId: String, focus: String? = null) {
     menu?.let { message ->
         val mine = message.dto.authorId == me.id
         val p = message.payloadAs<MessagePayload>()
+        var more by remember(message.id) { mutableStateOf(false) }
         ActionSheet({ menu = null }) {
-            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 for (emoji in QUICK) {
                     Text(emoji, fontSize = 30.sp, modifier = Modifier.clip(CircleShape).clickable {
                         menu = null
                         Graph.launch { Graph.client.composer.react(message, emoji) }
                     }.padding(6.dp))
+                }
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(if (more) Aez.colors.elev3 else Aez.colors.elev2).clickable { more = !more },
+                    contentAlignment = Alignment.Center,
+                ) { Text("+", fontSize = 24.sp, color = Aez.colors.text2) }
+            }
+            if (more) {
+                for (row in MORE_EMOJI.chunked(8)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                        for (emoji in row) {
+                            Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(10.dp)).clickable {
+                                menu = null
+                                Graph.launch { Graph.client.composer.react(message, emoji) }
+                            }, contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
+                        }
+                    }
                 }
             }
             SheetItem("Reply", Icons.AutoMirrored.Outlined.Reply) { menu = null; replyTo = message }
@@ -498,6 +522,14 @@ private fun Bubble(
                 else -> {
                     val story = p.storyId?.let { state.entities[it] }
                     Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                        if (p.type == MessageType.NOTE_REPLY) {
+                            Text(if (mine) "You replied to their note" else "Replied to your note", fontSize = 11.sp, color = Aez.colors.text3)
+                            p.quote?.let { quote ->
+                                Text(quote, fontSize = 12.sp, color = Aez.colors.text, maxLines = 3,
+                                    modifier = Modifier.padding(vertical = 4.dp).widthIn(max = 220.dp).clip(RoundedCornerShape(16.dp)).background(Aez.colors.elev3)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp))
+                            }
+                        }
                         if (p.type == MessageType.STORY_REPLY || p.type == MessageType.STORY_REACTION) {
                             Text(if (mine) "You replied to their story" else "Replied to your story", fontSize = 11.sp, color = Aez.colors.text3)
                             story?.payloadAs<StoryPayload>()?.let { s ->

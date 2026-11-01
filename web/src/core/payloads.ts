@@ -64,7 +64,7 @@ export interface CallSummary { callId: string; video: boolean; durationMs: numbe
 
 export const MessageType = {
   TEXT: 'text', MEDIA: 'media', VOICE: 'voice', SHARE: 'share', STORY_REPLY: 'story_reply', STORY_REACTION: 'story_reaction',
-  CALL: 'call', HEART: 'heart', SYSTEM: 'system',
+  CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply',
 } as const;
 
 export interface MessagePayload {
@@ -72,6 +72,8 @@ export interface MessagePayload {
   sharedAuthorId?: string | null; storyId?: string | null; call?: CallSummary | null; edited?: boolean;
   /** For SYSTEM messages: a change to the chat every member sees (see core/chat.ts). */
   event?: ChatEvent | null;
+  /** For NOTE_REPLY: the note's words, kept with the reply because notes vanish after a day. */
+  quote?: string | null;
 }
 
 /** One change to a chat's look; see ChatEvent in Payloads.kt. */

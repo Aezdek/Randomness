@@ -182,6 +182,7 @@ class ConnectionService : Service() {
             MessageType.SHARE -> "Shared a post"
             MessageType.STORY_REPLY -> "Replied to your story: ${payload.text.orEmpty()}"
             MessageType.STORY_REACTION -> "Reacted to your story ${payload.text.orEmpty()}"
+            MessageType.NOTE_REPLY -> "Replied to your note: ${payload.text.orEmpty()}"
             MessageType.CALL -> if (payload.call?.missed == true) "Missed call" else "Call"
             MessageType.HEART -> payload.text ?: "❤️"
             else -> payload.text ?: "Sent a message"

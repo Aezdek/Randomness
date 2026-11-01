@@ -1,14 +1,17 @@
-import { ChevronLeft, Edit, MessageCircle, Plus, Search } from 'lucide-react';
+import { ChevronLeft, Edit, Heart, MessageCircle, Plus, Search, Send, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MessageType, type MessagePayload } from '../../core/payloads';
+import { Kind, MessageType, type MessagePayload, type NotePayload } from '../../core/payloads';
+import { deleteObject, like, openDirect, sendMessage, unlike } from '../../core/compose';
+import { messageOf } from '../../core/errors';
 import { nameIn, threadTitle, unreadCount, useIndex } from '../../core/selectors';
 import { eventText } from '../../core/chat';
-import { useApp } from '../../core/store';
+import { toast, useApp, type Entity } from '../../core/store';
 import { openCreate } from '../../core/ui';
 import { Avatar } from '../../ui/Avatar';
 import { Ago, Empty } from '../../ui/bits';
+import { Sheet } from '../../ui/Sheet';
 import { NewChat } from './NewChat';
 
 export function previewOf(payload: MessagePayload, mine: boolean): string {
@@ -28,6 +31,8 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
       return mine ? `You reacted ${payload.text} to their story` : `Reacted ${payload.text} to your story`;
     case MessageType.CALL:
       return payload.call?.missed ? 'Missed call' : `${payload.call?.video ? 'Video' : 'Audio'} call`;
+    case MessageType.NOTE_REPLY:
+      return mine ? `You replied to their note: ${payload.text ?? ''}` : `Replied to your note: ${payload.text ?? ''}`;
     case MessageType.HEART:
       return you + (payload.text || '❤️');
     default:
@@ -39,6 +44,7 @@ function Notes() {
   const index = useIndex();
   const me = useApp((s) => s.me!);
   const users = useApp((s) => s.users);
+  const [open, setOpen] = useState<string | null>(null);
   const authors = [me.id, ...Object.keys(index.notes).filter((id) => id !== me.id && users[id]?.followState === 'following')];
   return (
     <div className="notes-row">
@@ -46,18 +52,98 @@ function Notes() {
         const note = index.notes[id];
         if (id !== me.id && !note) return null;
         return (
-          <button key={id} className="note" onClick={() => id === me.id && openCreate('note')}>
+          <button key={id} className="note" onClick={() => (note ? setOpen(id) : openCreate('note'))} aria-label={note ? `Note from ${id === me.id ? 'you' : users[id]?.username}` : 'Leave a note'}>
             <motion.span className={`note-bubble ${note ? '' : 'empty'}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-              {note ? note.payload.text : <><Plus size={12} /> Note</>}
+              <span className="note-text">{note ? note.payload.text : <><Plus size={12} /> Note</>}</span>
             </motion.span>
-            <Avatar userId={id} size={68} />
-            <span className="faint truncate" style={{ fontSize: 12, maxWidth: 76 }}>
-              {id === me.id ? 'Your note' : users[id]?.username}
-            </span>
+            <Avatar userId={id} size={64} />
+            <span className="faint truncate note-name">{id === me.id ? 'Your note' : users[id]?.username}</span>
           </button>
         );
       })}
+      {open && index.notes[open] && <NoteSheet note={index.notes[open] as Entity<NotePayload>} onClose={() => setOpen(null)} />}
     </div>
+  );
+}
+
+/** A note opened: someone else's can be liked and replied to (the reply goes to them as a message); your own shows who liked it. */
+function NoteSheet({ note, onClose }: { note: Entity<NotePayload>; onClose: () => void }) {
+  const index = useIndex();
+  const me = useApp((s) => s.me!);
+  const users = useApp((s) => s.users);
+  const navigate = useNavigate();
+  const [reply, setReply] = useState('');
+  const mine = note.dto.authorId === me.id;
+  const likes = (index.children[note.dto.id] ?? []).filter((e) => e.dto.kind === Kind.LIKE);
+  const liked = likes.some((e) => e.dto.authorId === me.id);
+  const author = users[note.dto.authorId];
+  const send = async () => {
+    const text = reply.trim();
+    if (!text) return;
+    try {
+      const threadId = await openDirect(note.dto.authorId);
+      await sendMessage(threadId, { type: MessageType.NOTE_REPLY, text, quote: note.payload.text, sharedObjectId: note.dto.id });
+      toast('Reply sent', 'success');
+      onClose();
+    } catch (e) {
+      toast(messageOf(e), 'error');
+    }
+  };
+  return (
+    <Sheet open onClose={onClose} hideHeader bottom>
+      <div className="note-open">
+        <span className="note-bubble big">
+          <span className="note-text">{note.payload.text}</span>
+        </span>
+        <Avatar userId={note.dto.authorId} size={84} />
+        <b>{mine ? 'Your note' : author?.username}</b>
+        <span className="faint">
+          <Ago at={note.dto.receivedAt} className="" /> ago · disappears after 24 hours
+        </span>
+        {mine ? (
+          <>
+            <p className="faint" style={{ margin: '6px 0 0' }}>
+              {likes.length ? `Liked by ${likes.map((l) => (l.dto.authorId === me.id ? 'you' : users[l.dto.authorId]?.username)).join(', ')}` : 'No likes yet'}
+            </p>
+            <div className="row" style={{ gap: 8, marginTop: 10 }}>
+              <button className="btn btn-secondary" onClick={() => (onClose(), openCreate('note'))}>
+                <Plus size={16} /> New note
+              </button>
+              <button className="btn btn-danger" onClick={() => void deleteObject(note.dto.id).then(onClose).catch((e) => toast(messageOf(e), 'error'))}>
+                <Trash2 size={16} /> Delete
+              </button>
+            </div>
+          </>
+        ) : (
+          <form
+            className="note-reply"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
+            <button
+              type="button"
+              className={`icon-btn ${liked ? 'liked' : ''}`}
+              aria-label={liked ? 'Unlike note' : 'Like note'}
+              aria-pressed={liked}
+              onClick={() => void (liked ? unlike(note.dto.id) : like(note.dto.id)).catch((e) => toast(messageOf(e), 'error'))}
+            >
+              <Heart size={22} fill={liked ? 'var(--heart)' : 'none'} color={liked ? 'var(--heart)' : 'currentColor'} />
+            </button>
+            <input className="input" autoFocus placeholder={`Reply to ${author?.username ?? ''}…`} value={reply} onChange={(e) => setReply(e.target.value)} maxLength={500} />
+            <button className="icon-btn" disabled={!reply.trim()} aria-label="Send reply">
+              <Send size={20} />
+            </button>
+          </form>
+        )}
+        {!mine && (
+          <button className="btn btn-link" onClick={() => (onClose(), navigate(`/u/${author?.username}`))}>
+            View profile
+          </button>
+        )}
+      </div>
+    </Sheet>
   );
 }
 

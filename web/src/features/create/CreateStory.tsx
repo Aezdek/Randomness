@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { createStory, newObjectId } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { prepare, upload, type Prepared } from '../../core/media';
+import { openablePhoto, prepare, type Prepared, upload } from '../../core/media';
 import { StickerType, type MediaRef, type Sticker, type StoryText } from '../../core/payloads';
 import { toast, useApp } from '../../core/store';
 import { Avatar } from '../../ui/Avatar';
@@ -327,7 +327,7 @@ export function CreateStory({ onClose }: { onClose: () => void }) {
                 <Type size={22} />
               </button>
             </div>
-            <input ref={file} type="file" accept="image/*,video/*" hidden onChange={(e) => e.target.files?.[0] && useFile(e.target.files[0])} />
+            <input ref={file} type="file" accept="image/*,video/*,.heic,.heif" hidden onChange={(e) => e.target.files?.[0] && void openablePhoto(e.target.files[0]).then(useFile, (err) => toast(messageOf(err), 'error'))} />
           </>
         )}
 

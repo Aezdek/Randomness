@@ -2,7 +2,7 @@ import { Camera } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { saveProfile } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { prepareImage, upload } from '../../core/media';
+import { openablePhoto, prepareImage, upload } from '../../core/media';
 import type { MediaRef } from '../../core/payloads';
 import { useIndex } from '../../core/selectors';
 import { toast, useApp } from '../../core/store';
@@ -33,9 +33,10 @@ export function EditProfile({ open, onClose }: { open: boolean; onClose: () => v
     setPreview(null);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pick = async (f: File) => {
+  const pick = async (picked: File) => {
     setBusy(true);
     try {
+      const f = await openablePhoto(picked);
       const bitmap = await createImageBitmap(f, { imageOrientation: 'from-image' });
       const side = Math.min(bitmap.width, bitmap.height);
       const prepared = await prepareImage(f, 'avatar', { crop: { x: (bitmap.width - side) / 2, y: (bitmap.height - side) / 2, width: side, height: side } });
@@ -80,7 +81,7 @@ export function EditProfile({ open, onClose }: { open: boolean; onClose: () => v
         <button className="btn btn-link" onClick={() => file.current?.click()}>
           Change photo
         </button>
-        <input ref={file} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])} />
+        <input ref={file} type="file" accept="image/*,.heic,.heif" hidden onChange={(e) => e.target.files?.[0] && pick(e.target.files[0])} />
         <label className="field">
           <span>Name</span>
           <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={60} placeholder="Your name" />

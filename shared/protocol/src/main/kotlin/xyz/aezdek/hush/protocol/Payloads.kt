@@ -169,6 +169,8 @@ data class MessagePayload(
     val edited: Boolean = false,
     /** For [MessageType.SYSTEM]: a change to the chat that every member sees ("Ana changed the theme"). */
     val event: ChatEvent? = null,
+    /** For [MessageType.NOTE_REPLY]: the note's words (notes vanish after a day; the reply keeps what it answered). */
+    val quote: String? = null,
 )
 
 /**
@@ -197,6 +199,8 @@ object MessageType {
     const val SHARE = "share"
     const val STORY_REPLY = "story_reply"
     const val STORY_REACTION = "story_reaction"
+    /** A reply to someone's note, sent to them as a message ([MessagePayload.quote] holds the note). */
+    const val NOTE_REPLY = "note_reply"
     const val CALL = "call"
     const val HEART = "heart"
     const val SYSTEM = "system"

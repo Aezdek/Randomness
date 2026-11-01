@@ -87,6 +87,7 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.STORY_REPLY -> if (mine) "You replied to their story" else "Replied to your story"
         MessageType.STORY_REACTION -> if (mine) "You reacted to their story" else "Reacted to your story ${p.text.orEmpty()}"
         MessageType.CALL -> if (p.call?.missed == true) "Missed ${if (p.call?.video == true) "video " else ""}call" else "${if (p.call?.video == true) "Video" else "Audio"} call"
+        MessageType.NOTE_REPLY -> if (mine) "You replied to their note: ${p.text.orEmpty()}" else "Replied to your note: ${p.text.orEmpty()}"
         MessageType.HEART -> prefix + (p.text ?: "❤️")
         else -> prefix + (p.text ?: "")
     } + "  ·  " + ago(entity.dto.receivedAt)
@@ -146,19 +147,21 @@ private fun NotesRow(index: Index, state: AppState) {
     val nav = LocalNav.current
     val me = state.me ?: return
     val people = listOf(me.id) + index.notes.keys.filter { it != me.id && state.users[it]?.blockedByMe != true }
+    var open by remember { mutableStateOf<String?>(null) }
+    open?.let { NoteSheet(it) { open = null } }
     LazyRow(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(people, key = { it }) { userId ->
             val note = index.notes[userId]?.payloadAs<NotePayload>()
             Column(Modifier.width(92.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.fillMaxWidth().height(118.dp), contentAlignment = Alignment.BottomCenter) {
                     Avatar(userId, 68.dp, index, state.users[userId]?.username ?: me.username, ring = ringOf(userId, index, state)) {
-                        if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) else nav.go(Screen.Profile(userId))
+                        if (note != null) open = userId else if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) else nav.go(Screen.Profile(userId))
                     }
                     // A thought bubble above the avatar: two lines at most, with the little tail Instagram's notes have.
                     Column(Modifier.align(Alignment.TopCenter)) {
                         Box(
                             Modifier.widthIn(min = 56.dp, max = 92.dp).clip(RoundedCornerShape(16.dp)).background(Aez.colors.elev2)
-                                .clickable { if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) }
+                                .clickable { if (note != null) open = userId else if (userId == me.id) nav.go(Screen.Create(CreateKind.NOTE)) }
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center,
                         ) {

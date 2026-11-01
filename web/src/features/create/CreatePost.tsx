@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPost } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { prepareImage, prepareVideo, upload, UnsupportedMediaError } from '../../core/media';
+import { openablePhoto, prepareImage, prepareVideo, upload, UnsupportedMediaError } from '../../core/media';
 import type { MediaRef } from '../../core/payloads';
 import { useApp } from '../../core/store';
 import { Avatar } from '../../ui/Avatar';
@@ -166,7 +166,7 @@ export function CreatePost({ onClose }: { onClose: () => void }) {
   const add = async (files: FileList | File[]) => {
     setError(null);
     try {
-      const loaded = await Promise.all([...files].slice(0, 20 - items.length).map(load));
+      const loaded = await Promise.all([...files].slice(0, 20 - items.length).map(async (f) => load(await openablePhoto(f))));
       setItems((prev) => [...prev, ...loaded]);
       setStep('edit');
     } catch (e) {
@@ -257,7 +257,7 @@ export function CreatePost({ onClose }: { onClose: () => void }) {
             Select from device
           </button>
           {error && <p className="form-error">{error}</p>}
-          <input ref={input} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
+          <input ref={input} type="file" accept="image/*,video/*,.heic,.heif" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
         </div>
       )}
 
@@ -299,7 +299,7 @@ export function CreatePost({ onClose }: { onClose: () => void }) {
                   <ImagePlus size={20} />
                 </button>
               )}
-              <input ref={input} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
+              <input ref={input} type="file" accept="image/*,video/*,.heic,.heif" multiple hidden onChange={(e) => e.target.files && add(e.target.files)} />
             </div>
           </div>
           <aside className="composer-side">

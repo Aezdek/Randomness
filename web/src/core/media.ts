@@ -82,6 +82,56 @@ async function blurhashOf(source: CanvasImageSource, width: number, height: numb
 }
 
 /** Decode (honouring EXIF orientation), optionally crop/filter, downscale, re-encode as JPEG. */
+/** iPhone photos (HEIC/HEIF), by type or, since some systems leave the type blank, by name. */
+export function isHeic(file: Blob): boolean {
+  return /^image\/hei[cf]/i.test(file.type) || (file instanceof File && /\.(heic|heif)$/i.test(file.name));
+}
+
+/**
+ * Decodes a HEIC/HEIF photo in browsers that can't (Chrome and Firefox on Windows, Android and Linux) with libheif,
+ * compiled to WebAssembly and only downloaded the first time someone picks such a photo.
+ */
+async function decodeHeic(file: Blob): Promise<OffscreenCanvas> {
+  const mod = (await import('libheif-js/libheif-wasm/libheif-bundle.mjs')) as { default: unknown };
+  const libheif = (typeof mod.default === 'function' ? await (mod.default as () => unknown)() : mod.default) as LibHeif;
+  const decoder = new libheif.HeifDecoder();
+  const images = decoder.decode(new Uint8Array(await file.arrayBuffer()));
+  if (!images?.length) throw new UnsupportedMediaError('That photo can’t be opened.');
+  const image = images[0];
+  const width = image.get_width();
+  const height = image.get_height();
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d')!;
+  const pixels = ctx.createImageData(width, height);
+  await new Promise<void>((resolve, reject) => image.display(pixels, (done) => (done ? resolve() : reject(new UnsupportedMediaError('That photo can’t be opened.')))));
+  ctx.putImageData(pixels, 0, 0);
+  for (const img of images) img.free?.();
+  return canvas;
+}
+
+interface LibHeif {
+  HeifDecoder: new () => {
+    decode(data: Uint8Array): {
+      get_width(): number;
+      get_height(): number;
+      display(target: ImageData, done: (result: ImageData | null) => void): void;
+      free?(): void;
+    }[];
+  };
+}
+
+/** A photo every part of the app can open: HEIC that this browser can't read becomes a JPEG at full quality. */
+export async function openablePhoto(file: File): Promise<File> {
+  if (!isHeic(file)) return file;
+  try {
+    (await createImageBitmap(file)).close();
+    return file;
+  } catch {
+    const jpeg = await (await decodeHeic(file)).convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+    return new File([jpeg], file.name.replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+  }
+}
+
 export async function prepareImage(
   file: Blob,
   kind: MediaKind,
@@ -91,7 +141,8 @@ export async function prepareImage(
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch {
-    throw new UnsupportedMediaError('This browser cannot open that photo format. Try a JPEG or PNG, or use the Android app.');
+    if (!isHeic(file)) throw new UnsupportedMediaError('This browser can’t open that photo. Try a JPEG, PNG or HEIC, or use the Android app.');
+    bitmap = await createImageBitmap(await decodeHeic(file));
   }
   const crop = edit?.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
   const { width, height } = fitWithin(crop.width, crop.height, IMAGE_EDGE[kind]);
@@ -243,13 +294,13 @@ async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => vo
   const header = newHeader(blob.size);
   const total = cipherLength(blob.size);
   const start = await api.post<UploadState>('/uploads', { size: total });
-  const pieceTarget = Math.min(start.chunkSize, 4 * 1024 * 1024);
+  // Big pieces mean fewer round trips through the tunnel; the server says how big it takes (older ones take 8 MB).
+  const pieceTarget = Math.min(start.chunkSize, 16 * 1024 * 1024);
   let sent = 0;
   let parts: Uint8Array[] = [header.bytes];
   let buffered = header.bytes.length;
 
-  const flush = async () => {
-    const body = concat(...parts);
+  const put = async (body: Uint8Array) => {
     for (let attempt = 0; ; attempt++) {
       try {
         const state = await api.raw<UploadState>('PUT', `/uploads/${start.uploadId}?offset=${sent}`, body);
@@ -267,9 +318,17 @@ async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => vo
         await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
       }
     }
+    onProgress?.(sent / total);
+  };
+  // One piece uploads while the next is encrypted: the network never waits for the CPU. Pieces still go in order,
+  // and at most two exist at once, so memory stays bounded.
+  let inFlight: Promise<void> = Promise.resolve();
+  const flush = async () => {
+    const body = concat(...parts);
     parts = [];
     buffered = 0;
-    onProgress?.(sent / total);
+    await inFlight;
+    inFlight = put(body);
   };
 
   const count = chunkCount(blob.size);
@@ -285,6 +344,7 @@ async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => vo
     }
   }
   if (buffered > 0) await flush();
+  await inFlight;
   const done = await api.post<BlobDto>(`/uploads/${start.uploadId}/complete`);
   return { blobId: done.blobId, key };
 }
@@ -355,7 +415,29 @@ export function bytesLabel(bytes: number): string {
 }
 
 /** Voice notes: mono AAC in MP4 (the raw WebM/Opus recording is the fallback; Android plays that too). */
+/** Whether a recording has any sound in it (false only when it decodes to silence; true when it can't be told). */
+async function audible(blob: Blob): Promise<boolean> {
+  try {
+    const ctx = new OfflineAudioContext(1, 1, 44_100);
+    const audio = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const samples = audio.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < samples.length; i += 32) peak = Math.max(peak, Math.abs(samples[i]));
+    return peak > 0.002;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Voice notes go out as AAC in MP4, which every browser and phone plays. Recorders that already make that (Safari's,
+ * the Android app's) are sent as recorded: converting again adds nothing, and Safari's own audio decoder has turned
+ * recordings silent along the way. Others (Chrome and Firefox record Opus) are converted, and the copy is only used
+ * if it still has sound in it.
+ */
 export async function prepareVoice(blob: Blob, durationMs: number): Promise<Prepared> {
+  const recorded = { blob, mime: blob.type.split(';')[0] || 'audio/webm', width: 0, height: 0, durationMs };
+  if (/^audio\/(mp4|aac|x-m4a|m4a)/.test(blob.type)) return { ...recorded, mime: 'audio/mp4' };
   try {
     const { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output, Quality, canEncodeAudio } = await loadCodecs();
     if (await canEncodeAudio('aac')) {
@@ -365,11 +447,12 @@ export async function prepareVoice(blob: Blob, durationMs: number): Promise<Prep
       const conversion = await Conversion.init({ input, output, video: { discard: true }, audio: { codec: 'aac', quality: new Quality({ bitrate: 64_000 }), numberOfChannels: 1, forceTranscode: true }, showWarnings: false });
       if (conversion.isValid) {
         await conversion.execute();
-        return { blob: new Blob([target.buffer!], { type: 'audio/mp4' }), mime: 'audio/mp4', width: 0, height: 0, durationMs };
+        const converted = new Blob([target.buffer!], { type: 'audio/mp4' });
+        if ((await audible(converted)) || !(await audible(blob))) return { blob: converted, mime: 'audio/mp4', width: 0, height: 0, durationMs };
       }
     }
   } catch {
-    /* fall through */
+    /* send it as recorded */
   }
-  return { blob, mime: blob.type || 'audio/webm', width: 0, height: 0, durationMs };
+  return recorded;
 }

@@ -2192,27 +2192,49 @@ input[type='range'] {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  max-width: 92px;
+  min-width: 52px;
+  max-width: 100px;
+  min-height: 30px;
   padding: 6px 10px;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--bg-elev-3);
   font-size: 12px;
-  line-height: 1.25;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  margin-bottom: -10px;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  margin-bottom: -16px;
   z-index: 1;
   word-break: break-word;
 }
+/* The two little "thought" dots under the bubble, as on Instagram. */
+.note-bubble::before,
 .note-bubble::after {
   content: '';
   position: absolute;
-  left: 22px;
+  border-radius: 50%;
+  background: inherit;
+}
+.note-bubble::before {
+  left: 50%;
   bottom: -6px;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
-  background: inherit;
+  transform: translateX(-80%);
+}
+.note-bubble::after {
+  left: 50%;
+  bottom: -11px;
+  width: 5px;
+  height: 5px;
+  transform: translateX(-160%);
+}
+.note-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .note-bubble.empty {
   color: var(--text-3);
@@ -2530,9 +2552,49 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  width: 84px;
+  width: 88px;
   flex: none;
+}
+.note-name {
+  font-size: 12px;
+  max-width: 84px;
+  margin-top: 2px;
+}
+.note-open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 8px 4px;
+  text-align: center;
+}
+.note-open .note-bubble.big {
+  max-width: 280px;
+  margin-bottom: -6px;
+  font-size: 15px;
+}
+.note-open .note-bubble.big .note-text {
+  -webkit-line-clamp: 6;
+}
+.note-reply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 12px;
+}
+.note-reply .input {
+  flex: 1;
+  border-radius: var(--r-full);
+}
+.note-reply .icon-btn.liked {
+  color: var(--heart);
+}
+.note-ref .note-bubble {
+  margin: 2px 0 8px;
+  max-width: 200px;
 }
 .thread-list-head {
   padding: 14px 20px 8px;
@@ -2936,6 +2998,7 @@ input[type='range'] {
 }
 .quick-react {
   display: flex;
+  align-items: center;
   justify-content: space-around;
   padding: 16px 12px;
   font-size: 30px;
@@ -4288,4 +4351,93 @@ button.info-row:hover {
   font-size: 18px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================================== sending media */
+.outgoing-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 280px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 18px;
+  background-image: var(--chat-bubble, linear-gradient(135deg, #7c5cff, #b34fe0 55%, #e84393));
+  background-attachment: fixed;
+  background-size: 100vw 100vh;
+  color: #fff;
+  opacity: 0.92;
+}
+.outgoing-bubble img,
+.outgoing-icon {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.outgoing-icon {
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.18);
+}
+.outgoing-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+.outgoing-text b {
+  font-size: 14px;
+}
+.outgoing-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+.outgoing-bar span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transition: width 0.3s var(--ease);
+}
+
+/* ===================================================================================== reacting to messages */
+.quick-react-more {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  color: var(--text-2);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+.quick-react-more.on {
+  background: var(--bg-elev-3);
+  color: var(--text);
+}
+.react-grid {
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 4px 12px 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.react-grid button {
+  height: 44px;
+  font-size: 26px;
+}
+/* A long press opens the menu, so the phone's own copy/select callout mustn't fight it. */
+@media (hover: none) {
+  .bubble {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }

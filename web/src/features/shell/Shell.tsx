@@ -1,11 +1,11 @@
-import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, PlusSquare, Search, ShieldCheck, WifiOff } from 'lucide-react';
+import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, ShieldCheck, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { usePushPrefsMirror } from '../../core/notifyPrefs';
 import { unreadCount, useIndex } from '../../core/selectors';
 import { useApp } from '../../core/store';
 import { engine } from '../../core/sync';
-import { useUi } from '../../core/ui';
+import { setNavCollapsed, useUi } from '../../core/ui';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
 import { BrandMark, Wordmark } from '../../ui/Brand';
@@ -70,7 +70,8 @@ function useUnreadMessages() {
 
 function NavItem({ to, icon, label, badge, end }: { to: string; icon: (active: boolean) => ReactNode; label: string; badge?: number; end?: boolean }) {
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+    // The label hides when the sidebar is folded to icons, so the link carries its name itself.
+    <NavLink to={to} end={end} aria-label={badge ? `${label}, ${badge} new` : label} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
       {({ isActive }) => (
         <>
           {icon(isActive)}
@@ -88,6 +89,7 @@ function SideNav() {
   const me = useApp((s) => s.me);
   const unread = useUnreadMessages();
   const activity = useActivityBadge();
+  const collapsed = useUi((s) => s.navCollapsed);
   return (
     <nav className="sidenav" aria-label="Main">
       <Link to="/" className="brand" aria-label="Hush home">
@@ -110,6 +112,15 @@ function SideNav() {
       <span className="spacer" />
       {me?.isAdmin && <NavItem to="/admin" label="Admin" icon={(a) => <ShieldCheck size={26} strokeWidth={stroke(a)} />} />}
       <NavItem to="/settings" label="More" icon={(a) => <Menu size={26} strokeWidth={stroke(a)} />} />
+      <button
+        className="nav-item nav-collapse only-wide"
+        onClick={() => setNavCollapsed(!collapsed)}
+        aria-label={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
+        title={collapsed ? 'Keep the sidebar open' : 'Collapse the sidebar'}
+      >
+        {collapsed ? <PanelLeftOpen size={24} strokeWidth={1.8} /> : <PanelLeftClose size={24} strokeWidth={1.8} />}
+        <span className="label">{collapsed ? 'Keep open' : 'Collapse'}</span>
+      </button>
     </nav>
   );
 }
@@ -231,8 +242,9 @@ export function Shell() {
   const location = useLocation();
   const background = (location.state as { background?: Location } | null)?.background;
   const page = (background ?? location).pathname;
+  const navCollapsed = useUi((s) => s.navCollapsed);
   return (
-    <div className={`shell ${hasTopBar(page) ? '' : 'no-topbar'}`}>
+    <div className={`shell ${hasTopBar(page) ? '' : 'no-topbar'} ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <SideNav />
       <TopBar pathname={page} />
       <main className="main">

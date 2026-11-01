@@ -213,6 +213,55 @@ test('three people use Hush end to end', async ({ browser }) => {
   await shot(alice.page, 'direct-desktop');
   await shot(bob.page, 'direct-mobile');
 
+  // ------------------------------------------------------------------------------------------ voice note
+  // Alice records a voice note (the test microphone plays a tone); Bob plays it and it really plays.
+  await alice.page.getByRole('button', { name: 'Record voice message' }).click();
+  await alice.page.waitForTimeout(2500);
+  await alice.page.locator('.recorder').getByRole('button', { name: 'Send' }).click();
+  const play = bob.page.locator('.voice-play').last();
+  await expect(play).toBeEnabled({ timeout: 30_000 });
+  await play.click();
+  await bob.page.waitForFunction(() => {
+    const audio = [...document.querySelectorAll<HTMLAudioElement>('.voice audio')].pop();
+    return !!audio && !audio.paused && audio.currentTime > 0.3;
+  }, undefined, { timeout: 15_000 });
+
+  // ------------------------------------------------------- messaging while a photo uploads, and reactions
+  // Alice sends a photo and, while it uploads, a text: the text isn't held up behind the photo.
+  await alice.page.locator('.chat-composer input[type=file]').setInputFiles(join(FIXTURES, 'sea.jpg'));
+  await expect(alice.page.locator('.outgoing-bubble')).toBeVisible();
+  await alice.page.locator('#chat-input').fill('typing while it uploads');
+  await alice.page.keyboard.press('Enter');
+  await expect(bob.page.locator('.chat-scroll').getByText('typing while it uploads')).toBeVisible({ timeout: 20_000 });
+  await expect(alice.page.locator('.outgoing-bubble')).toHaveCount(0, { timeout: 30_000 });
+  await expect(bob.page.locator('.bubble-media').last()).toBeVisible({ timeout: 30_000 });
+  // On his phone Bob long-presses her message and reacts from the full emoji set.
+  const target = bob.page.locator('.msg.theirs .bubble', { hasText: 'typing while it uploads' });
+  await target.dispatchEvent('pointerdown', { pointerType: 'touch', clientX: 20, clientY: 20, isPrimary: true });
+  await bob.page.waitForTimeout(700);
+  await target.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 20, clientY: 20, isPrimary: true });
+  await bob.page.getByRole('button', { name: 'More emojis' }).click();
+  await bob.page.locator('.react-grid').getByRole('button', { name: '🔥' }).click();
+  await expect(alice.page.locator('.msg.mine', { hasText: 'typing while it uploads' }).locator('.reactions')).toContainText('🔥', { timeout: 20_000 });
+
+  // ----------------------------------------------------------------------------------------------- notes
+  // Bob leaves a note; Alice opens it, likes it and replies; the reply reaches Bob with the note quoted.
+  await bob.page.goto('/direct');
+  await bob.page.getByRole('button', { name: 'Leave a note' }).click();
+  await bob.page.getByPlaceholder('Share a thought…').fill('sea day 🌊');
+  await bob.page.getByRole('button', { name: 'Share' }).click();
+  await alice.page.goto('/direct');
+  await alice.page.getByRole('button', { name: 'Note from bob' }).click({ timeout: 20_000 });
+  await shot(alice.page, 'note-open-desktop');
+  await alice.page.getByRole('button', { name: 'Like note' }).click();
+  await expect(alice.page.getByRole('button', { name: 'Unlike note' })).toBeVisible({ timeout: 15_000 });
+  await alice.page.getByPlaceholder(/Reply to bob/).fill('jealous!');
+  await alice.page.keyboard.press('Enter');
+  await bob.page.locator('.thread-row').first().click();
+  await expect(bob.page.locator('.note-ref')).toContainText('sea day', { timeout: 20_000 });
+  await expect(bob.page.locator('.chat-scroll').getByText('jealous!')).toBeVisible();
+  await alice.page.locator('.thread-row').first().click();
+
   // ----------------------------------------------------------------------------- chat theme and nicknames
   // Alice picks a theme and gives Bob a nickname; both are encrypted chat events Bob's app applies too.
   await alice.page.getByRole('button', { name: 'Details' }).click();
@@ -293,6 +342,16 @@ test('three people use Hush end to end', async ({ browser }) => {
   await alice.page.goto('/admin');
   await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
   await shot(alice.page, 'admin-desktop');
+  // The sidebar folds to icons and opens over the page on hover; the choice is remembered.
+  await alice.page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+  await expect(alice.page.locator('.shell.nav-collapsed')).toHaveCount(1);
+  await alice.page.mouse.move(900, 500);
+  await shot(alice.page, 'sidebar-collapsed');
+  await alice.page.locator('.sidenav').hover({ position: { x: 30, y: 300 } });
+  await expect(alice.page.locator('.sidenav .nav-item .label', { hasText: 'Messages' })).toBeVisible();
+  await shot(alice.page, 'sidebar-hover');
+  await alice.page.getByRole('button', { name: 'Keep the sidebar open' }).click();
+  await alice.page.mouse.move(900, 500);
 
   // The admin sees what the server knows about Bob (his chat with her, his devices), never what was said; she pauses
   // his posting and messaging, his next message is refused, and she lifts it again.

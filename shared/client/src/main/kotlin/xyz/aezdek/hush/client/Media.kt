@@ -46,7 +46,8 @@ class MediaStore(private val api: Api) {
         val key = MediaCipher.newFileKey()
         val total = MediaCipher.cipherLength(plainLength)
         val start: UploadState = api.post("/uploads", StartUploadRequest(total))
-        val pieceTarget = minOf(start.chunkSize, 4 * 1024 * 1024)
+        // Big pieces mean fewer round trips through the tunnel; the server says how big it takes (older ones take 8 MB).
+        val pieceTarget = minOf(start.chunkSize, 16 * 1024 * 1024)
         var sent = 0L
         val buffer = ByteArrayOutputStream(pieceTarget + MediaCipher.DEFAULT_CHUNK + 64)
 
