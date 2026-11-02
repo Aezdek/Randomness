@@ -50,16 +50,13 @@
       subject: `Question for ${SHOP.name}`,
       body: "Hi!\n\n",
     },
-    sell: {
-      subject: "Offer on my iPod",
+    donate: {
+      subject: "Dead iPod for you",
       body:
-        "Hi! I'd like an offer on my iPod.\n\n" +
+        "Hi! I have an iPod I don't need any more. I'm happy to cover the postage.\n\n" +
         "Model (from the back, e.g. A1238):\n" +
-        "Storage size:\n" +
-        "Does it turn on?\n" +
-        "Any damage or problems:\n" +
-        "My location:\n\n" +
-        "Photos attached: front, back, and the Settings > About screen if it turns on.\n",
+        "What's wrong with it:\n" +
+        "Sending from (city, country):\n",
     },
     request: {
       subject: "Looking for a specific iPod",
@@ -792,9 +789,25 @@
     renderGrid();
   });
 
-  window.addEventListener("hashchange", syncDialogToHash);
+  // Links to a FAQ entry (like the footer's "dead iPod" link) open that entry.
+  function openFaqFromHash() {
+    const target = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+    if (target && target.tagName === "DETAILS") target.open = true;
+  }
+
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    const target = a && a.getAttribute("href").length > 1 && document.getElementById(a.getAttribute("href").slice(1));
+    if (target && target.tagName === "DETAILS") target.open = true;
+  });
+
+  window.addEventListener("hashchange", () => {
+    syncDialogToHash();
+    openFaqFromHash();
+  });
 
   renderStatic();
   render();
   syncDialogToHash();
+  openFaqFromHash();
 })();

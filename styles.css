@@ -420,28 +420,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .grade-card p { color: var(--ink-2); font-size: 0.95rem; }
 
 /* ===================================================================
-   Sell
-   =================================================================== */
-.sell-card {
-  display: grid; gap: 28px; padding: 32px 22px; border-radius: calc(var(--radius) + 8px);
-  background: var(--ink); color: var(--bg);
-}
-.sell-card .eyebrow { color: color-mix(in srgb, var(--accent) 60%, var(--bg)); }
-.sell-card h2 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; margin: 12px 0 14px; }
-.sell-copy p { color: color-mix(in srgb, var(--bg) 78%, var(--ink)); max-width: 32em; margin-bottom: 24px; }
-.sell-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; align-content: center; }
-.sell-list li {
-  display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--bg) 8%, var(--ink));
-  border: 1px solid color-mix(in srgb, var(--bg) 14%, var(--ink));
-}
-.sell-list strong { font-weight: 700; }
-.sell-list span { font-size: 0.9rem; color: color-mix(in srgb, var(--bg) 65%, var(--ink)); }
-@media (min-width: 860px) {
-  .sell-card { grid-template-columns: 1.2fr 0.8fr; padding: 56px; gap: 48px; }
-}
-
-/* ===================================================================
    FAQ
    =================================================================== */
 .faq { display: grid; gap: 10px; }
@@ -457,6 +435,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 }
 .faq details[open] summary::after { rotate: 45deg; }
 .faq details p { padding: 0 20px 20px; color: var(--ink-2); }
+.faq details p a { color: var(--accent); text-underline-offset: 3px; }
 
 /* ===================================================================
    Contact + footer
@@ -479,6 +458,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .site-footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--ink-3); font-size: 0.88rem; }
 .footer-inner { display: grid; gap: 6px; }
 .fine { font-size: 0.8rem; }
+.fine a { color: inherit; text-underline-offset: 3px; }
+.fine a:hover { color: var(--ink); }
 
 /* ===================================================================
    Detail dialog

@@ -26,7 +26,8 @@ The best margins come from iPods that need work most people can't do themselves.
 - **Use saved searches with notifications** so you see new listings first. Good Buy It Now deals go within minutes.
 - **Make offers.** Offer about 20–30% under the asking price on "Best Offer" listings. Many sellers just want it gone.
 - **Look offline.** Facebook Marketplace, thrift stores, garage sales and family members' drawers are often cheaper than eBay. Buy offline, sell online.
-- **Use the "Sell yours" section on your site.** People with a dead iPod in a drawer would rather get $20 from you than nothing.
+- **Free parts from your site.** The FAQ and footer quietly say you'll take dead iPods if the sender covers postage. Plenty of people would rather post one than bin it, and every one is free parts.
+- **Overseas refurbishers** (lots of iPod touch listings ship from China) can be a cheap source. Have it delivered to **you**, check it, take your own photos and write your own listing before reselling. Never have their warehouse ship straight to your buyer: eBay bans that kind of drop shipping, and 2–3 week delivery will tank your ratings anyway.
 
 ## 3. Red flags when buying
 
@@ -111,6 +112,7 @@ Track **every** purchase, part, fee and shipping label in a spreadsheet from day
 ## 10. Rules that'll get you in trouble
 
 - **Don't sell iPods with music loaded on them.** That's distributing copyrighted music, and eBay can remove the listing. Always sell them wiped.
+- **Don't copy another seller's photos or description.** It's against eBay's rules, and a reverse image search or a pasted sentence leads buyers straight to the cheaper original. Shoot your own photos and write your own words.
 - **Don't move eBay buyers off eBay.** No website links, phone numbers or "message me for a better price" in eBay listings or eBay messages. eBay suspends accounts for it. Promote your website on social media instead.
 - **eBay and PayPal accounts require you to be 18+.** If you're younger, run it through a parent's or guardian's account with their involvement.
 - **Taxes:** profit is income. Keep your records (section 7) and look up the rules where you live.

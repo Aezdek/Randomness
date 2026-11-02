@@ -1,6 +1,6 @@
 # Wheelhouse: a storefront for restored iPods
 
-A fast, no-build website for reselling iPods: a filterable shop, a detail page for every iPod with a link you can share, condition grading, your restore process, a "sell me yours" section for sourcing, an FAQ and contact links. It works on phones and supports dark mode.
+A fast, no-build website for reselling iPods: a filterable shop, a detail page for every iPod with a link you can share, condition grading, your restore process, an FAQ (with a low-key "send me your dead iPod" note) and contact links. It works on phones and supports dark mode.
 
 > Part of [Aezdek/Randomness](https://github.com/Aezdek/Randomness), where every project too small for its own repo gets a branch.
 > Want the business side? Read **[PLAYBOOK.md](PLAYBOOK.md)** for how to source, fix, price, list and ship iPods.
