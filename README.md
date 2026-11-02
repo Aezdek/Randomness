@@ -48,6 +48,7 @@ Open `inventory.js` and copy one of the `{ ... }` blocks. The fields are explain
 ```
 
 - **No photos yet?** Leave `photos: []` and the site draws that model in its colour.
+- **Using a stock or Apple product photo?** Save it into `images/` (don't link to Apple's site) and mark it: `photos: [{ src: "images/apple-touch-7.png", stock: true }]`. The site tags it "Stock photo" so buyers know their unit has the condition you described. You can mix your own photos and stock ones in the same list. Apple's images are Apple's copyright, so if you ever get a takedown request, swap them for your own photos or the built-in drawing.
 - **Sold one?** Change `status` to `"sold"` and leave it up. A shelf of sold iPods tells visitors you're real.
 - **The "Setup mode" banner** goes away once you replace `you@example.com` with your real contact details.
 

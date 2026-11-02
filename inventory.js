@@ -44,6 +44,9 @@ window.SHOP = {
    description a couple of honest sentences, including any flaws
    included    what's in the box
    photos      list of image paths, e.g. ["images/c7-512-front.jpg", "images/c7-512-back.jpg"]
+               Mark a photo that isn't of your actual iPod (e.g. Apple's product shot) as stock:
+               [{ src: "images/apple-touch-7.png", stock: true }]
+               The site labels it "Stock photo" and says the buyer gets the condition described.
    ebayUrl     link to the eBay listing, if it's also listed there
    --------------------------------------------------------------------- */
 

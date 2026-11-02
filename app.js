@@ -142,7 +142,10 @@
       listed: raw.listed || "",
       upgrades: Array.isArray(raw.upgrades) ? raw.upgrades : [],
       included: Array.isArray(raw.included) ? raw.included : [],
-      photos: Array.isArray(raw.photos) ? raw.photos.filter(Boolean) : [],
+      // A photo is "images/x.jpg", or { src: "images/x.jpg", stock: true } for a manufacturer/stock photo.
+      photos: (Array.isArray(raw.photos) ? raw.photos : [])
+        .map((p) => (typeof p === "string" ? { src: p, stock: false } : p && p.src ? { src: String(p.src), stock: !!p.stock } : null))
+        .filter((p) => p && p.src),
       description: raw.description || "",
       ebayUrl: raw.ebayUrl || "",
       order: index,
@@ -480,7 +483,8 @@
 
   function artFor(it, size) {
     if (it.photos.length) {
-      return `<img src="${esc(it.photos[0])}" alt="${esc(titleOf(it))}, photo 1" loading="lazy" decoding="async">`;
+      const ph = it.photos[0];
+      return photoImg(it, ph, 0, 'loading="lazy" decoding="async"') + (ph.stock ? `<span class="photo-tag">Stock photo</span>` : "");
     }
     return deviceSVG(it.shape, it.color, size === "hero" ? "now-playing" : "menu");
   }
@@ -635,20 +639,32 @@
     return btn(buy, viaEmail ? "Message to buy" : "Message me to buy", "btn-accent") + (viaEmail && instagramUrl() ? btn(instagramUrl(), "DM on Instagram", "btn-ghost") : "");
   }
 
+  const STOCK_NOTE = "Stock photo. The one you get has the condition described here.";
+
+  function photoImg(it, ph, i, attrs = "") {
+    const alt = `${titleOf(it)}, ${ph.stock ? "stock photo" : `photo ${i + 1}`}`;
+    return `<img class="${ph.stock ? "is-stock" : ""}" src="${esc(ph.src)}" alt="${esc(alt)}" ${attrs}>`;
+  }
+
   function mediaHTML(it) {
     if (!it.photos.length) {
       return `<div class="detail-art" style="--tint:${hexFor(it.color)}">${deviceSVG(it.shape, it.color)}<p class="detail-art-note">Illustration. Real photos on request.</p></div>`;
     }
+    const first = it.photos[0];
     const thumbs =
       it.photos.length > 1
         ? `<div class="thumbs">${it.photos
             .map(
-              (src, i) =>
-                `<button type="button" class="thumb" data-src="${esc(src)}" data-alt="${esc(titleOf(it))}, photo ${i + 1}" aria-label="Photo ${i + 1}" aria-pressed="${i === 0}"><img src="${esc(src)}" alt="" loading="lazy"></button>`
+              (ph, i) =>
+                `<button type="button" class="thumb" data-index="${i}" aria-label="Photo ${i + 1}${ph.stock ? " (stock)" : ""}" aria-pressed="${i === 0}">${photoImg(it, ph, i, 'loading="lazy"').replace(/alt="[^"]*"/, 'alt=""')}</button>`
             )
             .join("")}</div>`
         : "";
-    return `<div class="detail-photos"><img class="detail-main-photo" src="${esc(it.photos[0])}" alt="${esc(titleOf(it))}, photo 1">${thumbs}</div>`;
+    return `<div class="detail-photos">
+        <div class="detail-main">${photoImg(it, first, 0).replace("<img ", '<img data-main ')}<span class="photo-tag"${first.stock ? "" : " hidden"}>Stock photo</span></div>
+        <p class="photo-note"${first.stock ? "" : " hidden"}>${STOCK_NOTE}</p>
+        ${thumbs}
+      </div>`;
   }
 
   function detailHTML(it) {
@@ -742,9 +758,15 @@
     }
     const thumb = e.target.closest(".thumb");
     if (thumb) {
-      const main = $(".detail-main-photo", dialog);
-      main.src = thumb.dataset.src;
-      main.alt = thumb.dataset.alt;
+      const it = ITEMS.find((x) => x.id === currentId);
+      const ph = it && it.photos[Number(thumb.dataset.index)];
+      if (!ph) return;
+      const main = $("img[data-main]", dialog);
+      main.src = ph.src;
+      main.alt = `${titleOf(it)}, ${ph.stock ? "stock photo" : `photo ${Number(thumb.dataset.index) + 1}`}`;
+      main.classList.toggle("is-stock", ph.stock);
+      $(".detail-main .photo-tag", dialog).hidden = !ph.stock;
+      $(".photo-note", dialog).hidden = !ph.stock;
       $$(".thumb", dialog).forEach((t) => t.setAttribute("aria-pressed", String(t === thumb)));
       return;
     }

@@ -25,6 +25,11 @@
   --reserved: #a35a06;
   --reserved-soft: #fbecd6;
 
+  /* Product photos sit on white in both themes, like a manufacturer's shot. */
+  --photo-plate: #ffffff;
+  --tag-bg: rgb(23 23 26 / 0.78);
+  --tag-fg: #ffffff;
+
   --radius: 20px;
   --radius-sm: 12px;
   --shadow: 0 1px 2px rgb(20 20 20 / 0.04), 0 10px 30px rgb(20 20 20 / 0.06);
@@ -344,6 +349,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.16)); transition: transform 0.3s ease;
 }
 .card-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.card-art img.is-stock, .detail-main img.is-stock { object-fit: contain; padding: 9%; background: var(--photo-plate); }
+.photo-tag {
+  position: absolute; left: 10px; bottom: 10px; z-index: 1; padding: 3px 9px; border-radius: 999px;
+  background: var(--tag-bg); color: var(--tag-fg); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+}
 .card:hover .card-art .device { transform: translateY(-4px) rotate(-2deg); }
 .card[data-status="sold"] .card-art .device,
 .card[data-status="sold"] .card-art img { filter: grayscale(0.85); opacity: 0.55; }
@@ -492,11 +502,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 }
 .detail-art-note { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 0.78rem; color: var(--ink-3); }
 .detail-photos { display: grid; gap: 8px; padding: 0 0 8px; background: var(--bg-sunk); }
-.detail-main-photo { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.detail-main { position: relative; }
+.detail-main img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.photo-note { font-size: 0.8rem; color: var(--ink-3); padding: 0 12px; }
 .thumbs { display: flex; gap: 8px; padding: 0 12px; overflow-x: auto; }
 .thumb { flex: none; width: 60px; height: 60px; padding: 0; border-radius: 10px; overflow: hidden; border: 2px solid transparent; cursor: pointer; background: none; }
 .thumb[aria-pressed="true"] { border-color: var(--accent); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb img.is-stock { object-fit: contain; padding: 4px; background: var(--photo-plate); }
 
 .detail-info { padding: 24px 20px 28px; display: flex; flex-direction: column; gap: 14px; }
 .detail-info h2 { font-size: clamp(1.8rem, 5vw, 2.4rem); font-weight: 800; margin-top: -6px; }
