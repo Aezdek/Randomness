@@ -407,7 +407,7 @@ fun Chat(threadId: String, focus: String? = null) {
         )
     }
     }
-    forwarding?.let { payload -> ShareSheet(null, { forwarding = null }, forward = payload) }
+    forwarding?.let { payload -> ShareSheet(null, forward = payload) { forwarding = null } }
     if (polling) {
         PollSheet({ polling = false }) { poll -> send(MessagePayload(MessageType.POLL, text = poll.question, poll = poll), Audience.THREAD) }
     }

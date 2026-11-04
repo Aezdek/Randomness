@@ -294,7 +294,7 @@ fun ToggleRow(icon: androidx.compose.ui.graphics.vector.ImageVector?, title: Str
  * ([forward]): a copy marked "Forwarded", whose media the other chat can then open.
  */
 @Composable
-fun ShareSheet(entity: Entity?, onDismiss: () -> Unit, forward: MessagePayload? = null) {
+fun ShareSheet(entity: Entity?, forward: MessagePayload? = null, onDismiss: () -> Unit) {
     val state by Graph.client.state.collectAsState()
     val index by Graph.client.index.collectAsState()
     val me = state.me ?: return

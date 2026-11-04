@@ -27,6 +27,8 @@ import xyz.aezdek.hush.protocol.LikePayload
 import xyz.aezdek.hush.protocol.Me
 import xyz.aezdek.hush.protocol.MediaRef
 import xyz.aezdek.hush.protocol.MessagePayload
+import xyz.aezdek.hush.protocol.VotePayload
+import xyz.aezdek.hush.protocol.Poll
 import xyz.aezdek.hush.protocol.MessageType
 import xyz.aezdek.hush.protocol.NotePayload
 import xyz.aezdek.hush.protocol.ObjectDto
@@ -144,6 +146,13 @@ object Fixtures {
         add(Kind.MESSAGE, ME, MessagePayload(MessageType.SYSTEM, event = ChatEvent(nicknameFor = LEO, nickname = "Captain")), 140 * MIN, Audience.THREAD, threadId = GROUP)
         message(GROUP, ZARA, "I'll bring snacks", 2 * HOUR)
         message(GROUP, ME, "Perfect, see you both at the station", 90 * MIN)
+        // A poll with votes (encrypted children of the message), and a forwarded message.
+        val poll = add(Kind.MESSAGE, ZARA, MessagePayload(MessageType.POLL, text = "Dinner on the first night?",
+            poll = Poll("Dinner on the first night?", listOf("Pizza", "Ramen", "Whatever's open"))), 80 * MIN, Audience.THREAD, threadId = GROUP)
+        add(Kind.VOTE, LEO, VotePayload("poll", 1), 75 * MIN, Audience.PARENT, parentId = poll.id, threadId = GROUP)
+        add(Kind.VOTE, ME, VotePayload("poll", 1), 74 * MIN, Audience.PARENT, parentId = poll.id, threadId = GROUP)
+        add(Kind.VOTE, ZARA, VotePayload("poll", 0), 73 * MIN, Audience.PARENT, parentId = poll.id, threadId = GROUP)
+        add(Kind.MESSAGE, LEO, MessagePayload(MessageType.TEXT, text = "Platform 4 for the 8:40", forwarded = true), 60 * MIN, Audience.THREAD, threadId = GROUP)
 
         val threads = mapOf(
             DM to ThreadDto(DM, false, ME, now - 200 * HOUR, listOf(member(ME, now - 42 * MIN), member(MAYA, now - 10 * MIN))),

@@ -207,23 +207,26 @@ export function ThreadList({ activeId }: { activeId?: string }) {
             )}
             <span className="thread-text">
               <span className="truncate thread-title">{title}</span>
-              <span className="truncate thread-preview">
-                {isTyping ? (
-                  <span className="typing-label">typing…</span>
-                ) : last ? (
-                  last.payload.type === MessageType.SYSTEM && last.payload.event ? (
-                    eventText(last.payload.event, last.dto.authorId, me.id, users, (id) => nameIn(thread.id, id, index, users))
+              {/* The text shortens; the time after it always shows, as on Instagram. */}
+              <span className="thread-preview">
+                <span className="truncate">
+                  {isTyping ? (
+                    <span className="typing-label">typing…</span>
+                  ) : last ? (
+                    last.payload.type === MessageType.SYSTEM && last.payload.event ? (
+                      eventText(last.payload.event, last.dto.authorId, me.id, users, (id) => nameIn(thread.id, id, index, users))
+                    ) : (
+                      previewOf(last.payload, last.dto.authorId === me.id)
+                    )
                   ) : (
-                    previewOf(last.payload, last.dto.authorId === me.id)
-                  )
-                ) : (
-                  'Say hi 👋'
-                )}
+                    'Say hi 👋'
+                  )}
+                </span>
                 {last && (
-                  <>
+                  <span className="thread-preview-time">
                     {' · '}
                     <Ago at={last.dto.receivedAt} className="" />
-                  </>
+                  </span>
                 )}
               </span>
             </span>

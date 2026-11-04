@@ -4687,3 +4687,14 @@ button.info-row:hover {
   background: var(--text);
   color: var(--bg);
 }
+.thread-preview {
+  display: flex;
+  min-width: 0;
+}
+.thread-preview > .truncate {
+  min-width: 0;
+}
+.thread-preview-time {
+  flex: none;
+  white-space: pre;
+}

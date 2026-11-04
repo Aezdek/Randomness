@@ -91,7 +91,7 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.HEART -> prefix + (p.text ?: "❤️")
         MessageType.POLL -> (if (mine) "You created a poll: " else "Poll: ") + (p.poll?.question ?: p.text.orEmpty())
         else -> prefix + (p.text ?: "")
-    } + "  ·  " + ago(entity.dto.receivedAt)
+    }
 }
 
 @Composable
@@ -236,11 +236,18 @@ private fun ThreadRow(thread: ThreadDto, index: Index, state: AppState, onLongPr
         Column(Modifier.weight(1f)) {
             Text(index.threadTitle(thread, state.users, me.id), fontWeight = if (unread > 0) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp,
                 color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                if (typing) "typing…" else lastLine(index.lastMessage(thread.id), me.id, index, state.users),
-                fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (unread > 0) Aez.colors.text else Aez.colors.text3, fontWeight = if (unread > 0) FontWeight.SemiBold else FontWeight.Normal,
-            )
+            // The text shortens; the time after it always shows, as on Instagram.
+            val last = index.lastMessage(thread.id)
+            val tone = if (unread > 0) Aez.colors.text else Aez.colors.text3
+            val heft = if (unread > 0) FontWeight.SemiBold else FontWeight.Normal
+            Row {
+                Text(
+                    if (typing) "typing…" else lastLine(last, me.id, index, state.users),
+                    fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = tone, fontWeight = heft,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (!typing && last != null) Text("  ·  " + ago(last.dto.receivedAt), fontSize = 13.sp, maxLines = 1, color = tone, fontWeight = heft)
+            }
         }
         if (muted) Icon(Icons.Outlined.NotificationsOff, "Muted", tint = Aez.colors.text3, modifier = Modifier.size(16.dp))
         if (thread.id in index.settings.pinnedThreads) Icon(Icons.Outlined.PushPin, "Pinned", tint = Aez.colors.text3, modifier = Modifier.size(16.dp))
