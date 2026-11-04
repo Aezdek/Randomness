@@ -56,6 +56,13 @@ class ConnectionService : Service() {
         val client = Graph.client
         client.realtime.connect()
         scope.launch { watchForNotifications() }
+        // Look for an app update every few hours, even if Hush is never opened (it installs while Hush is in the background).
+        scope.launch {
+            while (true) {
+                runCatching { xyz.aezdek.hush.update.AutoUpdater.check(this@ConnectionService) }
+                kotlinx.coroutines.delay(4 * 60 * 60 * 1000L)
+            }
+        }
         // Reconnect as soon as the network comes back instead of waiting out the backoff.
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) = client.realtime.nudge()
@@ -206,6 +213,7 @@ class ConnectionService : Service() {
 /** Reconnects after a reboot or an app update, so calls ring without opening the app first. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) xyz.aezdek.hush.update.AutoUpdater.onUpdated(context)
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val pending = goAsync()
             Graph.scope.launch {

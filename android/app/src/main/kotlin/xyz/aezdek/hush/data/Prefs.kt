@@ -40,6 +40,15 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("samsungNeverSleeping", false)
         set(value) = prefs.edit().putBoolean("samsungNeverSleeping", value).apply()
 
+    /** Install updates from the server by themselves (on by default). */
+    var autoUpdate: Boolean
+        get() = prefs.getBoolean("autoUpdate", true)
+        set(value) = prefs.edit().putBoolean("autoUpdate", value).apply()
+
+    var lastUpdateCheck: Long
+        get() = prefs.getLong("lastUpdateCheck", 0)
+        set(value) = prefs.edit().putLong("lastUpdateCheck", value).apply()
+
     var notifiedUpTo: Long
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()

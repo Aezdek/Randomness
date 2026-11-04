@@ -74,14 +74,14 @@ class Harness(val builder: ApplicationTestBuilder, val services: Services, val c
     }
 }
 
-fun serverTest(block: suspend Harness.() -> Unit) {
+fun serverTest(configure: (ServerConfig) -> ServerConfig = { it }, block: suspend Harness.() -> Unit) {
     val dir = Files.createTempDirectory("hush-test").toFile()
     val clock = MutableClock()
     var services: Services? = null
     try {
         testApplication {
             application {
-                services = hush(ServerConfig(dataDir = dir, runJobs = false, minFreeBytes = 0, version = "test"), clock)
+                services = hush(configure(ServerConfig(dataDir = dir, runJobs = false, minFreeBytes = 0, version = "test")), clock)
             }
             startApplication()
             Harness(this, services!!, clock, dir).block()

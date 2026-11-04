@@ -58,7 +58,12 @@ You do four things. Everything else is automatic.
    with a test ring while the phone is locked.
 4. **Updates:** when you want a new version, run `sudo /opt/hl/hush/update.sh`. It shows what changed, asks
    y/N, health-checks the new version, and rolls back if that fails. The apps then pick it up: the web app on its
-   next load, and Android from **Settings → App updates**.
+   next load, and the Android app by itself. Every few hours, and whenever it's opened, it reads
+   `https://hush.aezdek.xyz/version`. If that build is newer, it downloads the APK and checks its SHA-256, then
+   installs it while Hush is in the background and no call is going. If you're in the app, it asks first.
+   On Android 12+ updates need no tap once Hush has installed one of its own. The first one, after a browser
+   installed the app, shows Android's usual "Update" prompt. **Settings → App updates** shows where it stands and
+   has the on/off switch.
 
 Invite the others from **Settings → Server and invites**.
 

@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 12+: an app updating itself can skip the "Update?" prompt once it installed the current build. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -78,6 +80,11 @@
 
         <receiver
             android:name=".calls.CallActionReceiver"
+            android:exported="false" />
+
+        <!-- Android reports how an app update install went here (see update/AutoUpdater.kt). -->
+        <receiver
+            android:name=".update.UpdateReceiver"
             android:exported="false" />
 
         <provider

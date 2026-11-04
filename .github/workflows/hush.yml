@@ -266,6 +266,10 @@ jobs:
           sudo cat "$RUNNER_TEMP/data/apk/version.json" | tee version.json
           [ "$(sha256sum signed.apk | cut -c1-64)" = "$(jq -r .sha256 version.json)" ]
           [ "$(jq -r .versionName version.json)" = "$VERSION" ]
+          # The public endpoint the app polls to update itself describes this very APK.
+          curl -fsS http://127.0.0.1:18080/version | tee served-version.json
+          [ "$(jq -r .sha256 served-version.json)" = "$(jq -r .sha256 version.json)" ]
+          [ "$(jq -r .versionCode served-version.json)" = "$(jq -r .versionCode version.json)" ]
           TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
           "${TOOLS}apksigner" verify --min-sdk-version 29 --print-certs signed.apk | tee signature.txt
           # 16 KB alignment of the native libraries (WebRTC, libsodium), which Android 15+ devices need.

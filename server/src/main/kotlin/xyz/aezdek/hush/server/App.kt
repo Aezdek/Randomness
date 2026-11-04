@@ -1,5 +1,6 @@
 package xyz.aezdek.hush.server
 
+import xyz.aezdek.hush.protocol.AppVersion
 import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -126,7 +127,15 @@ fun Application.hush(config: ServerConfig, clock: Clock = Clock.SYSTEM): Service
         get("/download/hush.apk") {
             val apk = config.apkDir?.let { File(it, "hush.apk") }?.takeIf { it.isFile } ?: notFound("No Android build in this image")
             call.response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter("filename", "Hush.apk").toString())
+            // Cloudflare caches .apk files by default; after update.sh it must hand out the new build at once.
+            call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondFile(apk)
+        }
+        // What the Android app checks to update itself. Public, like the APK it describes: no sign-in needed.
+        get("/version") {
+            val file = config.apkDir?.let { File(it, "version.json") }?.takeIf { it.isFile } ?: notFound("No Android build in this image")
+            call.response.header(HttpHeaders.CacheControl, "no-store")
+            call.respond(Wire.json.decodeFromString(AppVersion.serializer(), file.readText()))
         }
         get("/{path...}") { serveWeb(call, config) }
     }

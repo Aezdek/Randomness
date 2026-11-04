@@ -111,6 +111,7 @@ class MainActivity : FragmentActivity() {
                     SignedIn()
                     BackHandler(enabled = navigator.stack.size > 1 || navigator.current != Screen.Home) { navigator.back() }
                     Shell()
+                    xyz.aezdek.hush.ui.settings.UpdatePrompt()
                 }
             }
             ToastHost(Modifier.align(Alignment.BottomCenter))

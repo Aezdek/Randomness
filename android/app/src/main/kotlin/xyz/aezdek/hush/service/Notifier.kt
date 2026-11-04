@@ -44,6 +44,10 @@ class Notifier(private val context: Context) {
                 description = "Shown while you're in a call"
                 setSound(null, null)
             },
+            NotificationChannel(UPDATES, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "A new version of Hush from your server"
+                setShowBadge(false)
+            },
             NotificationChannel(CONNECTION, "Connection", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "Keeps Hush connected so calls can ring. You can hide this channel."
                 setShowBadge(false)
@@ -104,6 +108,32 @@ class Notifier(private val context: Context) {
         post(id, notification)
     }
 
+    /** Android wants a tap to install this update (the first one, or before Android 12): its prompt, one tap away. */
+    fun updateReady(version: String, confirm: Intent) {
+        val tap = PendingIntent.getActivity(context, ID_UPDATE, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        post(ID_UPDATE, update("Hush $version is ready", "Tap to install the update.", tap))
+    }
+
+    /** Android hasn't let Hush install apps yet: one switch to turn on, then updates go through by themselves. */
+    fun allowUpdates(version: String) {
+        val settings = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${context.packageName}"))
+        val tap = PendingIntent.getActivity(context, ID_UPDATE, settings, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        post(ID_UPDATE, update("Hush $version is ready", "Tap, then allow Hush to install updates.", tap))
+    }
+
+    fun updated(version: String) {
+        post(ID_UPDATE, update("Hush updated to $version", "Tap to open Hush.", openIntent("home", ID_UPDATE)))
+    }
+
+    private fun update(title: String, text: String, tap: PendingIntent): Notification =
+        NotificationCompat.Builder(context, UPDATES)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setAutoCancel(true)
+            .setContentIntent(tap)
+            .build()
+
     fun cancel(id: Int) = NotificationManagerCompat.from(context).cancel(id)
 
     fun cancelChat(threadId: String) = cancel(threadId.hashCode())
@@ -128,8 +158,10 @@ class Notifier(private val context: Context) {
         const val CALLS = "calls"
         const val ONGOING_CALL = "ongoing_call"
         const val CONNECTION = "connection"
+        const val UPDATES = "updates"
         const val ID_CONNECTION = 1
         const val ID_CALL = 2
         const val ID_ONGOING_CALL = 3
+        const val ID_UPDATE = 4
     }
 }

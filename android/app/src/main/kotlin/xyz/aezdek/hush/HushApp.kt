@@ -19,6 +19,7 @@ import xyz.aezdek.hush.data.SqliteTables
 import xyz.aezdek.hush.media.MediaCache
 import xyz.aezdek.hush.service.ConnectionService
 import xyz.aezdek.hush.service.Notifier
+import xyz.aezdek.hush.update.AutoUpdater
 import xyz.aezdek.hush.protocol.DeviceInfo
 import xyz.aezdek.hush.protocol.WsType
 import java.io.IOException
@@ -48,6 +49,9 @@ object Graph {
 
     /** True once the stored session (if any) has been restored, so the UI never flashes the sign-in screen. */
     val booted = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** Whether any Hush screen is on show (updates wait until it isn't, so they never close the app under you). */
+    val visible = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     private val _toasts = MutableSharedFlow<Toast>(extraBufferCapacity = 8)
     val toasts: SharedFlow<Toast> = _toasts
@@ -125,10 +129,21 @@ class HushApp : Application() {
         super.onCreate()
         Graph.init(this)
         Graph.notifier.createChannels()
+        androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    Graph.visible.value = true
+                    AutoUpdater.checkSoon(this)
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> Graph.visible.value = false
+                else -> Unit
+            }
+        })
         Graph.scope.launch {
             val signedIn = runCatching { Graph.client.restore() }.getOrDefault(false)
             Graph.booted.value = true
             if (signedIn) ConnectionService.start(this@HushApp)
+            AutoUpdater.checkSoon(this@HushApp)
         }
     }
 }
