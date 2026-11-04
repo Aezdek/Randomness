@@ -7,7 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: 'e2e',
-  timeout: 180_000,
+  // One long journey through the whole app (three people, a call, uploads); CI runners are about twice as slow as a laptop.
+  timeout: 420_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
   workers: 1,
