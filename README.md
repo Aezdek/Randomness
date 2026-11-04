@@ -4,12 +4,15 @@ A private Instagram for a handful of people (built for 2, capped at 10), where e
 and lives on your own server. There's an Android app and a web app. Video calls are peer to peer.
 
 - **Feed:** posts with up to 20 photos or videos, crop, filters, captions, @mentions, #hashtags, tags and
-  location. Likes, threaded comments, saves and collections, archive, hidden like counts, comments off.
+  location. Likes, threaded comments, saves and collections, archive, hidden like counts, comments off, and up
+  to three posts pinned to the top of your profile.
 - **Stories:** photo, video or text stories, with stickers (poll, quiz, question, slider, countdown, mention,
   hashtag, location, link, emoji). Close Friends, viewers, replies into DMs, highlights and an archive.
 - **Reels:** a full-screen vertical feed, with trim and cover.
-- **Direct:** 1:1 chats and groups. Photos, videos, voice notes, view-once, vanish mode, reactions, replies,
-  edit and unsend, typing and seen receipts, Notes, and pinned and muted chats.
+- **Direct:** 1:1 chats and groups. Photos, videos, voice notes, view-once, vanish mode, reactions, replies
+  (swipe a message right), forwarding, polls in groups, edit and unsend, message times (hover, or swipe the chat
+  left on a phone), typing and seen receipts (which you can turn off), themes, nicknames, pinned messages, Notes,
+  inbox filters, and pinned and muted chats.
 - **Calls:** 1:1 and group video calls (mesh, up to 10 people). Live to followers (up to 9 viewers) with comments
   and hearts.
 - **Everything else:** explore and search, activity, private accounts, follow requests, blocks, activity status,
