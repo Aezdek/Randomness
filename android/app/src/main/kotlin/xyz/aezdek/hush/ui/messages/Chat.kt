@@ -654,13 +654,15 @@ private fun Bubble(
     ) {
     Icon(
         Icons.AutoMirrored.Outlined.Reply, null, tint = Aez.colors.text,
-        modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(30.dp).clip(CircleShape).background(Aez.colors.elev2).padding(6.dp)
+        // The fade comes first in the chain so it covers the circle's background too, not just the arrow.
+        modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp)
             .graphicsLayer {
                 val progress = (swipe / replyAt).coerceIn(0f, 1f)
                 alpha = progress
                 scaleX = 0.6f + 0.4f * progress
                 scaleY = scaleX
-            },
+            }
+            .size(30.dp).clip(CircleShape).background(Aez.colors.elev2).padding(6.dp),
     )
     Text(
         clock(message.dto.receivedAt), fontSize = 11.sp, color = Aez.colors.text3, maxLines = 1,
