@@ -89,6 +89,7 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.CALL -> if (p.call?.missed == true) "Missed ${if (p.call?.video == true) "video " else ""}call" else "${if (p.call?.video == true) "Video" else "Audio"} call"
         MessageType.NOTE_REPLY -> if (mine) "You replied to their note: ${p.text.orEmpty()}" else "Replied to your note: ${p.text.orEmpty()}"
         MessageType.HEART -> prefix + (p.text ?: "❤️")
+        MessageType.POLL -> (if (mine) "You created a poll: " else "Poll: ") + (p.poll?.question ?: p.text.orEmpty())
         else -> prefix + (p.text ?: "")
     } + "  ·  " + ago(entity.dto.receivedAt)
 }
@@ -99,7 +100,14 @@ fun Inbox() {
     val state by Graph.client.state.collectAsState()
     val index by Graph.client.index.collectAsState()
     val me = state.me ?: return
-    val threads = sortedThreads(state, index)
+    var filter by remember { mutableStateOf("all") }
+    val threads = sortedThreads(state, index).filter {
+        when (filter) {
+            "unread" -> index.unreadCount(it, me.id) > 0
+            "groups" -> it.isGroup
+            else -> true
+        }
+    }
     var menuFor by remember { mutableStateOf<ThreadDto?>(null) }
     Column(Modifier.fillMaxSize()) {
         TopBar(me.username, actions = { IconAction(Icons.Outlined.Edit, "New message", { nav.go(Screen.NewChat) }) })
@@ -108,12 +116,32 @@ fun Inbox() {
             item {
                 Text("Messages", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 6.dp))
             }
+            item {
+                // Instagram's inbox filters; the chosen one is solid.
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((key, label) in listOf("all" to "All", "unread" to "Unread", "groups" to "Groups")) {
+                        val on = filter == key
+                        Text(
+                            label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (on) Aez.colors.bg else Aez.colors.text,
+                            modifier = Modifier.clip(CircleShape).background(if (on) Aez.colors.text else Aez.colors.elev2).clickable { filter = key }
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
             items(threads, key = { it.id }) { thread ->
                 ThreadRow(thread, index, state, onLongPress = { menuFor = thread }) { nav.go(Screen.Chat(thread.id)) }
             }
             if (threads.isEmpty()) {
                 item {
-                    Text("No chats yet. Tap ✎ to message someone.", color = Aez.colors.text3, modifier = Modifier.padding(20.dp))
+                    Text(
+                        when (filter) {
+                            "unread" -> "You're all caught up."
+                            "groups" -> "No group chats yet."
+                            else -> "No chats yet. Tap ✎ to message someone."
+                        },
+                        color = Aez.colors.text3, modifier = Modifier.padding(20.dp),
+                    )
                 }
             }
         }

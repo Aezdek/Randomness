@@ -289,15 +289,18 @@ fun ToggleRow(icon: androidx.compose.ui.graphics.vector.ImageVector?, title: Str
     }
 }
 
-/** Send a post or reel to chats (as an end-to-end encrypted message that points at it). */
+/**
+ * Send a post or reel to chats (as an end-to-end encrypted message that points at it), or forward a message
+ * ([forward]): a copy marked "Forwarded", whose media the other chat can then open.
+ */
 @Composable
-fun ShareSheet(entity: Entity, onDismiss: () -> Unit) {
+fun ShareSheet(entity: Entity?, onDismiss: () -> Unit, forward: MessagePayload? = null) {
     val state by Graph.client.state.collectAsState()
     val index by Graph.client.index.collectAsState()
     val me = state.me ?: return
     var picked by remember { mutableStateOf(listOf<String>()) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
-        Text("Share", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+        Text(if (forward != null) "Forward" else "Share", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
         val threads = sortedThreads(state, index)
         LazyColumn(Modifier.heightIn(max = 460.dp)) {
             items(threads, key = { it.id }) { thread ->
@@ -324,8 +327,9 @@ fun ShareSheet(entity: Entity, onDismiss: () -> Unit) {
                 val targets = picked
                 Graph.launch {
                     for (threadId in targets) {
-                        Graph.client.composer.sendMessage(threadId,
-                            MessagePayload(MessageType.SHARE, sharedObjectId = entity.id, sharedAuthorId = entity.dto.authorId))
+                        val payload = forward?.copy(replyTo = null, edited = false, forwarded = true)
+                            ?: MessagePayload(MessageType.SHARE, sharedObjectId = entity?.id, sharedAuthorId = entity?.dto?.authorId)
+                        Graph.client.composer.sendMessage(threadId, payload)
                     }
                     Graph.toast(if (targets.size == 1) "Sent" else "Sent to ${targets.size} chats")
                 }

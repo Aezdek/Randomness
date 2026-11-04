@@ -8,7 +8,7 @@ export interface SignupRequest {
   inviteCode: string; username: string; salt: string; opsLimit: number; memLimit: number; authKey: string;
   signPk: string; boxPk: string; boxPkSig: string; vault: string; device: DeviceInfo;
 }
-export interface Me { id: string; username: string; isAdmin: boolean; isPrivate: boolean; showActivity: boolean; createdAt: number; keyVersion: number }
+export interface Me { id: string; username: string; isAdmin: boolean; isPrivate: boolean; showActivity: boolean; createdAt: number; keyVersion: number; readReceipts?: boolean }
 export interface AuthResponse { token: string; me: Me; vault: string }
 export interface SessionDto { id: string; deviceName: string; platform: string; createdAt: number; lastSeenAt: number; current: boolean }
 

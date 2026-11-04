@@ -115,7 +115,7 @@ export async function deleteAccount(password: string) {
   await signOut(false);
 }
 
-export async function updateMe(patch: { isPrivate?: boolean; showActivity?: boolean }) {
+export async function updateMe(patch: { isPrivate?: boolean; showActivity?: boolean; readReceipts?: boolean }) {
   const fresh = await api.patch<Me>('/me', patch);
   useApp.setState({ me: fresh });
   await updateStoredMe(fresh);

@@ -59,10 +59,12 @@ data class Me(
     val showActivity: Boolean,
     val createdAt: Long,
     val keyVersion: Int,
+    /** Off: nobody sees when you've read their messages ("Seen"). You still see theirs, as on Instagram. */
+    val readReceipts: Boolean = true,
 )
 
 @Serializable
-data class UpdateMeRequest(val isPrivate: Boolean? = null, val showActivity: Boolean? = null)
+data class UpdateMeRequest(val isPrivate: Boolean? = null, val showActivity: Boolean? = null, val readReceipts: Boolean? = null)
 
 @Serializable
 data class ChangePasswordRequest(

@@ -321,6 +321,9 @@ fun boldPrefix(name: String) = buildAnnotatedString {
 
 // ---------------------------------------------------------------------------------------------------------- misc
 
+/** "5m ago", or "just now" (never "now ago"). */
+fun since(at: Long, now: Long = System.currentTimeMillis()): String = ago(at, now).let { if (it == "now") "just now" else "$it ago" }
+
 fun ago(at: Long, now: Long = System.currentTimeMillis()): String {
     val s = (now - at).coerceAtLeast(0) / 1000
     return when {

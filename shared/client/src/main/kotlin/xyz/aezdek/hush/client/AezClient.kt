@@ -175,8 +175,8 @@ class AezClient(
         signOut(tellServer = false)
     }
 
-    suspend fun updateMe(isPrivate: Boolean? = null, showActivity: Boolean? = null) {
-        val fresh: Me = api.patch("/me", UpdateMeRequest(isPrivate, showActivity))
+    suspend fun updateMe(isPrivate: Boolean? = null, showActivity: Boolean? = null, readReceipts: Boolean? = null) {
+        val fresh: Me = api.patch("/me", UpdateMeRequest(isPrivate, showActivity, readReceipts))
         state.update { it.copy(me = fresh) }
         state.value.keys?.let { keys -> api.token?.let { secrets.save(StoredSession.of(it, fresh, keys)) } }
         engine.sync()

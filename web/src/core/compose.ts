@@ -190,6 +190,16 @@ export async function saveProfile(payload: ProfilePayload) {
   return publish({ kind: Kind.PROFILE, audience: Audience.MEMBERS, payload, blobIds });
 }
 
+/** Pins a post or reel to the top of your profile grid (up to three, newest pin first), or unpins it. */
+export async function togglePinnedPost(postId: string) {
+  const current = (index().profiles[me().me.id]?.payload as ProfilePayload | undefined) ?? {};
+  const pinned = current.pinned ?? [];
+  const next = pinned.includes(postId) ? pinned.filter((x) => x !== postId) : [postId, ...pinned];
+  if (next.length > 3) throw new Error('You can pin up to 3 posts. Unpin one first.');
+  await saveProfile({ ...current, pinned: next });
+  return next.includes(postId);
+}
+
 export async function saveSettings(patch: Partial<SettingsPayload>) {
   const existing = index().settings as Entity<SettingsPayload> | null;
   const payload = { ...(existing?.payload ?? {}), ...patch };
@@ -454,6 +464,14 @@ export async function react(message: Entity, emoji: string) {
   if (mine) await deleteObject(mine.dto.id);
   if ((mine?.payload as ReactionPayload | undefined)?.emoji === emoji) return;
   return publish<ReactionPayload>({ kind: Kind.REACTION, audience: Audience.PARENT, payload: { emoji }, parentId: message.dto.id, threadId: message.dto.threadId });
+}
+
+/** Votes in a chat poll (one vote each; voting for the same option again takes the vote back, as on Instagram). */
+export async function votePoll(message: Entity, option: number) {
+  const mine = index().children[message.dto.id]?.find((e) => e.dto.kind === Kind.VOTE && e.dto.authorId === me().me.id);
+  if (mine) await deleteObject(mine.dto.id);
+  if ((mine?.payload as VotePayload | undefined)?.option === option) return;
+  return publish<VotePayload>({ kind: Kind.VOTE, audience: Audience.PARENT, payload: { stickerId: 'poll', option }, parentId: message.dto.id, threadId: message.dto.threadId });
 }
 
 export async function addMembers(threadId: string, userIds: string[]) {

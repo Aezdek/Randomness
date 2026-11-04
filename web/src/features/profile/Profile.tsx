@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../core/api';
 import { block, openDirect, removeFollower, unblock } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { Kind, type PostPayload } from '../../core/payloads';
+import { Kind, type PostPayload, type ProfilePayload } from '../../core/payloads';
 import { savedPostIds, useIndex, useUserByName } from '../../core/selectors';
 import { toast, useApp } from '../../core/store';
 import type { IdList } from '../../core/types';
@@ -59,6 +59,7 @@ export function Profile() {
 
   const posts = useMemo(() => index.posts.filter((p) => p.dto.authorId === userId && (!p.dto.archived || isMe)), [index.posts, userId, isMe]);
   const visiblePosts = posts.filter((p) => !p.dto.archived);
+  const pinnedIds = useMemo<string[]>(() => (userId ? ((index.profiles[userId]?.payload as ProfilePayload | undefined)?.pinned ?? []) : []).slice(0, 3), [index, userId]);
   const grid = useMemo(() => {
     switch (tab) {
       case 'reels':
@@ -69,10 +70,14 @@ export function Profile() {
         const saved = savedPostIds(index);
         return index.posts.filter((p) => saved.has(p.dto.id));
       }
-      default:
-        return visiblePosts.filter((p) => p.dto.kind === Kind.POST || p.dto.kind === Kind.REEL);
+      default: {
+        // Pinned posts first, in pin order, then the rest newest first.
+        const all = visiblePosts.filter((p) => p.dto.kind === Kind.POST || p.dto.kind === Kind.REEL);
+        const top = pinnedIds.map((id) => all.find((p) => p.dto.id === id)).filter(Boolean) as typeof all;
+        return [...top, ...all.filter((p) => !pinnedIds.includes(p.dto.id))];
+      }
     }
-  }, [tab, visiblePosts, index, userId]);
+  }, [tab, visiblePosts, index, userId, pinnedIds]);
 
   if (!userId) {
     return (
@@ -192,7 +197,7 @@ export function Profile() {
             ]}
           />
           {grid.length ? (
-            <PostGrid posts={grid} reels={tab === 'reels'} />
+            <PostGrid posts={grid} reels={tab === 'reels'} pinned={tab === 'posts' ? pinnedIds : []} />
           ) : (
             <Empty
               icon={tab === 'reels' ? <Clapperboard size={34} /> : tab === 'saved' ? <Bookmark size={34} /> : tab === 'tagged' ? <SquareUser size={34} /> : <Grid3x3 size={34} />}

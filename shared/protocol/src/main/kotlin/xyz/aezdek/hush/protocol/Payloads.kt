@@ -29,6 +29,8 @@ data class ProfilePayload(
     val link: String = "",
     val pronouns: String = "",
     val avatar: MediaRef? = null,
+    /** Up to three posts or reels shown first on the profile grid, as on Instagram. */
+    val pinned: List<String> = emptyList(),
 )
 
 @Serializable
@@ -171,7 +173,15 @@ data class MessagePayload(
     val event: ChatEvent? = null,
     /** For [MessageType.NOTE_REPLY]: the note's words (notes vanish after a day; the reply keeps what it answered). */
     val quote: String? = null,
+    /** Sent on from another chat (Instagram's "Forwarded" label). */
+    val forwarded: Boolean = false,
+    /** For [MessageType.POLL]: the question and its options. Votes are [Kind.VOTE] children with [VotePayload.option]. */
+    val poll: Poll? = null,
 )
+
+/** A poll in a group chat, as on Instagram. Everyone in the chat sees who voted for what. */
+@Serializable
+data class Poll(val question: String, val options: List<String>)
 
 /**
  * A change anyone in a chat can make, sent as an ordinary (end-to-end encrypted) message so every member's app applies
@@ -204,6 +214,7 @@ object MessageType {
     const val CALL = "call"
     const val HEART = "heart"
     const val SYSTEM = "system"
+    const val POLL = "poll"
 }
 
 @Serializable

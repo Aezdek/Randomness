@@ -182,6 +182,10 @@ object Schema {
         """
         ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
         """.trimIndent(),
+        // 5: read receipts can be turned off; the others in a chat then never learn when this person read it.
+        """
+        ALTER TABLE users ADD COLUMN read_receipts INTEGER NOT NULL DEFAULT 1;
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

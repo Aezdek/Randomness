@@ -89,7 +89,14 @@ export function longDate(at: number) {
   return new Date(at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: new Date(at).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
-export function Ago({ at, className = 'faint' }: { at: number; className?: string }) {
+/** "5m ago", or "just now" (never "now ago"). */
+export const since = (at: number) => {
+  const a = ago(at);
+  return a === 'now' ? 'just now' : `${a} ago`;
+};
+
+/** A live relative time: "5m" (or "5m ago" / "just now" with [suffix]). */
+export function Ago({ at, className = 'faint', suffix }: { at: number; className?: string; suffix?: boolean }) {
   const [, tick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => tick((n) => n + 1), 60_000);
@@ -97,7 +104,7 @@ export function Ago({ at, className = 'faint' }: { at: number; className?: strin
   }, []);
   return (
     <time className={className} dateTime={new Date(at).toISOString()} title={new Date(at).toLocaleString()}>
-      {ago(at)}
+      {suffix ? since(at) : ago(at)}
     </time>
   );
 }

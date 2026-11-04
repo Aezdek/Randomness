@@ -19,7 +19,11 @@ export interface MediaRef {
   blurhash?: string | null; poster?: MediaRef | null; alt?: string | null;
 }
 
-export interface ProfilePayload { displayName?: string; bio?: string; link?: string; pronouns?: string; avatar?: MediaRef | null }
+export interface ProfilePayload {
+  displayName?: string; bio?: string; link?: string; pronouns?: string; avatar?: MediaRef | null;
+  /** Up to three posts or reels shown first on the grid. */
+  pinned?: string[];
+}
 
 export interface PostPayload {
   caption?: string; media: MediaRef[]; location?: string | null; taggedUserIds?: string[]; hideLikes?: boolean; commentsOff?: boolean;
@@ -64,7 +68,7 @@ export interface CallSummary { callId: string; video: boolean; durationMs: numbe
 
 export const MessageType = {
   TEXT: 'text', MEDIA: 'media', VOICE: 'voice', SHARE: 'share', STORY_REPLY: 'story_reply', STORY_REACTION: 'story_reaction',
-  CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply',
+  CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply', POLL: 'poll',
 } as const;
 
 export interface MessagePayload {
@@ -74,7 +78,13 @@ export interface MessagePayload {
   event?: ChatEvent | null;
   /** For NOTE_REPLY: the note's words, kept with the reply because notes vanish after a day. */
   quote?: string | null;
+  /** Sent on from another chat (shows "Forwarded"). */
+  forwarded?: boolean;
+  /** For POLL: the question and options; votes are VOTE children ({ stickerId: 'poll', option }). */
+  poll?: Poll | null;
 }
+
+export interface Poll { question: string; options: string[] }
 
 /** One change to a chat's look; see ChatEvent in Payloads.kt. */
 export interface ChatEvent {

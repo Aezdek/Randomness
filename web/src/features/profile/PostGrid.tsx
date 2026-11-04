@@ -1,4 +1,4 @@
-import { Clapperboard, Copy, Heart, MessageCircle } from 'lucide-react';
+import { Clapperboard, Copy, Heart, MessageCircle, Pin } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Kind, type PostPayload, type ReelPayload } from '../../core/payloads';
 import { commentsOf, likesOf, useIndex } from '../../core/selectors';
@@ -15,8 +15,8 @@ export function coverOf(entity: Entity) {
   return first?.mime.startsWith('video/') ? first.poster ?? null : first ?? null;
 }
 
-/** Three-up grid of square (or 9:16 for reels) tiles, with counts on hover. */
-export function PostGrid({ posts, reels }: { posts: Entity[]; reels?: boolean }) {
+/** Three-up grid of square (or 9:16 for reels) tiles, with counts on hover. [pinned] tiles show a pin, as on Instagram. */
+export function PostGrid({ posts, reels, pinned = [] }: { posts: Entity[]; reels?: boolean; pinned?: string[] }) {
   const index = useIndex();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,7 +35,13 @@ export function PostGrid({ posts, reels }: { posts: Entity[]; reels?: boolean })
             aria-label="Open post"
           >
             {cover ? <MediaImage media={cover} /> : <div className="media-frame" />}
-            {(many || isReel) && <span className="tile-kind">{isReel ? <Clapperboard size={18} fill="#fff" strokeWidth={1.5} /> : <Copy size={18} fill="#fff" strokeWidth={1.5} />}</span>}
+            {pinned.includes(post.dto.id) ? (
+              <span className="tile-kind" aria-label="Pinned">
+                <Pin size={18} fill="#fff" strokeWidth={1.5} style={{ rotate: '45deg' }} />
+              </span>
+            ) : (
+              (many || isReel) && <span className="tile-kind">{isReel ? <Clapperboard size={18} fill="#fff" strokeWidth={1.5} /> : <Copy size={18} fill="#fff" strokeWidth={1.5} />}</span>
+            )}
             {post.dto.archived && <span className="tile-archived">Archived</span>}
             <span className="tile-hover">
               <span>

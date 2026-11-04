@@ -185,6 +185,7 @@ class ConnectionService : Service() {
             MessageType.NOTE_REPLY -> "Replied to your note: ${payload.text.orEmpty()}"
             MessageType.CALL -> if (payload.call?.missed == true) "Missed call" else "Call"
             MessageType.HEART -> payload.text ?: "❤️"
+            MessageType.POLL -> "Poll: ${payload.poll?.question ?: payload.text.orEmpty()}"
             else -> payload.text ?: "Sent a message"
         }
 

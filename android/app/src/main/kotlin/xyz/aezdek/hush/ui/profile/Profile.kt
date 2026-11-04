@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.AccountBox
 import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -66,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -171,8 +173,10 @@ fun Profile(userId: String) {
         }.getOrNull()
     }
     val posts = index.posts.filter { it.dto.authorId == userId && !it.dto.archived }
+    // Up to three pinned posts lead the grid, in pin order, as on Instagram.
+    val pinnedIds = profile?.pinned.orEmpty().take(3)
     val grid = when (tab) {
-        Tab.POSTS -> posts
+        Tab.POSTS -> pinnedIds.mapNotNull { id -> posts.firstOrNull { it.id == id } } + posts.filter { it.id !in pinnedIds }
         Tab.REELS -> posts.filter { it.dto.kind == Kind.REEL }
         Tab.TAGGED -> index.posts.filter { userId in (it.post()?.tagged.orEmpty()) && !it.dto.archived }
         Tab.SAVED -> index.savedPostIds().let { saved -> index.posts.filter { it.id in saved } }
@@ -304,7 +308,7 @@ fun Profile(userId: String) {
                     }
                 }
             } else {
-                items(grid, key = { it.id }) { entity -> GridTile(entity, reels = tab == Tab.REELS) }
+                items(grid, key = { it.id }) { entity -> GridTile(entity, reels = tab == Tab.REELS, pinned = tab == Tab.POSTS && entity.id in pinnedIds) }
             }
         }
     }
@@ -344,7 +348,7 @@ private fun Stat(value: Int?, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun GridTile(entity: Entity, reels: Boolean = false) {
+fun GridTile(entity: Entity, reels: Boolean = false, pinned: Boolean = false) {
     val nav = LocalNav.current
     Box(Modifier.fillMaxWidth().aspectRatio(if (reels) 9f / 16f else 1f).clickable {
         if (entity.dto.kind == Kind.REEL && reels) nav.go(Screen.Reels(entity.id)) else nav.go(Screen.Post(entity.id))
@@ -352,7 +356,9 @@ fun GridTile(entity: Entity, reels: Boolean = false) {
         MediaImage(coverOf(entity), Modifier.fillMaxSize(), maxEdge = 480)
         val many = (entity.post()?.media?.size ?: 0) > 1
         val video = entity.dto.kind == Kind.REEL || entity.post()?.media?.firstOrNull()?.mime?.startsWith("video/") == true
-        if (many || video) {
+        if (pinned) {
+            Icon(Icons.Filled.PushPin, "Pinned", tint = Color.White, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(18.dp).rotate(45f))
+        } else if (many || video) {
             Icon(if (many) Icons.Filled.Collections else Icons.Filled.Movie, null, tint = Color.White,
                 modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(18.dp))
         }
@@ -484,7 +490,7 @@ fun EditProfile() {
         AezButton("Save", {
             saving = true
             scope.launch {
-                Graph.attempt { Graph.client.composer.saveProfile(ProfilePayload(name.trim(), bio.trim(), link.trim(), pronouns.trim(), avatar)) }
+                Graph.attempt { Graph.client.composer.saveProfile(current.copy(displayName = name.trim(), bio = bio.trim(), link = link.trim(), pronouns = pronouns.trim(), avatar = avatar)) }
                 saving = false
                 nav.back()
             }

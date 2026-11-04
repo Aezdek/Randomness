@@ -1,22 +1,23 @@
-import { ArrowLeft, Camera, CornerUpLeft, Eye, Ghost, Heart, ImagePlus, Info, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Smile, Square, Video, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Smile, Square, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { chatCustom, DEFAULT_REACTION, eventText, themeBackground, themeGradient, themeOf, type ChatCustom } from '../../core/chat';
-import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage } from '../../core/compose';
+import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage, votePoll } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { prepare, prepareVoice, upload } from '../../core/media';
-import { Audience, Kind, MessageType, type MessagePayload, type ReactionPayload, type StoryPayload } from '../../core/payloads';
+import { Audience, Kind, MessageType, type MessagePayload, type Poll, type ReactionPayload, type StoryPayload, type VotePayload } from '../../core/payloads';
 import { nameIn, threadTitle, useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
-import { ago, Center, longDate, RichText, Spinner } from '../../ui/bits';
+import { ago, Center, RichText, Spinner } from '../../ui/bits';
 import { MediaImage, MediaVideo, useMediaUrl } from '../../ui/Media';
 import { Sheet } from '../../ui/Sheet';
 import { calls } from '../calls/calls';
 import { coverOf } from '../profile/PostGrid';
 import { ThreadList } from './Inbox';
+import { ShareSheet } from './ShareSheet';
 import { ThreadInfo } from './ThreadInfo';
 
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
@@ -27,6 +28,88 @@ const MORE_EMOJI = [
   '🤔', '🫡', '🤭', '🫢', '😶', '🙄', '😬', '😴', '🤤', '🤢', '🤮', '🤧', '😵', '🤠', '😈', '💀',
   '👏', '🙌', '🙏', '🤝', '👌', '✌️', '🤞', '🫶', '💪', '👀', '🔥', '✨', '💯', '🎉', '💔', '💕',
 ];
+
+/** "14:32" in the viewer's own clock format. */
+const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+/** Instagram's centred stamps between messages: "Today 14:32", "Yesterday 09:10", "Mon 14:32", "3 Oct 14:32". */
+function chatStamp(at: number, now = Date.now()) {
+  const d = new Date(at);
+  const today = new Date(now);
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(today) - startOf(d)) / 86_400_000);
+  const time = clock(at);
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  if (days < 7) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })}, ${time}`;
+}
+const fullTime = (at: number) => new Date(at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/**
+ * The chat's touch gestures, as on Instagram: drag the chat left to slide every message over and show its time (it
+ * springs back on release), or drag one message right to reply to it. Vertical scrolling stays the browser's own.
+ */
+function useChatGestures(scroller: React.RefObject<HTMLDivElement | null>, onReply: (messageId: string) => void) {
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    let start: { x: number; y: number; id: number } | null = null;
+    let mode: 'times' | 'reply' | 'none' | null = null;
+    let row: HTMLElement | null = null;
+    let dx = 0;
+    const reset = () => {
+      el.classList.remove('dragging');
+      el.style.setProperty('--reveal', '0px');
+      if (row) {
+        row.style.left = '';
+        row.classList.remove('replying', 'swiping');
+      }
+      start = null;
+      mode = null;
+      row = null;
+      dx = 0;
+    };
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' || !e.isPrimary) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      row = (e.target as HTMLElement).closest<HTMLElement>('.msg[id^="msg-"]');
+      mode = null;
+    };
+    const move = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (!mode) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? (dx < 0 ? 'times' : row ? 'reply' : 'none') : 'none';
+        if (mode !== 'none') el.classList.add('dragging');
+      }
+      if (mode === 'times') el.style.setProperty('--reveal', `${Math.max(-84, Math.min(0, dx))}px`);
+      if (mode === 'reply' && row) {
+        row.classList.add('swiping');
+        row.style.left = `${Math.max(0, Math.min(84, dx))}px`;
+        row.classList.toggle('replying', dx > 60);
+      }
+    };
+    const up = () => {
+      if (mode === 'reply' && row && dx > 60) {
+        navigator.vibrate?.(10);
+        onReply(row.id.slice(4));
+      }
+      reset();
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', reset);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', reset);
+    };
+  }, [scroller, onReply]);
+}
 
 /** Opens a message's menu on a long press (phones have no right-click, and Safari never fires one). */
 function useLongPress(onLong: () => void) {
@@ -161,6 +244,7 @@ function Bubble({
   const [menu, setMenu] = useState(false);
   const [moreEmoji, setMoreEmoji] = useState(false);
   const [opened, setOpened] = useState(false);
+  const [forwarding, setForwarding] = useState(false);
   const longPress = useLongPress(() => setMenu(true));
   const p = message.payload;
   const reactions = (index.children[message.dto.id] ?? []).filter((e) => e.dto.kind === Kind.REACTION) as Entity<ReactionPayload>[];
@@ -172,6 +256,8 @@ function Bubble({
   const threadId = message.dto.threadId ?? null;
   const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, index, users));
   const pinned = custom.pinned.includes(message.dto.id);
+  const forwardable =
+    !once && !vanish && ([MessageType.TEXT, MessageType.MEDIA, MessageType.VOICE, MessageType.SHARE, MessageType.HEART] as string[]).includes(p.type);
 
   let content: React.ReactNode;
   if (p.type === MessageType.CALL && p.call) {
@@ -200,11 +286,13 @@ function Bubble({
           {p.text && <p className="bubble-caption">{p.text}</p>}
         </div>
       );
+  } else if (p.type === MessageType.POLL && p.poll) {
+    content = <PollCard message={message} />;
   } else {
     content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? p.text || DEFAULT_REACTION : p.text}</span> : <RichText text={p.text ?? ''} />;
   }
 
-  const plainBubble = big || p.type === MessageType.SHARE || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
+  const plainBubble = big || p.type === MessageType.SHARE || p.type === MessageType.POLL || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
   return (
     <div className={`msg ${mine ? 'mine' : 'theirs'}`} id={`msg-${message.dto.id}`}>
       {!mine && <span className="msg-avatar">{showAvatar && <Avatar userId={message.dto.authorId} size={28} />}</span>}
@@ -222,6 +310,11 @@ function Bubble({
             {story?.payload.media && <MediaImage media={story.payload.media.mime.startsWith('video/') && story.payload.media.poster ? story.payload.media.poster : story.payload.media} className="story-ref-thumb" />}
           </div>
         )}
+        {p.forwarded && (
+          <span className="msg-forwarded">
+            <Forward size={11} /> {mine ? 'You forwarded a message' : 'Forwarded'}
+          </span>
+        )}
         {replyTarget && (
           <div className="reply-ref">
             <CornerUpLeft size={12} /> {name(replyTarget.dto.authorId)}: {replyTarget.payload.text ?? 'Attachment'}
@@ -238,6 +331,9 @@ function Bubble({
             {p.edited && <span className="edited">Edited</span>}
           </div>
           <span className="msg-actions">
+            <time className="msg-hover-time" dateTime={new Date(message.dto.receivedAt).toISOString()} title={fullTime(message.dto.receivedAt)}>
+              {clock(message.dto.receivedAt)}
+            </time>
             <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="React">
               <Smile size={16} />
             </button>
@@ -249,6 +345,9 @@ function Bubble({
             </button>
           </span>
         </div>
+        <span className="msg-swipe-reply" aria-hidden>
+          <CornerUpLeft size={18} />
+        </span>
         {reactions.length > 0 && (
           <div className="reactions" onClick={() => setMenu(true)}>
             {[...new Set(reactions.map((r) => r.payload.emoji))].slice(0, 3).join('')}
@@ -256,7 +355,11 @@ function Bubble({
           </div>
         )}
       </div>
+      <time className="msg-time" dateTime={new Date(message.dto.receivedAt).toISOString()}>
+        {clock(message.dto.receivedAt)}
+      </time>
       <Sheet open={menu} onClose={() => (setMenu(false), setMoreEmoji(false))} hideHeader bottom bodyClass="flush">
+        <p className="menu-time">{fullTime(message.dto.receivedAt)}</p>
         <div className="quick-react">
           {QUICK.map((e) => (
             <motion.button key={e} whileHover={{ scale: 1.25 }} whileTap={{ scale: 0.9 }} onClick={() => (setMenu(false), void reactTo(message, e))}>
@@ -278,6 +381,7 @@ function Bubble({
         )}
         <div className="menu">
           <button onClick={() => (setMenu(false), onReply())}>Reply</button>
+          {forwardable && <button onClick={() => (setMenu(false), setForwarding(true))}>Forward</button>}
           {p.text && <button onClick={() => (setMenu(false), void navigator.clipboard.writeText(p.text ?? ''))}>Copy</button>}
           {threadId && message.dto.audience !== Audience.VANISH && message.dto.audience !== Audience.ONCE && (
             <button onClick={() => (setMenu(false), void sendChatEvent(threadId, pinned ? { unpin: message.dto.id } : { pin: message.dto.id }).catch((e) => toast(messageOf(e), 'error')))}>
@@ -303,7 +407,91 @@ function Bubble({
           )}
         </div>
       </Sheet>
+      {forwarding && <ShareSheet open onClose={() => setForwarding(false)} forward={p} />}
     </div>
+  );
+}
+
+/** A group-chat poll: tap an option to vote (tap it again to take the vote back); everyone sees who voted for what. */
+function PollCard({ message }: { message: Entity<MessagePayload> }) {
+  const index = useIndex();
+  const me = useApp((s) => s.me!);
+  const users = useApp((s) => s.users);
+  const poll = message.payload.poll!;
+  const votes = (index.children[message.dto.id] ?? []).filter((e) => e.dto.kind === Kind.VOTE) as Entity<VotePayload>[];
+  const myVote = votes.find((v) => v.dto.authorId === me.id)?.payload.option;
+  const total = votes.length;
+  const vote = (i: number) => void votePoll(message, i).catch((e) => toast(messageOf(e), 'error'));
+  return (
+    <div className="chat-poll-card">
+      <p className="chat-poll-question">
+        <ListChecks size={16} /> {poll.question}
+      </p>
+      {poll.options.map((option, i) => {
+        const voters = votes.filter((v) => v.payload.option === i);
+        const share = total ? voters.length / total : 0;
+        return (
+          <button
+            key={i}
+            className={`chat-poll-option ${myVote === i ? 'on' : ''}`}
+            onClick={() => vote(i)}
+            aria-pressed={myVote === i}
+            title={voters.map((v) => (v.dto.authorId === me.id ? 'You' : nameIn(message.dto.threadId ?? null, v.dto.authorId, index, users))).join(', ')}
+          >
+            <span className="chat-poll-fill" style={{ width: `${Math.round(share * 100)}%` }} />
+            <span className="chat-poll-label">{option}</span>
+            <span className="chat-poll-voters">
+              {voters.slice(0, 3).map((v) => (
+                <Avatar key={v.dto.id} userId={v.dto.authorId} size={18} />
+              ))}
+            </span>
+            {total > 0 && <span className="chat-poll-count">{voters.length}</span>}
+          </button>
+        );
+      })}
+      <p className="chat-poll-total">{total === 0 ? 'No votes yet · tap to vote' : `${total} vote${total === 1 ? '' : 's'}`}</p>
+    </div>
+  );
+}
+
+function PollSheet({ open, onClose, onSend }: { open: boolean; onClose: () => void; onSend: (poll: Poll) => void }) {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  const filled = options.map((o) => o.trim()).filter(Boolean);
+  const ready = question.trim().length > 0 && filled.length >= 2;
+  const close = () => (setQuestion(''), setOptions(['', '']), onClose());
+  return (
+    <Sheet open={open} onClose={close} title="Poll" bottom>
+      <form
+        className="chat-poll-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!ready) return;
+          onSend({ question: question.trim(), options: filled });
+          close();
+        }}
+      >
+        <input className="input" placeholder="Ask a question…" value={question} maxLength={140} onChange={(e) => setQuestion(e.target.value)} autoFocus />
+        {options.map((o, i) => (
+          <div className="chat-poll-form-option" key={i}>
+            <input className="input" placeholder={`Option ${i + 1}`} value={o} maxLength={60} onChange={(e) => setOptions((all) => all.map((x, j) => (j === i ? e.target.value : x)))} />
+            {options.length > 2 && (
+              <button type="button" className="icon-btn sm" aria-label={`Remove option ${i + 1}`} onClick={() => setOptions((all) => all.filter((_, j) => j !== i))}>
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        ))}
+        {options.length < 6 && (
+          <button type="button" className="btn btn-link chat-poll-add" onClick={() => setOptions((all) => [...all, ''])}>
+            <Plus size={16} /> Add option
+          </button>
+        )}
+        <button className="btn btn-primary btn-block" disabled={!ready}>
+          Send poll
+        </button>
+      </form>
+    </Sheet>
   );
 }
 
@@ -384,14 +572,36 @@ export function Chat() {
   const [info, setInfo] = useState(false);
   const [once, setOnce] = useState(false);
   const [vanish, setVanish] = useVanish(threadId);
+  const [polling, setPolling] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
+  // Scrolled up to read? New messages then don't yank the chat down; a "jump to latest" button counts them instead.
+  const atBottom = useRef(true);
+  const shownThread = useRef<string | null>(null);
+  const [below, setBelow] = useState<number | null>(null);
+  const lastAuthor = messages.at(-1)?.dto.authorId;
 
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, outbox.length, threadId]);
+    if (!el) return;
+    const fresh = shownThread.current !== threadId;
+    shownThread.current = threadId;
+    if (fresh || atBottom.current || lastAuthor === me.id) {
+      el.scrollTop = el.scrollHeight;
+      atBottom.current = true;
+      setBelow(null);
+    } else {
+      setBelow((n) => (n ?? 0) + 1);
+    }
+  }, [messages.length, outbox.length, threadId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setBelow((n) => (atBottom.current ? null : (n ?? 0)));
+  };
+  const toLatest = () => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
 
   const lastId = messages.at(-1)?.dto.id;
   useEffect(() => {
@@ -488,6 +698,17 @@ export function Chat() {
     });
   };
 
+  const replyById = useCallback(
+    (id: string) => {
+      const target = (index.messages[threadId] ?? []).find((m) => m.dto.id === id) as Entity<MessagePayload> | undefined;
+      if (!target) return;
+      setReplyTo(target);
+      document.getElementById('chat-input')?.focus();
+    },
+    [index, threadId],
+  );
+  useChatGestures(scroller, replyById);
+
   /** Scrolls to a message (a pin, a search result) and flashes it. */
   const jump = (messageId: string) => {
     setInfo(false);
@@ -570,7 +791,8 @@ export function Chat() {
             {custom.pinned.length > 1 && <span className="faint">{custom.pinned.length} pinned</span>}
           </button>
         )}
-        <div className="chat-scroll" ref={scroller}>
+        <div className="chat-scroll-wrap">
+        <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
           <div className="chat-intro">
             {thread.isGroup ? (
               <span className="group-avatar large">
@@ -600,7 +822,7 @@ export function Chat() {
             const showName = thread.isGroup && (!prev || prev.dto.authorId !== m.dto.authorId || isEvent(prev) || newDay || !!gap);
             return (
               <Fragment key={m.dto.id}>
-                {(newDay || gap) && <div className="day">{newDay ? longDate(m.dto.receivedAt) : new Date(m.dto.receivedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</div>}
+                {(newDay || gap) && <div className="day">{chatStamp(m.dto.receivedAt)}</div>}
                 {payload.type === MessageType.SYSTEM ? (
                   payload.event && <div className="chat-event" id={`msg-${m.dto.id}`}>{eventText(payload.event, m.dto.authorId, me.id, users, nameOf)}</div>
                 ) : (
@@ -656,6 +878,22 @@ export function Chat() {
                   <span />
                 </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+          <AnimatePresence>
+            {below !== null && (
+              <motion.button
+                className={`jump-latest ${below > 0 ? 'has-new' : ''}`}
+                initial={{ opacity: 0, y: 10, x: '-50%' }}
+                animate={{ opacity: 1, y: 0, x: '-50%' }}
+                exit={{ opacity: 0, y: 10, x: '-50%' }}
+                onClick={toLatest}
+                aria-label="Jump to latest messages"
+              >
+                <ArrowDown size={18} />
+                {below > 0 && <span>{below === 1 ? '1 new message' : `${below} new messages`}</span>}
+              </motion.button>
             )}
           </AnimatePresence>
         </div>
@@ -715,6 +953,11 @@ export function Chat() {
                   <button type="button" className="icon-btn sm" onClick={() => file.current?.click()} aria-label="Gallery">
                     <ImagePlus size={20} />
                   </button>
+                  {thread.isGroup && (
+                    <button type="button" className="icon-btn sm" onClick={() => setPolling(true)} aria-label="Create poll">
+                      <ListChecks size={20} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-btn sm quick-reaction"
@@ -730,6 +973,7 @@ export function Chat() {
           )}
         </div>
       </section>
+      <PollSheet open={polling} onClose={() => setPolling(false)} onSend={(poll) => void send({ type: MessageType.POLL, text: poll.question, poll }, { audience: Audience.THREAD })} />
       {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} onJump={jump} />}
     </div>
   );

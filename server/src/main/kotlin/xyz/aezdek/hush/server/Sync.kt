@@ -54,7 +54,7 @@ class Sync(
         val removed = ArrayList<String>()
         with(threads) {
             for (id in threadIds) {
-                val thread = thread(id)
+                val thread = thread(id, userId)
                 if (thread != null && thread.members.any { it.userId == userId }) threadsOut += thread else removed += id
             }
         }

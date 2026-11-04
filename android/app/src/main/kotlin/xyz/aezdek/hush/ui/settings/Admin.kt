@@ -69,6 +69,7 @@ import xyz.aezdek.hush.ui.components.ButtonStyle
 import xyz.aezdek.hush.ui.components.SheetItem
 import xyz.aezdek.hush.ui.components.Spinner
 import xyz.aezdek.hush.ui.components.ago
+import xyz.aezdek.hush.ui.components.since
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.Brand
 
@@ -139,7 +140,7 @@ internal fun AdminPanel(
                     if (s.uploadsBlocked) "Uploads paused" else "on the server", Modifier.weight(1f), warn = s.uploadsBlocked,
                 )
                 StatTile(
-                    "Last backup", s.lastBackupAt?.let { "${ago(it)} ago" } ?: "Never",
+                    "Last backup", s.lastBackupAt?.let { since(it) } ?: "Never",
                     if (backupOk) "Encrypted, off-site" else "Not set up yet", Modifier.weight(1f), warn = !backupOk, ok = backupOk,
                 )
             }

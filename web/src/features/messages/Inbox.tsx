@@ -35,6 +35,8 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
       return mine ? `You replied to their note: ${payload.text ?? ''}` : `Replied to your note: ${payload.text ?? ''}`;
     case MessageType.HEART:
       return you + (payload.text || '❤️');
+    case MessageType.POLL:
+      return `${mine ? 'You created a poll' : 'Poll'}: ${payload.poll?.question ?? ''}`;
     default:
       return payload.text ?? '';
   }
@@ -98,7 +100,7 @@ function NoteSheet({ note, onClose }: { note: Entity<NotePayload>; onClose: () =
         <Avatar userId={note.dto.authorId} size={84} />
         <b>{mine ? 'Your note' : author?.username}</b>
         <span className="faint">
-          <Ago at={note.dto.receivedAt} className="" /> ago · disappears after 24 hours
+          <Ago at={note.dto.receivedAt} className="" suffix /> · disappears after 24 hours
         </span>
         {mine ? (
           <>
@@ -154,14 +156,16 @@ export function ThreadList({ activeId }: { activeId?: string }) {
   const typing = useApp((s) => s.typing);
   const index = useIndex();
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'groups'>('all');
   const pinned = new Set(index.settings?.payload.pinnedThreads ?? []);
   const sorted = useMemo(
     () =>
       Object.values(threads)
         .map((t) => ({ thread: t, last: index.messages[t.id]?.at(-1), title: threadTitle(t, index, users, me.id) }))
         .filter((x) => !query || x.title.toLowerCase().includes(query.toLowerCase()))
+        .filter((x) => (filter === 'unread' ? unreadCount(x.thread, index, me.id) > 0 : filter === 'groups' ? x.thread.isGroup : true))
         .sort((a, b) => Number(pinned.has(b.thread.id)) - Number(pinned.has(a.thread.id)) || (b.last?.dto.receivedAt ?? b.thread.createdAt) - (a.last?.dto.receivedAt ?? a.thread.createdAt)),
-    [threads, index, users, me.id, query], // eslint-disable-line react-hooks/exhaustive-deps
+    [threads, index, users, me.id, query, filter], // eslint-disable-line react-hooks/exhaustive-deps
   );
   return (
     <>
@@ -172,6 +176,19 @@ export function ThreadList({ activeId }: { activeId?: string }) {
       <Notes />
       <div className="thread-list-head">
         <b>Messages</b>
+      </div>
+      <div className="inbox-filters" role="tablist" aria-label="Show">
+        {(
+          [
+            ['all', 'All'],
+            ['unread', 'Unread'],
+            ['groups', 'Groups'],
+          ] as const
+        ).map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={filter === key} className={`chip ${filter === key ? 'on' : ''}`} onClick={() => setFilter(key)}>
+            {label}
+          </button>
+        ))}
       </div>
       {sorted.map(({ thread, last, title }) => {
         const unread = unreadCount(thread, index, me.id);
@@ -214,7 +231,11 @@ export function ThreadList({ activeId }: { activeId?: string }) {
           </Link>
         );
       })}
-      {!sorted.length && <p className="faint" style={{ padding: '24px 20px' }}>No chats yet.</p>}
+      {!sorted.length && (
+        <p className="faint" style={{ padding: '24px 20px' }}>
+          {filter === 'unread' ? "You're all caught up." : filter === 'groups' ? 'No group chats yet.' : 'No chats yet.'}
+        </p>
+      )}
     </>
   );
 }

@@ -43,7 +43,7 @@ import xyz.aezdek.hush.ui.components.Avatar
 import xyz.aezdek.hush.ui.components.ConfirmDialog
 import xyz.aezdek.hush.ui.components.SectionLabel
 import xyz.aezdek.hush.ui.components.Spinner
-import xyz.aezdek.hush.ui.components.ago
+import xyz.aezdek.hush.ui.components.since
 import xyz.aezdek.hush.ui.theme.Aez
 import java.text.DateFormat
 import java.util.Date
@@ -91,7 +91,7 @@ internal fun MemberSheet(userId: String, users: List<AdminUserDto>, onDismiss: (
                             fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Aez.colors.text,
                         )
                         Text(
-                            "Joined ${date.format(Date(u.createdAt))}" + (u.lastActiveAt?.let { " · active ${ago(it)} ago" } ?: "") +
+                            "Joined ${date.format(Date(u.createdAt))}" + (u.lastActiveAt?.let { " · active ${since(it)}" } ?: "") +
                                 (m.invitedBy?.let { " · invited by ${name(it)}" } ?: ""),
                             fontSize = 13.sp, color = Aez.colors.text2,
                         )
@@ -125,8 +125,8 @@ internal fun MemberSheet(userId: String, users: List<AdminUserDto>, onDismiss: (
                         val others = chat.members.filter { it != u.id }
                         Text(if (chat.isGroup) "Group · ${chat.members.size} people" else "With ${people(others)}", fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
                         Text(
-                            (if (chat.isGroup) people(others) + " · " else "") + "${chat.messages} messages, ${chat.sentByThem} from them" +
-                                (chat.lastMessageAt?.let { " · last ${ago(it)} ago" } ?: ""),
+                            (if (chat.isGroup) people(others) + " · " else "") + (if (chat.messages == 1) "1 message" else "${chat.messages} messages") + ", ${chat.sentByThem} from them" +
+                                (chat.lastMessageAt?.let { " · last ${since(it)}" } ?: ""),
                             fontSize = 12.sp, color = Aez.colors.text2,
                         )
                     }
@@ -141,7 +141,7 @@ internal fun MemberSheet(userId: String, users: List<AdminUserDto>, onDismiss: (
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.elev2).padding(12.dp)) {
                     Text(device.name, fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
                     Text(
-                        (if (device.platform == "android") "Android app" else "Web") + " · signed in ${date.format(Date(device.createdAt))} · last used ${ago(device.lastSeenAt)} ago",
+                        (if (device.platform == "android") "Android app" else "Web") + " · signed in ${date.format(Date(device.createdAt))} · last used ${since(device.lastSeenAt)}",
                         fontSize = 12.sp, color = Aez.colors.text2,
                     )
                 }

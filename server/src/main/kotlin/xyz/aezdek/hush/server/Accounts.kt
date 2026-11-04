@@ -216,6 +216,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
 
     fun updateMe(session: Session, req: UpdateMeRequest, social: Social, fx: Effects): Me = db.tx {
         req.showActivity?.let { exec("UPDATE users SET show_activity = ? WHERE id = ?", it, session.userId) }
+        req.readReceipts?.let { exec("UPDATE users SET read_receipts = ? WHERE id = ?", it, session.userId) }
         req.isPrivate?.let { social.setPrivate(this, session.userId, it, fx) }
         val everyone = strings("SELECT id FROM users WHERE deleted = 0")
         change(everyone, ChangeType.USER, session.userId, fx, clock.now())
@@ -228,6 +229,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         Me(
             id = it.str("id"), username = it.str("username"), isAdmin = it.bool("is_admin"), isPrivate = it.bool("is_private"),
             showActivity = it.bool("show_activity"), createdAt = it.getLong("created_at"), keyVersion = it.getInt("key_version"),
+            readReceipts = it.bool("read_receipts"),
         )
     } ?: notFound("No such user")
 

@@ -168,6 +168,24 @@ class Composer(
         else publish(Draft(Kind.PROFILE, Audience.MEMBERS, payload, blobIds = blobIds))
     }
 
+    /** Pins a post or reel to the top of your profile grid (up to three, newest pin first), or unpins it. Returns whether it's pinned now. */
+    suspend fun togglePinnedPost(postId: String): Boolean {
+        val current = index().profile(self().first.id) ?: ProfilePayload()
+        val next = if (postId in current.pinned) current.pinned - postId else listOf(postId) + current.pinned
+        if (next.size > 3) throw UserFacingException("You can pin up to 3 posts. Unpin one first.")
+        saveProfile(current.copy(pinned = next))
+        return postId in next
+    }
+
+    /** Votes in a chat poll; voting for the same option again takes the vote back, as on Instagram. */
+    suspend fun votePoll(message: Entity, option: Int) {
+        val me = self().first.id
+        val mine = index().children[message.id]?.firstOrNull { it.dto.kind == Kind.VOTE && it.dto.authorId == me }
+        if (mine != null) delete(mine.id)
+        if (mine?.payloadAs<VotePayload>()?.option == option) return
+        publish(Draft(Kind.VOTE, Audience.PARENT, VotePayload("poll", option), parentId = message.id, threadId = message.dto.threadId))
+    }
+
     suspend fun saveSettings(change: (SettingsPayload) -> SettingsPayload): Entity {
         val existing = index().settingsEntity
         val payload = change(existing?.payloadAs<SettingsPayload>() ?: SettingsPayload())

@@ -1,5 +1,10 @@
 package xyz.aezdek.hush.ui.messages
 
+import xyz.aezdek.hush.ui.components.AezButton
+import xyz.aezdek.hush.ui.components.AezField
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.material3.ModalBottomSheet
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -8,7 +13,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -23,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,7 +43,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Forward
 import androidx.compose.material.icons.automirrored.outlined.Reply
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Poll
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
@@ -58,19 +70,29 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -101,6 +123,9 @@ import xyz.aezdek.hush.protocol.ChatEvent
 import xyz.aezdek.hush.protocol.MediaRef
 import xyz.aezdek.hush.protocol.MessagePayload
 import xyz.aezdek.hush.protocol.MessageType
+import xyz.aezdek.hush.protocol.Poll
+import xyz.aezdek.hush.protocol.VotePayload
+import xyz.aezdek.hush.protocol.Kind
 import xyz.aezdek.hush.protocol.ReactionPayload
 import xyz.aezdek.hush.protocol.StoryPayload
 import xyz.aezdek.hush.service.ConnectionService
@@ -156,6 +181,8 @@ fun Chat(threadId: String, focus: String? = null) {
     var replyTo by remember { mutableStateOf<Entity?>(null) }
     var editing by remember { mutableStateOf<Entity?>(null) }
     var menu by remember { mutableStateOf<Entity?>(null) }
+    var forwarding by remember { mutableStateOf<MessagePayload?>(null) }
+    var polling by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf<String?>(null) }
     var once by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -250,12 +277,23 @@ fun Chat(threadId: String, focus: String? = null) {
             }
         }
         var focused by remember(threadId, focus) { mutableStateOf(focus == null) }
+        // Scrolled up to read? New messages don't pull the chat down; the "jump to latest" button counts them instead.
+        val scrolledUp by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
+        var newBelow by remember(threadId) { mutableIntStateOf(0) }
+        var seenSize by remember(threadId) { mutableIntStateOf(-1) }
         LaunchedEffect(messages.size) {
+            val first = seenSize < 0
+            val grew = messages.size > seenSize
+            seenSize = messages.size
             if (!focused && focus != null) {
                 focused = true
                 jump(focus)
-            } else if (messages.isNotEmpty()) listState.animateScrollToItem(0)
+            } else if (messages.isNotEmpty() && (first || !scrolledUp || messages.last().dto.authorId == me.id)) {
+                newBelow = 0
+                listState.animateScrollToItem(0)
+            } else if (grew) newBelow++
         }
+        LaunchedEffect(scrolledUp) { if (!scrolledUp) newBelow = 0 }
         val pinned = custom.pinned.asReversed().firstNotNullOfOrNull { id -> messages.firstOrNull { it.id == id } }
         if (pinned != null) {
             val p = pinned.payloadAs<MessagePayload>()
@@ -273,27 +311,32 @@ fun Chat(threadId: String, focus: String? = null) {
                 if (custom.pinned.size > 1) Text("${custom.pinned.size} pinned", fontSize = 12.sp, color = Aez.colors.text3)
             }
         }
+        val reveal = remember { TimeReveal() }
         val theirRead = thread.members.filter { it.userId != me.id }.minOfOrNull { it.lastReadAt } ?: 0L
         val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.fillMaxSize().clipToBounds(), state = listState, reverseLayout = true) {
             if (typing.isNotEmpty()) item { TypingBubble(typing.first(), index, state) }
             itemsIndexed(reversed, key = { _, m -> m.id }) { reversedIndex, message ->
                 val i = messages.lastIndex - reversedIndex
                 val prev = messages.getOrNull(i - 1)
                 val next = messages.getOrNull(i + 1)
                 val newDay = prev == null || !sameDay(prev.dto.receivedAt, message.dto.receivedAt)
+                val gap = prev != null && message.dto.receivedAt - prev.dto.receivedAt > 30 * 60_000L
                 Column {
-                    if (newDay) {
+                    if (newDay || gap) {
                         Text(dayLabel(message.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3,
                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
                     }
                     fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type == MessageType.SYSTEM
                     Bubble(
                         message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]),
-                        firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || isEvent(prev),
+                        firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || gap || isEvent(prev),
                         lastOfGroup = next?.dto?.authorId != message.dto.authorId || isEvent(next),
                         flash = flash == message.id,
+                        reveal = reveal,
                         onLongPress = { menu = message },
+                        onReply = { replyTo = message },
                     )
                     if (message === lastMine && theirRead >= message.dto.receivedAt) {
                         Text("Seen", fontSize = 11.sp, color = Aez.colors.text3, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth().padding(end = 16.dp, top = 2.dp))
@@ -301,6 +344,25 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             }
             if (messages.isEmpty()) item { ChatIntro(others.firstOrNull(), title, index, state) }
+        }
+            androidx.compose.animation.AnimatedVisibility(
+                scrolledUp, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 },
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it / 2 },
+            ) {
+                Row(
+                    Modifier.clip(CircleShape).background(if (newBelow > 0) Color(theme.accent) else Aez.colors.elev2)
+                        .clickable { scope.launch { listState.animateScrollToItem(0) } }
+                        .padding(start = 10.dp, end = if (newBelow > 0) 14.dp else 10.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, "Jump to latest messages", tint = if (newBelow > 0) Color.White else Aez.colors.text, modifier = Modifier.size(20.dp))
+                    if (newBelow > 0) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (newBelow == 1) "1 new message" else "$newBelow new messages", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
         sending?.let {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -330,6 +392,7 @@ fun Chat(threadId: String, focus: String? = null) {
             accent = Color(theme.accent),
             themed = theme.hasBackground,
             onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
+            onPoll = if (thread.isGroup) ({ polling = true }) else null,
             onVoice = { media ->
                 scope.launch {
                     sending = "Sending voice message…"
@@ -344,11 +407,16 @@ fun Chat(threadId: String, focus: String? = null) {
         )
     }
     }
+    forwarding?.let { payload -> ShareSheet(null, { forwarding = null }, forward = payload) }
+    if (polling) {
+        PollSheet({ polling = false }) { poll -> send(MessagePayload(MessageType.POLL, text = poll.question, poll = poll), Audience.THREAD) }
+    }
     menu?.let { message ->
         val mine = message.dto.authorId == me.id
         val p = message.payloadAs<MessagePayload>()
         var more by remember(message.id) { mutableStateOf(false) }
         ActionSheet({ menu = null }) {
+            Text(fullTime(message.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 for (emoji in QUICK) {
                     Text(emoji, fontSize = 30.sp, modifier = Modifier.clip(CircleShape).clickable {
@@ -374,6 +442,9 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             }
             SheetItem("Reply", Icons.AutoMirrored.Outlined.Reply) { menu = null; replyTo = message }
+            val forwardable = message.dto.audience != Audience.VANISH && message.dto.audience != Audience.ONCE &&
+                p?.type in setOf(MessageType.TEXT, MessageType.MEDIA, MessageType.VOICE, MessageType.SHARE, MessageType.HEART)
+            if (forwardable) SheetItem("Forward", Icons.AutoMirrored.Outlined.Forward) { menu = null; forwarding = p }
             if (p?.type == MessageType.TEXT) {
                 SheetItem("Copy", Icons.Outlined.ContentCopy) {
                     menu = null
@@ -398,6 +469,78 @@ fun Chat(threadId: String, focus: String? = null) {
     }
 }
 
+/** A group-chat poll: tap an option to vote (again to take it back); everyone sees who voted for what. */
+@Composable
+private fun PollCard(message: Entity, poll: Poll, index: Index, state: AppState, accent: Color, modifier: Modifier) {
+    val me = state.me ?: return
+    val votes = index.children[message.id].orEmpty().filter { it.dto.kind == Kind.VOTE }
+    val myVote = votes.firstOrNull { it.dto.authorId == me.id }?.payloadAs<VotePayload>()?.option
+    Column(
+        modifier.widthIn(max = 290.dp).clip(RoundedCornerShape(20.dp)).background(Aez.colors.bubbleOther).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(Icons.Outlined.Poll, null, tint = Aez.colors.text2, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(poll.question, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
+        }
+        poll.options.forEachIndexed { i, option ->
+            val voters = votes.filter { it.payloadAs<VotePayload>()?.option == i }
+            val share = if (votes.isEmpty()) 0f else voters.size / votes.size.toFloat()
+            val chosen = myVote == i
+            val shape = RoundedCornerShape(12.dp)
+            Box(
+                Modifier.fillMaxWidth().clip(shape).border(1.dp, if (chosen) accent else Aez.colors.borderStrong, shape)
+                    .clickable { Graph.launch { Graph.client.composer.votePoll(message, i) } },
+            ) {
+                Box(Modifier.matchParentSize()) { Box(Modifier.fillMaxHeight().fillMaxWidth(share).background(accent.copy(alpha = 0.22f))) }
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(option, Modifier.weight(1f), color = Aez.colors.text, fontSize = 14.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal)
+                    for (v in voters.take(3)) Avatar(v.dto.authorId, 18.dp, index, state.users[v.dto.authorId]?.username)
+                    if (votes.isNotEmpty()) Text("  ${voters.size}", fontSize = 12.sp, color = Aez.colors.text2)
+                }
+            }
+        }
+        Text(
+            if (votes.isEmpty()) "No votes yet · tap to vote" else "${votes.size} vote" + if (votes.size == 1) "" else "s",
+            fontSize = 12.sp, color = Aez.colors.text3,
+        )
+    }
+}
+
+@Composable
+private fun PollSheet(onDismiss: () -> Unit, onSend: (Poll) -> Unit) {
+    var question by remember { mutableStateOf("") }
+    val options = remember { mutableStateListOf("", "") }
+    val filled = options.map { it.trim() }.filter { it.isNotEmpty() }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
+        Column(
+            Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Poll", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Aez.colors.text)
+            AezField(question, { question = it.take(140) }, "Ask a question…")
+            options.forEachIndexed { i, option ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { AezField(option, { options[i] = it.take(60) }, "Option ${i + 1}") }
+                    if (options.size > 2) {
+                        Text("✕", color = Aez.colors.text2, modifier = Modifier.clip(CircleShape).clickable { options.removeAt(i) }.padding(12.dp))
+                    }
+                }
+            }
+            if (options.size < 6) {
+                Text("+ Add option", color = Aez.colors.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { options.add("") }.padding(vertical = 8.dp, horizontal = 4.dp))
+            }
+            AezButton("Send poll", {
+                onSend(Poll(question.trim(), filled))
+                onDismiss()
+            }, Modifier.fillMaxWidth(), enabled = question.isNotBlank() && filled.size >= 2)
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
 /** "Today 21:40", "Yesterday 09:12", "Tuesday 18:03", then the date, as Instagram's chat dividers read. */
 private fun dayLabel(at: Long, now: Long = System.currentTimeMillis()): String {
     val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
@@ -410,8 +553,17 @@ private fun dayLabel(at: Long, now: Long = System.currentTimeMillis()): String {
         days == 0L -> "Today $time"
         days == 1L -> "Yesterday $time"
         days < 7L -> java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(Date(at)) + " $time"
-        else -> DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at))
+        else -> DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at)) + ", $time"
     }
+}
+
+private fun clock(at: Long) = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
+private fun fullTime(at: Long) = DateFormat.getDateTimeInstance(DateFormat.FULL, DateFormat.SHORT).format(Date(at))
+
+/** How far the chat is dragged left to show every message's time (Instagram's gesture), shared by all the rows. */
+@Stable
+private class TimeReveal {
+    var px by mutableFloatStateOf(0f)
 }
 
 private fun sameDay(a: Long, b: Long): Boolean {
@@ -450,7 +602,7 @@ private fun TypingBubble(userId: String, index: Index, state: AppState) {
 @Composable
 private fun Bubble(
     message: Entity, index: Index, state: AppState, isGroup: Boolean, themeBrush: Brush, themeColor: Color, firstOfGroup: Boolean, lastOfGroup: Boolean,
-    flash: Boolean, onLongPress: () -> Unit,
+    flash: Boolean, reveal: TimeReveal, onLongPress: () -> Unit, onReply: () -> Unit,
 ) {
     val nav = LocalNav.current
     val me = state.me ?: return
@@ -472,9 +624,62 @@ private fun Bubble(
         topStart = if (!mine && !firstOfGroup) 6.dp else 20.dp, topEnd = if (mine && !firstOfGroup) 6.dp else 20.dp,
         bottomStart = if (!mine && !lastOfGroup) 6.dp else 20.dp, bottomEnd = if (mine && !lastOfGroup) 6.dp else 20.dp,
     )
-    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 1.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+    // Drag left: every message slides over to show its time at the edge. Drag this one right: reply to it.
+    val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val timeWidth = with(density) { 64.dp.toPx() }
+    val replyAt = with(density) { 64.dp.toPx() }
+    var swipe by remember { mutableFloatStateOf(0f) }
+    var mode by remember { mutableIntStateOf(0) }
+    fun release() {
+        if (mode == 2 && swipe >= replyAt) onReply()
+        mode = 0
+        scope.launch { animate(reveal.px, 0f, animationSpec = spring(dampingRatio = 0.8f)) { v, _ -> reveal.px = v } }
+        scope.launch { animate(swipe, 0f, animationSpec = spring(dampingRatio = 0.8f)) { v, _ -> swipe = v } }
+    }
+    Box(
+        Modifier.fillMaxWidth().pointerInput(message.id) {
+            detectHorizontalDragGestures(onDragEnd = { release() }, onDragCancel = { release() }) { change, amount ->
+                change.consume()
+                if (mode == 0) mode = if (amount < 0) 1 else 2
+                if (mode == 1) reveal.px = (reveal.px + amount).coerceIn(-timeWidth, 0f)
+                else {
+                    val before = swipe
+                    swipe = (swipe + amount).coerceIn(0f, replyAt * 1.3f)
+                    if (before < replyAt && swipe >= replyAt) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }
+        },
+    ) {
+    Icon(
+        Icons.AutoMirrored.Outlined.Reply, null, tint = Aez.colors.text,
+        modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp).size(30.dp).clip(CircleShape).background(Aez.colors.elev2).padding(6.dp)
+            .graphicsLayer {
+                val progress = (swipe / replyAt).coerceIn(0f, 1f)
+                alpha = progress
+                scaleX = 0.6f + 0.4f * progress
+                scaleY = scaleX
+            },
+    )
+    Text(
+        clock(message.dto.receivedAt), fontSize = 11.sp, color = Aez.colors.text3, maxLines = 1,
+        modifier = Modifier.align(Alignment.CenterEnd).width(56.dp).offset { IntOffset((reveal.px + timeWidth).toInt(), 0) }
+            .graphicsLayer { alpha = (-reveal.px / timeWidth).coerceIn(0f, 1f) },
+    )
+    Column(
+        Modifier.fillMaxWidth().offset { IntOffset((reveal.px + swipe).toInt(), 0) }.padding(horizontal = 10.dp, vertical = 1.dp),
+        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+    ) {
         if (isGroup && !mine && firstOfGroup) {
             Text(index.nameIn(message.dto.threadId, message.dto.authorId, state.users), fontSize = 11.sp, color = Aez.colors.text3, modifier = Modifier.padding(start = 46.dp, top = 6.dp))
+        }
+        if (p.forwarded) {
+            Row(Modifier.padding(start = if (mine) 0.dp else 38.dp, top = 6.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.AutoMirrored.Outlined.Forward, null, tint = Aez.colors.text3, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(if (mine) "You forwarded a message" else "Forwarded", fontSize = 11.sp, color = Aez.colors.text3)
+            }
         }
         p.replyTo?.let { id ->
             val quoted = state.entities[id]?.payloadAs<MessagePayload>()
@@ -516,6 +721,7 @@ private fun Bubble(
                     VoiceBubble(p.media.first(), if (mine) Color.White else Aez.colors.text)
                 }
                 p.type == MessageType.SHARE -> SharedPost(p, state, clickModifier)
+                p.type == MessageType.POLL && p.poll != null -> PollCard(message, p.poll!!, index, state, themeColor, clickModifier)
                 p.type == MessageType.CALL -> CallBubble(p, mine, clickModifier.clip(shape).background(Aez.colors.bubbleOther)) {
                     message.dto.threadId?.let { Graph.calls.start(it, p.call?.video ?: true) }
                 }
@@ -559,6 +765,7 @@ private fun Bubble(
                     .background(Aez.colors.elev2).padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
+    }
     }
 }
 
@@ -688,6 +895,8 @@ private fun Composer(
     themed: Boolean,
     onHeart: () -> Unit,
     onVoice: (xyz.aezdek.hush.client.PreparedMedia) -> Unit,
+    /** Group chats only: start a poll. */
+    onPoll: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var text by remember(editing?.id) { mutableStateOf(editing?.payloadAs<MessagePayload>()?.text.orEmpty()) }
@@ -770,6 +979,7 @@ private fun Composer(
                 IconAction(Icons.Outlined.Visibility, if (once) "View once on" else "View once off", onToggleOnce,
                     tint = if (once) Brand.pink else Aez.colors.text2, size = 22.dp)
                 IconAction(Icons.Filled.Mic, "Voice message", { micPermission.launch(Manifest.permission.RECORD_AUDIO) }, size = 24.dp)
+                onPoll?.let { IconAction(Icons.Outlined.Poll, "Create poll", it, size = 23.dp) }
                 if (quickReaction == ChatCustom.DEFAULT_REACTION) IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = if (themed) accent else Brand.pink, size = 24.dp)
                 else Text(quickReaction, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onHeart).padding(8.dp))
             }

@@ -45,7 +45,7 @@ private val DIRECT_KINDS = setOf(Kind.ANSWER, Kind.ACTIVITY)
 private val PARENT_KINDS = mapOf(
     Kind.COMMENT to setOf(Kind.POST, Kind.REEL, Kind.COMMENT),
     Kind.LIKE to setOf(Kind.POST, Kind.REEL, Kind.COMMENT, Kind.STORY, Kind.NOTE),
-    Kind.VOTE to setOf(Kind.STORY),
+    Kind.VOTE to setOf(Kind.STORY, Kind.MESSAGE),
 )
 /** One per author and parent: liking twice is a no-op, unliking deletes. */
 private val ONE_PER_PARENT = setOf(Kind.LIKE, Kind.VOTE, Kind.REACTION)
@@ -170,7 +170,8 @@ class Objects(private val db: Db, private val clock: Clock) {
             in PARENT_KINDS.keys -> {
                 val p = parent ?: badRequest("${up.kind} needs a parent")
                 if (p.kind !in PARENT_KINDS.getValue(up.kind)) badRequest("A ${up.kind} cannot go on a ${p.kind}")
-                if (up.threadId != null || up.audience != Audience.PARENT) badRequest("${up.kind} inherits its parent's audience")
+                // A vote on a chat poll lives in the chat, like a reaction, so it syncs with the messages.
+                if (up.threadId != p.threadId || up.audience != Audience.PARENT) badRequest("${up.kind} inherits its parent's audience")
             }
             Kind.THREAD, Kind.EPOCH -> {
                 if (!allowThreadKinds) badRequest("Use the threads API for ${up.kind}")

@@ -16,13 +16,23 @@ import xyz.aezdek.hush.protocol.ThreadMemberDto
  */
 class Threads(private val db: Db, private val clock: Clock, private val objects: Objects) {
 
-    fun Tx.thread(id: String): ThreadDto? = one("SELECT * FROM threads WHERE id = ?", id) {
+    /**
+     * A chat as [viewer] sees it. Someone who turned read receipts off shows to the others as having read nothing
+     * (`lastReadAt` 0); they still see their own, and everyone else's.
+     */
+    fun Tx.thread(id: String, viewer: String? = null): ThreadDto? = one("SELECT * FROM threads WHERE id = ?", id) {
         Triple(it.bool("is_group"), it.str("created_by"), it.getLong("created_at"))
     }?.let { (isGroup, createdBy, createdAt) ->
         ThreadDto(
             id = id, isGroup = isGroup, createdBy = createdBy, createdAt = createdAt,
-            members = query("SELECT * FROM thread_members WHERE thread_id = ? ORDER BY joined_at", id) {
-                ThreadMemberDto(it.str("user_id"), it.str("role"), it.getLong("joined_at"), it.getLong("last_read_at"))
+            members = query(
+                """SELECT m.*, u.read_receipts FROM thread_members m JOIN users u ON u.id = m.user_id
+                   WHERE m.thread_id = ? ORDER BY m.joined_at""",
+                id,
+            ) {
+                val userId = it.str("user_id")
+                val hidden = viewer != null && userId != viewer && !it.bool("read_receipts")
+                ThreadMemberDto(userId, it.str("role"), it.getLong("joined_at"), if (hidden) 0 else it.getLong("last_read_at"))
             },
         )
     }
@@ -30,12 +40,12 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
     fun Tx.members(threadId: String) = strings("SELECT user_id FROM thread_members WHERE thread_id = ?", threadId)
 
     fun list(me: String): List<ThreadDto> = db.tx {
-        strings("SELECT thread_id FROM thread_members WHERE user_id = ?", me).mapNotNull { thread(it) }
+        strings("SELECT thread_id FROM thread_members WHERE user_id = ?", me).mapNotNull { thread(it, me) }
     }
 
     fun get(me: String, id: String): ThreadDto = db.tx {
         if (!exists("SELECT 1 FROM thread_members WHERE thread_id = ? AND user_id = ?", id, me)) notFound()
-        thread(id)!!
+        thread(id, me)!!
     }
 
     fun create(me: String, req: CreateThreadRequest, fx: Effects): ThreadDto = db.tx {
@@ -73,7 +83,7 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
         objects.createIn(this, me, req.thread, fx, allowThreadKinds = true)
         objects.createIn(this, me, req.epoch, fx, allowThreadKinds = true)
         change(members, ChangeType.THREAD, id, fx, now)
-        thread(id)!!
+        thread(id, me)!!
     }
 
     private fun requireWrapsForAll(recipients: List<String>, members: List<String>) {
@@ -87,7 +97,7 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
         val current = thread.members.map { it.userId }
         if (me !in current) notFound()
         val added = req.userIds.distinct().filter { it !in current }
-        if (added.isEmpty()) return@tx thread
+        if (added.isEmpty()) return@tx thread(threadId, me)!!
         if (current.size + added.size > MAX_MEMBERS) badRequest("Chats hold up to $MAX_MEMBERS people")
         for (user in added) {
             if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", user)) badRequest("Unknown member")
@@ -107,7 +117,7 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
             change(wrap.recipientId, ChangeType.OBJECT, threadId, fx, now)
         }
         change(members, ChangeType.THREAD, threadId, fx, now)
-        thread(threadId)!!
+        thread(threadId, me)!!
     }
 
     /**

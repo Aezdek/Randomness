@@ -31,7 +31,9 @@ import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.SetStatusRequest
 import xyz.aezdek.hush.protocol.BlobDto
 import xyz.aezdek.hush.protocol.CreateThreadRequest
+import xyz.aezdek.hush.protocol.Me
 import xyz.aezdek.hush.protocol.ReadRequest
+import xyz.aezdek.hush.protocol.UpdateMeRequest
 import xyz.aezdek.hush.protocol.SignalDto
 import xyz.aezdek.hush.protocol.StartUploadRequest
 import xyz.aezdek.hush.protocol.ThreadDto
@@ -153,6 +155,53 @@ class ThreadsAndMediaTest {
         assertEquals(HttpStatusCode.OK, admin.delete("/api/v1/admin/threads/${chat.threadId}/members/${cara.id}").status)
         assertFalse(cara.get("/api/v1/threads").body<List<ThreadDto>>().any { it.id == chat.threadId })
         assertEquals(HttpStatusCode.NotFound, cara.get("/api/v1/objects/${first.id}").status)
+    }
+
+    @Test
+    fun withReadReceiptsOffOthersNeverSeeWhenYouReadButYouStillSeeTheirs() = serverTest {
+        val (alice, bob) = members("alice", "bob")
+        val chat = startChat(alice, listOf(bob), group = false)
+        alice.create(alice.message(chat, "hi").first)
+        assertEquals(HttpStatusCode.OK, bob.patch("/api/v1/me", UpdateMeRequest(readReceipts = false)).status)
+        assertFalse(bob.get("/api/v1/me").body<Me>().readReceipts)
+
+        clock.advance(1000)
+        bob.post("/api/v1/threads/${chat.threadId}/read", ReadRequest(clock.now()))
+        alice.post("/api/v1/threads/${chat.threadId}/read", ReadRequest(clock.now()))
+        fun ThreadDto.readAt(m: Member) = members.first { it.userId == m.id }.lastReadAt
+        val seenByAlice = alice.get("/api/v1/threads/${chat.threadId}").body<ThreadDto>()
+        assertEquals(0L, seenByAlice.readAt(bob))
+        assertEquals(clock.now(), seenByAlice.readAt(alice))
+        val seenByBob = bob.get("/api/v1/threads/${chat.threadId}").body<ThreadDto>()
+        assertEquals(clock.now(), seenByBob.readAt(bob))
+        assertEquals(clock.now(), seenByBob.readAt(alice))
+        // The same goes for the chat list and sync.
+        assertEquals(0L, alice.get("/api/v1/threads").body<List<ThreadDto>>().first { it.id == chat.threadId }.readAt(bob))
+
+        bob.patch("/api/v1/me", UpdateMeRequest(readReceipts = true))
+        assertEquals(clock.now(), alice.get("/api/v1/threads/${chat.threadId}").body<ThreadDto>().readAt(bob))
+    }
+
+    @Test
+    fun pollVotesLiveInTheChatOnePerPersonAndOnlyMembersCanVote() = serverTest {
+        val (alice, bob, cara) = members("alice", "bob", "cara")
+        val chat = startChat(alice, listOf(bob), group = true)
+        val (poll) = alice.message(chat, """{"type":"poll","poll":{"question":"Pizza?","options":["Yes","No"]}}""")
+        assertEquals(HttpStatusCode.Created, alice.create(poll).status)
+        fun Member.vote(threadId: String?) = newId().let { id ->
+            seal("vote", "parent", """{"stickerId":"poll","option":0}""", objectId = id, parentId = poll.id, threadId = threadId,
+                key = ObjectCrypto.childKey(ObjectCrypto.childKey(chat.epochKey, poll.id), id), wrap = false).first
+        }
+        // A vote on a chat message carries the chat, like a reaction does.
+        assertEquals(HttpStatusCode.BadRequest, bob.create(bob.vote(null)).status)
+        val vote = bob.vote(chat.threadId)
+        assertEquals(HttpStatusCode.Created, bob.create(vote).status)
+        assertEquals(HttpStatusCode.Conflict, bob.create(bob.vote(chat.threadId)).status)
+        assertEquals(HttpStatusCode.NotFound, cara.create(cara.vote(chat.threadId)).status)
+        assertEquals(HttpStatusCode.OK, alice.get("/api/v1/objects/${vote.id}").status)
+        // Changing your vote: take the old one back, vote again.
+        assertEquals(HttpStatusCode.OK, bob.delete("/api/v1/objects/${vote.id}").status)
+        assertEquals(HttpStatusCode.Created, bob.create(bob.vote(chat.threadId)).status)
     }
 
     @Test

@@ -27,6 +27,8 @@ import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.Kind
 import xyz.aezdek.hush.protocol.LikePayload
 import xyz.aezdek.hush.protocol.MessagePayload
+import xyz.aezdek.hush.protocol.VotePayload
+import xyz.aezdek.hush.protocol.Poll
 import xyz.aezdek.hush.protocol.MessageType
 import xyz.aezdek.hush.protocol.PostPayload
 import xyz.aezdek.hush.protocol.ProfilePayload
@@ -158,6 +160,22 @@ class ClientTest {
         assertEquals(2, ana.current.messages[threadId]!!.size)
         assertEquals(1, ana.current.reactionsOf(message.id).size)
         assertEquals(1, ana.current.unreadCount(ana.state.value.threads[threadId]!!, anaId))
+
+        // A poll: votes are children of the message, one each; voting for the same option again takes it back.
+        val poll = ana.composer.sendMessage(threadId, MessagePayload(MessageType.POLL, text = "Where?", poll = Poll("Where?", listOf("Café", "Park"))))
+        bo.engine.sync()
+        bo.composer.votePoll(bo.current.messages[threadId]!!.first { it.id == poll.id }, 1)
+        ana.engine.sync()
+        assertEquals(1, ana.current.children[poll.id].orEmpty().single { it.dto.kind == Kind.VOTE }.payloadAs<VotePayload>()!!.option)
+        bo.composer.votePoll(bo.current.messages[threadId]!!.first { it.id == poll.id }, 1)
+        ana.engine.sync()
+        assertTrue(ana.current.children[poll.id].orEmpty().none { it.dto.kind == Kind.VOTE })
+
+        // Pinned posts live in the (encrypted) profile; editing the profile keeps them.
+        assertTrue(ana.composer.togglePinnedPost(post.id))
+        ana.composer.saveProfile(ana.current.profile(anaId)!!.copy(bio = "Pinned something"))
+        bo.engine.sync()
+        assertEquals(listOf(post.id), bo.current.profile(anaId)!!.pinned)
 
         // Call signalling is sealed to Bo and signed by Ana; anything else is rejected.
         val frame = ana.sealSignal(boId, CallSignal("offer", "call-1", sdp = "v=0"))!!

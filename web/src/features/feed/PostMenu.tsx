@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { block, deleteObject, edit, setArchived, unfollow } from '../../core/compose';
+import { block, deleteObject, edit, setArchived, togglePinnedPost, unfollow } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import type { PostPayload } from '../../core/payloads';
+import type { PostPayload, ProfilePayload } from '../../core/payloads';
+import { useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import { Confirm, Sheet } from '../../ui/Sheet';
 
@@ -15,6 +16,8 @@ export function PostMenu({ entity, open, onClose }: { entity: Entity; open: bool
   const [editing, setEditing] = useState(false);
   const payload = entity.payload as PostPayload;
   const mine = entity.dto.authorId === me.id;
+  const index = useIndex();
+  const pinned = ((index.profiles[me.id]?.payload as ProfilePayload | undefined)?.pinned ?? []).includes(entity.dto.id);
   const run = (action: () => Promise<unknown>, done?: string) => async () => {
     onClose();
     try {
@@ -36,6 +39,11 @@ export function PostMenu({ entity, open, onClose }: { entity: Entity; open: bool
                 Delete
               </button>
               <button onClick={() => (onClose(), setEditing(true))}>Edit</button>
+              {!entity.dto.archived && (
+                <button onClick={run(() => togglePinnedPost(entity.dto.id), pinned ? 'Unpinned from your profile' : 'Pinned to your profile')}>
+                  {pinned ? 'Unpin from profile' : 'Pin to your profile'}
+                </button>
+              )}
               <button onClick={run(() => setArchived(entity.dto.id, !entity.dto.archived), entity.dto.archived ? 'Shown on your profile again' : 'Archived — only you can see it')}>
                 {entity.dto.archived ? 'Show on profile' : 'Archive'}
               </button>

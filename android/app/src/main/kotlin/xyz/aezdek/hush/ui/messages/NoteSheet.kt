@@ -48,7 +48,7 @@ import xyz.aezdek.hush.ui.components.AezButton
 import xyz.aezdek.hush.ui.components.AezField
 import xyz.aezdek.hush.ui.components.Avatar
 import xyz.aezdek.hush.ui.components.ButtonStyle
-import xyz.aezdek.hush.ui.components.ago
+import xyz.aezdek.hush.ui.components.since
 import xyz.aezdek.hush.ui.CreateKind
 import xyz.aezdek.hush.ui.theme.Aez
 
@@ -82,7 +82,7 @@ internal fun NoteSheet(authorId: String, onDismiss: () -> Unit) {
             }
             Avatar(authorId, 84.dp, index, username)
             Text(if (mine) "Your note" else username, fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
-            Text("${ago(entity.dto.receivedAt)} ago · disappears after 24 hours", fontSize = 12.sp, color = Aez.colors.text2)
+            Text("${since(entity.dto.receivedAt)} · disappears after 24 hours", fontSize = 12.sp, color = Aez.colors.text2)
             if (mine) {
                 Text(
                     if (likes.isEmpty()) "No likes yet"

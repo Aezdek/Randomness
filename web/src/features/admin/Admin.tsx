@@ -91,7 +91,7 @@ export function Admin() {
           <h1>Admin</h1>
           <p className="faint">
             Hush {status.version}
-            {status.startedAt ? <> · up since <Ago at={status.startedAt} className="" /> ago</> : null}
+            {status.startedAt ? <> · started <Ago at={status.startedAt} className="" suffix /></> : null}
           </p>
         </div>
         {status.updateAvailable && status.latestVersion && <span className="admin-pill">Update {status.latestVersion} available</span>}
@@ -364,7 +364,7 @@ function MemberView({ userId, users, onClose, onChanged }: { userId: string; use
               </b>
               <span className="faint">
                 Joined {new Date(u.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                {u.lastActiveAt ? <> · active <Ago at={u.lastActiveAt} className="" /> ago</> : null}
+                {u.lastActiveAt ? <> · active <Ago at={u.lastActiveAt} className="" suffix /></> : null}
                 {info.invitedBy ? ` · invited by ${name(info.invitedBy)}` : ''}
               </span>
             </div>
@@ -400,9 +400,8 @@ function MemberView({ userId, users, onClose, onChanged }: { userId: string; use
                   <b>{c.isGroup ? `Group · ${c.members.length} people` : `With ${people(c.members.filter((id) => id !== u.id))}`}</b>
                   <span className="faint">
                     {c.isGroup ? `${people(c.members.filter((id) => id !== u.id))} · ` : ''}
-                    {c.messages} messages, {c.sentByThem} from them{c.lastMessageAt ? ' · last ' : ''}
-                    {c.lastMessageAt ? <Ago at={c.lastMessageAt} className="" /> : null}
-                    {c.lastMessageAt ? ' ago' : ''}
+                    {c.messages === 1 ? '1 message' : `${c.messages} messages`}, {c.sentByThem} from them{c.lastMessageAt ? ' · last ' : ''}
+                    {c.lastMessageAt ? <Ago at={c.lastMessageAt} className="" suffix /> : null}
                   </span>
                 </span>
                 {!u.isAdmin && (
@@ -426,7 +425,7 @@ function MemberView({ userId, users, onClose, onChanged }: { userId: string; use
                 <span className="admin-row-main">
                   <b>{d.name}</b>
                   <span className="faint">
-                    {d.platform === 'android' ? 'Android app' : 'Web'} · signed in {new Date(d.createdAt).toLocaleDateString()} · last used <Ago at={d.lastSeenAt} className="" /> ago
+                    {d.platform === 'android' ? 'Android app' : 'Web'} · signed in {new Date(d.createdAt).toLocaleDateString()} · last used <Ago at={d.lastSeenAt} className="" suffix />
                   </span>
                 </span>
               </div>

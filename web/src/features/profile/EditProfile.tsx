@@ -53,7 +53,7 @@ export function EditProfile({ open, onClose }: { open: boolean; onClose: () => v
   const save = async () => {
     setBusy(true);
     try {
-      await saveProfile({ displayName: displayName.trim(), pronouns: pronouns.trim(), bio: bio.trim(), link: link.trim(), avatar });
+      await saveProfile({ ...index.profiles[me.id]?.payload, displayName: displayName.trim(), pronouns: pronouns.trim(), bio: bio.trim(), link: link.trim(), avatar });
       toast('Profile saved', 'success');
       onClose();
     } catch (e) {

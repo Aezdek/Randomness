@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HeartBroken
 import androidx.compose.material.icons.outlined.PersonRemove
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.SpeakerNotesOff
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -213,6 +214,17 @@ fun PostMenu(entity: Entity, mine: Boolean, onDismiss: () -> Unit) {
             SheetItem(if (off) "Turn on commenting" else "Turn off commenting", Icons.Outlined.SpeakerNotesOff) {
                 onDismiss()
                 Graph.launch { composer.edit(entity, post?.copy(commentsOff = !off) ?: reel!!.copy(commentsOff = !off)) }
+            }
+            if (!entity.dto.archived) {
+                val pinnedPosts = Graph.client.index.collectAsState().value.profile(entity.dto.authorId)?.pinned.orEmpty()
+                val isPinned = entity.id in pinnedPosts
+                SheetItem(if (isPinned) "Unpin from profile" else "Pin to your profile", Icons.Outlined.PushPin) {
+                    onDismiss()
+                    Graph.launch {
+                        Graph.attempt { composer.togglePinnedPost(entity.id) }
+                            ?.let { Graph.toast(if (it) "Pinned to your profile" else "Unpinned from your profile") }
+                    }
+                }
             }
             SheetItem(if (entity.dto.archived) "Show on profile" else "Archive", if (entity.dto.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive) {
                 onDismiss()

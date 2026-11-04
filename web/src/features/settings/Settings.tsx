@@ -40,7 +40,7 @@ const SECTIONS = [
   { id: 'notifications', label: 'Notifications and calls', icon: Bell },
   { id: 'security', label: 'Encryption and devices', icon: Laptop },
   { id: 'archive', label: 'Archive', icon: Archive },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'appearance', label: 'Appearance & app', icon: Palette },
   { id: 'data', label: 'Your data', icon: Download },
 ] as const;
 
@@ -111,6 +111,9 @@ function PrivacySection() {
       </Row>
       <Row title="Show activity status" sub="People you can see will know when you’re online. Turning this off hides theirs from you too.">
         <Switch checked={me.showActivity} onChange={(v) => void run(updateMe({ showActivity: v }))} label="Show activity status" />
+      </Row>
+      <Row title="Read receipts" sub="Off: people won’t see “Seen” when you read their messages. You’ll still see when they read yours.">
+        <Switch checked={me.readReceipts !== false} onChange={(v) => void run(updateMe({ readReceipts: v }))} label="Read receipts" />
       </Row>
     </Card>
   );
@@ -258,7 +261,7 @@ function SecuritySection() {
               <span className="device-icon">{s.platform === 'android' ? <Smartphone size={20} /> : <Laptop size={20} />}</span>
               <span className="user-row-text">
                 <b>{s.deviceName}</b>
-                <span className="faint">{s.current ? 'This device' : <>Active <Ago at={s.lastSeenAt} className="" /> ago</>}</span>
+                <span className="faint">{s.current ? 'This device' : <>Active <Ago at={s.lastSeenAt} className="" suffix /></>}</span>
               </span>
               {!s.current && (
                 <button className="btn btn-secondary btn-sm" onClick={() => void run(api.delete(`/auth/sessions/${s.id}`)).then(load)}>
@@ -325,9 +328,38 @@ function ArchiveSection() {
 function AppearanceSection() {
   const theme = useUi((s) => s.theme);
   return (
+    <>
+      <Card>
+        <Row title="Theme">
+          <Segmented id="theme" value={theme} onChange={applyTheme} options={[{ id: 'system', label: 'Auto' }, { id: 'dark', label: 'Dark' }, { id: 'light', label: 'Light' }]} />
+        </Row>
+      </Card>
+      <AndroidAppCard />
+    </>
+  );
+}
+
+/** Where to get the Android app: the APK this server ships, signed on the server itself (not on GitHub). */
+function AndroidAppCard() {
+  const [version, setVersion] = useState<{ versionName: string; size: number } | null | undefined>(undefined);
+  useEffect(() => {
+    api.get<{ versionName: string; size: number }>('/app/version').then(setVersion, () => setVersion(null));
+  }, []);
+  return (
     <Card>
-      <Row title="Theme">
-        <Segmented id="theme" value={theme} onChange={applyTheme} options={[{ id: 'system', label: 'Auto' }, { id: 'dark', label: 'Dark' }, { id: 'light', label: 'Light' }]} />
+      <Row
+        title="Android app"
+        sub={
+          version === null
+            ? 'This server has no Android build yet. It comes with the next update.'
+            : `Calls ring like a phone call, and notifications arrive with the app closed.${version ? ` Version ${version.versionName}, ${(version.size / 1_048_576).toFixed(0)} MB.` : ''} Open this on your phone to install.`
+        }
+      >
+        {version !== null && (
+          <a className="btn btn-primary btn-sm" href="/download/hush.apk" download>
+            Download
+          </a>
+        )}
       </Row>
     </Card>
   );

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -104,6 +105,7 @@ import xyz.aezdek.hush.ui.components.Spinner
 import xyz.aezdek.hush.ui.components.TopBar
 import xyz.aezdek.hush.ui.components.VerifiedBadge
 import xyz.aezdek.hush.ui.components.ago
+import xyz.aezdek.hush.ui.components.since
 import xyz.aezdek.hush.ui.messages.ToggleRow
 import xyz.aezdek.hush.ui.profile.GridTile
 import xyz.aezdek.hush.ui.theme.Aez
@@ -288,6 +290,10 @@ private fun PrivacySection() {
             "People you can see know when you're online. Turning this off hides theirs from you too.") {
             Graph.launch { Graph.client.updateMe(showActivity = !me.showActivity) }
         }
+        ToggleRow(Icons.Outlined.DoneAll, "Read receipts", me.readReceipts,
+            "Off: people won't see \"Seen\" when you read their messages. You'll still see when they read yours.") {
+            Graph.launch { Graph.client.updateMe(readReceipts = !me.readReceipts) }
+        }
     }
 }
 
@@ -396,7 +402,7 @@ private fun SecuritySection() {
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(session.deviceName, fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
-                    Text(if (session.current) "This phone" else "Active ${ago(session.lastSeenAt)} ago", fontSize = 12.sp, color = Aez.colors.text2)
+                    Text(if (session.current) "This phone" else "Active ${since(session.lastSeenAt)}", fontSize = 12.sp, color = Aez.colors.text2)
                 }
                 if (!session.current) {
                     AezButton("Sign out", {
