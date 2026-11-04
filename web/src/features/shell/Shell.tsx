@@ -20,7 +20,7 @@ import { Chat } from '../messages/Chat';
 import { Inbox } from '../messages/Inbox';
 import { Profile } from '../profile/Profile';
 import { Reels } from '../reels/Reels';
-import { Settings } from '../settings/Settings';
+import { Settings, settingsTitle } from '../settings/Settings';
 import { Admin } from '../admin/Admin';
 import { Verify } from '../settings/Verify';
 import { StoryViewerPage } from '../stories/StoryViewer';
@@ -134,7 +134,7 @@ function topBarTitle(pathname: string, myName: string | undefined): { title: str
   if (pathname.startsWith('/reels')) return { title: 'Reels', back: false };
   if (pathname.startsWith('/explore/tags/')) return { title: `#${decodeURIComponent(pathname.split('/')[3])}`, back: true };
   if (pathname === '/activity') return { title: 'Notifications', back: true };
-  if (pathname.startsWith('/settings')) return { title: 'Settings', back: true };
+  if (pathname.startsWith('/settings')) return { title: settingsTitle(pathname.split('/')[2]) ?? 'Settings', back: true };
   if (pathname.startsWith('/verify/')) return { title: 'Security code', back: true };
   if (pathname === '/admin') return { title: 'Admin', back: true };
   if (pathname.startsWith('/p/')) return { title: 'Post', back: true };

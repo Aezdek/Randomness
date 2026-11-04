@@ -32,6 +32,9 @@ import { StoryThumb } from '../stories/StoryThumb';
 import { MyQr } from './Verify';
 import { safetyCode, groupDigits } from '../../crypto/safety';
 
+/** A settings page's name, for the phone's top bar. */
+export const settingsTitle = (id: string | undefined) => SECTIONS.find((s) => s.id === id)?.label;
+
 const SECTIONS = [
   { id: 'account', label: 'Account', icon: KeyRound },
   { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
@@ -437,10 +440,8 @@ export function Settings() {
       <section className="settings-body">
         {active ? (
           <>
-            <h2 className="settings-title">
-              <Link to="/settings" className="only-mobile" style={{ marginRight: 8 }}>‹</Link>
-              {active.label}
-            </h2>
+            {/* On phones the top bar names the page and has the back button. */}
+            <h2 className="settings-title hide-mobile">{active.label}</h2>
             {body}
           </>
         ) : (
