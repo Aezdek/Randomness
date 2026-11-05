@@ -321,12 +321,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # GitHub's API sometimes answers 500 for a minute; every call here is safe to repeat.
+          retry() {
+            for attempt in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "::warning::attempt $attempt failed: $*"
+              sleep $((attempt * 20))
+            done
+            return 1
+          }
           git tag -f hush-latest "$GITHUB_SHA"
-          git push -f origin refs/tags/hush-latest
+          retry git push -f origin refs/tags/hush-latest
           NOTES="Hush $VERSION, built from ${GITHUB_SHA::12}. Install: see deploy/RUNBOOK.md. Update on Resolute: sudo /opt/hl/hush/update.sh"
           if gh release view hush-latest >/dev/null 2>&1; then
-            gh release edit hush-latest --title "Hush $VERSION" --notes "$NOTES"
+            retry gh release edit hush-latest --title "Hush $VERSION" --notes "$NOTES"
           else
-            gh release create hush-latest --title "Hush $VERSION" --notes "$NOTES" --latest=false
+            retry gh release create hush-latest --title "Hush $VERSION" --notes "$NOTES" --latest=false || retry gh release edit hush-latest --title "Hush $VERSION" --notes "$NOTES"
           fi
-          gh release upload hush-latest out/* --clobber
+          # One file at a time, the manifest last: until it is replaced, update.sh's checksums match the old files
+          # or nothing, so a half-finished upload is never installed.
+          for file in $(find out -type f ! -name hush-release.env | sort) out/hush-release.env; do
+            retry gh release upload hush-latest "$file" --clobber
+          done
