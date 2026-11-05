@@ -359,6 +359,7 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   // out of the call (it used to answer the video offer itself, and decline the running call 45 seconds later).
   const bobLaptop = await person(browser, 'bob-laptop');
   await bobLaptop.page.goto('/');
+  await bobLaptop.page.getByRole('button', { name: 'Sign in' }).first().click();
   await bobLaptop.page.getByLabel('Username').fill('bob');
   await bobLaptop.page.getByLabel('Password', { exact: true }).fill('bob has a long password');
   await bobLaptop.page.getByRole('button', { name: 'Sign in' }).last().click();

@@ -50,9 +50,6 @@ function ServerWaiting({ state }: { state: 'setup' | 'locked' }) {
           ? 'The admin is choosing the server password, on the server itself. This page carries on by itself when it’s done.'
           : 'Hush moved to new hardware or was restored, so its database needs the server password. The admin unlocks it on the server; this page carries on by itself.'}
       </p>
-      <p className="faint server-waiting-seal" title="Everything Hush stores is sealed">
-        sealed with AezCrypt
-      </p>
     </div>
   );
 }

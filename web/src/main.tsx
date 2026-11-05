@@ -7,10 +7,9 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/shell.css';
 import './styles/features.css';
+import './styles/landing.css';
 
 applyTheme(useUi.getState().theme);
-// For whoever opens the console.
-console.info('%c🔒 sealed with AezCrypt', 'color:#8e8e93;font:11px ui-monospace,monospace;letter-spacing:.08em');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

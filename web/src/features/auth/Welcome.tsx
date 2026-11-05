@@ -1,158 +1,518 @@
-import { ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useState, type FormEvent } from 'react';
-import { messageOf } from '../../core/errors';
-import { signIn, signUp } from '../../core/session';
+import { ArrowRight, ChevronDown, KeyRound, LockKeyhole, MessageCircle, Server, Share2, ShieldCheck, Smartphone, Users, Video, X } from 'lucide-react';
+import { AnimatePresence, MotionConfig, motion, useMotionValueEvent, useScroll, useTransform, type MotionValue } from 'motion/react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BrandMark, Wordmark } from '../../ui/Brand';
-import { Segmented, Spinner } from '../../ui/bits';
+import { AuthForm, type AuthMode } from './AuthForm';
+import { CallPanel, PhoneMock, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
-type Mode = 'signin' | 'join';
+/*
+ * What someone sees at hush.aezdek.xyz before signing in: what Hush is, why it's private, and the door in
+ * (sign in, or join with the invite someone sent). An invite link opens the join form straight away.
+ */
 
-/** Sign in, or join with an invite. Passwords never leave the device: they are stretched with Argon2id here. */
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+function Reveal({ children, delay = 0, className = '' }: { children: ReactNode; delay?: number; className?: string }) {
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px' }}
+      transition={{ duration: 0.8, delay, ease: EASE }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return <p className="lp-eyebrow">{children}</p>;
+}
+
 export function Welcome() {
-  const [mode, setMode] = useState<Mode>(() => (new URLSearchParams(location.search).get('invite') ? 'join' : 'signin'));
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [invite, setInvite] = useState(() => new URLSearchParams(location.search).get('invite') ?? '');
-  const [show, setShow] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (mode === 'join') {
-      if (!/^[a-z0-9._]{2,30}$/.test(username.trim().toLowerCase())) return setError('Usernames are 2–30 characters: letters, numbers, dots and underscores.');
-      if (password.length < 10) return setError('Use at least 10 characters. Your password also protects your encryption keys.');
-      if (password !== confirm) return setError('The passwords don’t match.');
-    }
-    setBusy(true);
-    try {
-      if (mode === 'join') await signUp(invite, username, password);
-      else await signIn(username, password);
-      history.replaceState(null, '', '/');
-    } catch (err) {
-      setError(messageOf(err));
-      setBusy(false);
-    }
+  const invite = new URLSearchParams(location.search).get('invite') ?? '';
+  const [mode, setMode] = useState<AuthMode>(invite ? 'join' : 'signin');
+  const [authOpen, setAuthOpen] = useState(Boolean(invite));
+  const start = (m: AuthMode) => {
+    setMode(m);
+    setAuthOpen(true);
   };
 
   return (
-    <div className="welcome">
-      <div className="aurora" aria-hidden>
-        <span />
-        <span />
-        <span />
+    <MotionConfig reducedMotion="user">
+      <div className="landing">
+        <div className="lp-content" inert={authOpen}>
+          <Nav onSignIn={() => start('signin')} />
+          <main>
+            <Hero onStart={start} />
+            <Features onStart={start} />
+            <Statement />
+            <Pillars />
+            <Numbers onStart={start} />
+            <Faq />
+            <FinalCta onStart={start} />
+          </main>
+          <Footer onStart={start} />
+        </div>
+        <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} mode={mode} onMode={setMode} invite={invite} />
       </div>
-      <main className="welcome-inner">
-        <motion.section className="welcome-hero" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
-          <BrandMark size={56} />
-          <h1>
-            <Wordmark className="hero-word" />
-          </h1>
-          <p className="tagline">
-            Your people, your moments.
-            <br />
-            <span className="grad-text">Encrypted end to end.</span>
-          </p>
-          <ul className="promises">
-            <li>
-              <LockKeyhole size={18} /> Posts, stories, messages and calls are encrypted on your device.
-            </li>
-            <li>
-              <ShieldCheck size={18} /> The server only ever stores ciphertext it cannot read.
-            </li>
-          </ul>
-        </motion.section>
+    </MotionConfig>
+  );
+}
 
-        <motion.form
-          className="auth-card"
-          onSubmit={submit}
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <Segmented
-            id="auth"
-            value={mode}
-            onChange={(m) => {
-              setMode(m);
-              setError(null);
-            }}
-            options={[
-              { id: 'signin', label: 'Sign in' },
-              { id: 'join', label: 'Join with invite' },
-            ]}
-          />
-          <AnimatePresence initial={false}>
-            {mode === 'join' && (
-              <motion.label className="field" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                <span>Invite code</span>
-                <input className="input" value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase())} placeholder="ABCDE-FGHJK" autoComplete="off" required />
-              </motion.label>
-            )}
+function Nav({ onSignIn }: { onSignIn: () => void }) {
+  const { scrollY } = useScroll();
+  const [scrolled, setScrolled] = useState(false);
+  useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 12));
+  return (
+    <header className={`lp-nav ${scrolled ? 'scrolled' : ''}`}>
+      <div className="lp-nav-inner">
+        <a className="lp-logo" href="#top" aria-label="Hush">
+          <BrandMark size={28} />
+          <Wordmark />
+        </a>
+        <nav className="lp-links" aria-label="Sections">
+          <a href="#features">Features</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <button className="btn btn-bold" onClick={onSignIn}>
+          Sign in
+        </button>
+      </div>
+    </header>
+  );
+}
+
+const HERO_CARDS = [
+  { icon: LockKeyhole, title: 'Encrypted on your device', text: 'Posts, stories and messages are sealed before they leave your phone.', className: 'c1' },
+  { icon: Video, title: 'Calls, peer to peer', text: 'Voice and video connect you directly, encrypted end to end.', className: 'c2' },
+  { icon: ShieldCheck, title: 'Nothing for the server', text: 'It stores sealed data it has no key to open.', className: 'c3' },
+];
+
+function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
+  const { scrollY } = useScroll();
+  const phoneY = useTransform(scrollY, [0, 700], [0, -60]);
+  const cardsY = useTransform(scrollY, [0, 700], [0, -120]);
+  return (
+    <section className="lp-hero" id="top">
+      <div className="lp-hero-bg" aria-hidden>
+        <Starfield />
+      </div>
+      <motion.div className="lp-hero-copy" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: EASE }}>
+        <span className="lp-chip">
+          <LockKeyhole size={13} /> Private · end-to-end encrypted
+        </span>
+        <h1>
+          Your people.
+          <br />
+          Nobody else.
+        </h1>
+        <p className="lp-lede">
+          Hush is a private place for photos, stories, messages and calls with the few people who matter. Everything is encrypted on your device, so the server
+          only keeps what it can’t read.
+        </p>
+        <div className="lp-ctas">
+          <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
+            Sign in <ArrowRight size={18} />
+          </button>
+          <button className="btn btn-glass btn-lg" onClick={() => onStart('join')}>
+            Join with an invite
+          </button>
+        </div>
+      </motion.div>
+      <motion.div className="lp-hero-art" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.15, ease: EASE }}>
+        <motion.div style={{ y: phoneY }}>
+          <PhoneMock />
+        </motion.div>
+        <motion.div className="lp-float-cards" style={{ y: cardsY }}>
+          {HERO_CARDS.map(({ icon: Icon, title, text, className }, i) => (
+            <motion.div
+              key={title}
+              className={`lp-glass-card ${className}`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.5 + i * 0.12, ease: EASE }}
+            >
+              <span className="lp-icon">
+                <Icon size={16} />
+              </span>
+              <b>{title}</b>
+              <p>{text}</p>
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
+    </section>
+  );
+}
+
+const FEATURES = [
+  {
+    id: 'share',
+    label: 'Share',
+    icon: Share2,
+    caption: 'Posts, carousels, reels and 24-hour stories with polls, questions and Close Friends.',
+    Panel: SharePanel,
+  },
+  {
+    id: 'talk',
+    label: 'Talk',
+    icon: MessageCircle,
+    caption: 'Messages with reactions, replies, voice notes, polls, view-once photos and vanish mode.',
+    Panel: TalkPanel,
+  },
+  {
+    id: 'call',
+    label: 'Call',
+    icon: Video,
+    caption: 'Voice and video calls for up to ten, and Live for your followers.',
+    Panel: CallPanel,
+  },
+] as const;
+
+function Features({ onStart }: { onStart: (m: AuthMode) => void }) {
+  const [active, setActive] = useState(0);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (touched) return;
+    const timer = setInterval(() => setActive((a) => (a + 1) % FEATURES.length), 5200);
+    return () => clearInterval(timer);
+  }, [touched]);
+  const feature = FEATURES[active];
+  return (
+    <section className="lp-section" id="features">
+      <Reveal className="lp-head center">
+        <Eyebrow>Features</Eyebrow>
+        <h2>Everything you’d expect. Nothing you wouldn’t.</h2>
+        <p className="lp-sub">The app you already know, for your own circle: no ads, no strangers, no feed deciding what you see.</p>
+      </Reveal>
+      <Reveal className="lp-feature-card" delay={0.05}>
+        <div className="lp-feature-left">
+          <div className="lp-tabs" role="tablist" aria-label="Features">
+            {FEATURES.map((f, i) => (
+              <button
+                key={f.id}
+                role="tab"
+                aria-selected={i === active}
+                className={i === active ? 'on' : ''}
+                onClick={() => {
+                  setTouched(true);
+                  setActive(i);
+                }}
+              >
+                {f.label}
+                <sup>0{i + 1}</sup>
+                {i === active && !touched && <motion.span key={active} className="lp-tab-progress" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 5.2, ease: 'linear' }} />}
+              </button>
+            ))}
+          </div>
+          <div className="lp-feature-foot">
+            <p>Built for a handful of people who actually know each other: up to ten, each invited by someone already inside.</p>
+            <button className="btn btn-bold" onClick={() => onStart('join')}>
+              Join with an invite
+            </button>
+          </div>
+        </div>
+        <div className="lp-feature-stage">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={feature.id}
+              className="lp-stage-inner"
+              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.45, ease: EASE }}
+            >
+              <feature.Panel />
+              <div className="lp-stage-caption">
+                <span className="lp-icon">
+                  <feature.icon size={17} />
+                </span>
+                <p>{feature.caption}</p>
+              </div>
+            </motion.div>
           </AnimatePresence>
-          <label className="field">
-            <span>Username</span>
-            <input
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="yourname"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <div className="password">
-              <input
-                className="input"
-                type={show ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === 'join' ? 'new-password' : 'current-password'}
-                required
-              />
-              <button type="button" className="icon-btn sm" onClick={() => setShow((s) => !s)} aria-label={show ? 'Hide password' : 'Show password'}>
-                {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
+const STATEMENT: { text: string; accent?: boolean }[] = [
+  { text: 'Most apps read everything you share, because that’s the business.' },
+  { text: 'Hush can’t.', accent: true },
+  { text: 'Every photo, story, message and call is locked on your device, with keys only you and the people you share with hold.' },
+];
+
+function Word({ word, progress, range, accent }: { word: string; progress: MotionValue<number>; range: [number, number]; accent?: boolean }) {
+  const opacity = useTransform(progress, range, [0.16, 1]);
+  return (
+    <motion.span className={accent ? 'lp-accent' : undefined} style={{ opacity }}>
+      {word}{' '}
+    </motion.span>
+  );
+}
+
+/** The big statement that lights up word by word as it scrolls past. */
+function Statement() {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start 0.85', 'end 0.5'] });
+  const words = STATEMENT.flatMap((part) => part.text.split(' ').map((word) => ({ word, accent: part.accent })));
+  return (
+    <section className="lp-section lp-statement" id="privacy">
+      <Eyebrow>Privacy</Eyebrow>
+      <p ref={ref} className="lp-statement-text">
+        {words.map((w, i) => (
+          <Word key={i} word={w.word} accent={w.accent} progress={scrollYProgress} range={[i / words.length, (i + 1) / words.length]} />
+        ))}
+      </p>
+    </section>
+  );
+}
+
+const PILLARS = [
+  { icon: KeyRound, title: 'Your keys stay with you', text: 'Your password unlocks your keys on your device. Neither ever reaches the server.' },
+  { icon: Server, title: 'A server that knows nothing', text: 'It holds only sealed data, and even its own database is encrypted at rest.' },
+  { icon: Users, title: 'Invite only', text: 'Up to ten people, each invited by someone already inside. No ads, no strangers, no algorithm.' },
+];
+
+function Pillars() {
+  return (
+    <section className="lp-section lp-pillars">
+      <span className="lp-glow center" aria-hidden />
+      <Reveal className="lp-split-head">
+        <div>
+          <Eyebrow>How it stays private</Eyebrow>
+          <h2>Private by design, not by promise.</h2>
+        </div>
+        <p className="lp-sub">Privacy that doesn’t depend on anyone behaving well, the server included. The maths keeps it private, whoever runs it.</p>
+      </Reveal>
+      <div className="lp-pillar-grid">
+        {PILLARS.map(({ icon: Icon, title, text }, i) => (
+          <Reveal key={title} className="lp-pillar" delay={i * 0.08}>
+            <span className="lp-icon lg">
+              <Icon size={22} />
+            </span>
+            <div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const NUMBERS = [
+  { value: '0', title: 'Readable bytes on its disk', text: 'Your posts and messages are encrypted end to end, and everything else under the server password.' },
+  { value: '10', title: 'People, at most', text: 'Hush is for your circle, not the whole internet. Small on purpose.' },
+  { value: '1', title: 'Server, run by your circle', text: 'No company in the middle. Hush runs on a home server one of you looks after.' },
+];
+
+function Numbers({ onStart }: { onStart: (m: AuthMode) => void }) {
+  return (
+    <section className="lp-section">
+      <span className="lp-glow center" aria-hidden />
+      <div className="lp-numbers">
+        <div className="lp-numbers-left">
+          <Eyebrow>By the numbers</Eyebrow>
+          <h2>
+            Small on purpose.
+            <span className="dim"> Sealed by default.</span>
+          </h2>
+          <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
+            Sign in <ArrowRight size={18} />
+          </button>
+        </div>
+        <div className="lp-numbers-right">
+          {NUMBERS.map((n, i) => (
+            <Reveal key={n.title} className="lp-number" delay={i * 0.06}>
+              <span className="lp-big">{n.value}</span>
+              <b>{n.title}</b>
+              <p>{n.text}</p>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const QUESTIONS = [
+  {
+    q: 'How do I join?',
+    a: 'With an invite from someone who’s already on Hush. Open their invite link, pick a username and a password, and you’re in.',
+  },
+  {
+    q: 'Can the server read my messages?',
+    a: 'No. Posts, stories, messages and calls are encrypted on your device before they’re sent, and only the people you share with hold the keys. The server stores sealed data it can’t open.',
+  },
+  {
+    q: 'What if I forget my password?',
+    a: 'Your password protects your encryption keys, so nobody can recover your messages without it, not even the admin. Keep it in a password manager.',
+  },
+  {
+    q: 'Is there a phone app?',
+    a: 'Yes: the Android app downloads straight from this server and keeps itself up to date. On iPhone, open this page in Safari and add it to your Home Screen.',
+    link: { href: '/download/hush.apk', label: 'Download for Android' },
+  },
+  {
+    q: 'Do calls go through the server?',
+    a: 'Calls connect you directly whenever your networks allow. When they can’t, a relay passes the encrypted stream along without being able to see or hear it.',
+  },
+];
+
+function Faq() {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <section className="lp-section lp-faq" id="faq">
+      <Reveal className="lp-faq-head">
+        <Eyebrow>FAQ</Eyebrow>
+        <h2>Questions, answered.</h2>
+        <p className="lp-sub">Anything else? Ask whoever invited you.</p>
+      </Reveal>
+      <div className="lp-faq-list">
+        {QUESTIONS.map((item, i) => {
+          const isOpen = open === i;
+          return (
+            <Reveal key={item.q} delay={i * 0.04}>
+              <div className={`lp-q ${isOpen ? 'open' : ''}`}>
+                <button aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : i)}>
+                  <h3>{item.q}</h3>
+                  <ChevronDown size={22} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.32, ease: EASE }}>
+                      <p>
+                        {item.a}
+                        {item.link && (
+                          <>
+                            {' '}
+                            <a className="lp-inline-link" href={item.link.href}>
+                              {item.link.label} →
+                            </a>
+                          </>
+                        )}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </Reveal>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FinalCta({ onStart }: { onStart: (m: AuthMode) => void }) {
+  return (
+    <section className="lp-section">
+      <Reveal className="lp-cta">
+        <span className="lp-rays" aria-hidden />
+        <BrandMark size={52} />
+        <h2>Your people are waiting.</h2>
+        <p className="lp-sub">Sign in, or open the invite someone sent you.</p>
+        <div className="lp-ctas">
+          <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
+            Sign in <ArrowRight size={18} />
+          </button>
+          <a className="btn btn-glass btn-lg" href="/download/hush.apk">
+            <Smartphone size={18} /> Get the Android app
+          </a>
+        </div>
+      </Reveal>
+    </section>
+  );
+}
+
+function Footer({ onStart }: { onStart: (m: AuthMode) => void }) {
+  return (
+    <footer className="lp-footer">
+      <div className="lp-footer-top">
+        <div className="lp-footer-brand">
+          <a className="lp-logo" href="#top" aria-label="Hush">
+            <BrandMark size={26} />
+            <Wordmark />
+          </a>
+          <p>A private place for your people.</p>
+        </div>
+        <div className="lp-footer-cols">
+          <div>
+            <b>Hush</b>
+            <button onClick={() => onStart('signin')}>Sign in</button>
+            <button onClick={() => onStart('join')}>Join with an invite</button>
+            <a href="/download/hush.apk">Android app</a>
+          </div>
+          <div>
+            <b>Learn</b>
+            <a href="#features">Features</a>
+            <a href="#privacy">Privacy</a>
+            <a href="#faq">FAQ</a>
+          </div>
+        </div>
+      </div>
+      <div className="lp-footer-bottom">
+        <span>Hush · end-to-end encrypted</span>
+        <span>Made for a few.</span>
+      </div>
+    </footer>
+  );
+}
+
+function AuthDialog({ open, onClose, mode, onMode, invite }: { open: boolean; onClose: () => void; mode: AuthMode; onMode: (m: AuthMode) => void; invite: string }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="lp-scrim"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={mode === 'join' ? 'Join Hush' : 'Sign in to Hush'}
+            className="lp-dialog"
+            initial={{ opacity: 0, y: 28, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 34, mass: 0.9 }}
+          >
+            <div className="lp-dialog-head">
+              <BrandMark size={34} />
+              <div>
+                <h2>{mode === 'join' ? 'Join Hush' : 'Welcome back'}</h2>
+                <p>{mode === 'join' ? 'Your keys are made right here, on this device.' : 'Your keys unlock right here, on this device.'}</p>
+              </div>
+              <button className="icon-btn sm" onClick={onClose} aria-label="Close">
+                <X size={20} />
               </button>
             </div>
-          </label>
-          <AnimatePresence initial={false}>
-            {mode === 'join' && (
-              <motion.label className="field" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                <span>Confirm password</span>
-                <input className="input" type={show ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
-              </motion.label>
-            )}
-          </AnimatePresence>
-          {error && (
-            <motion.p className="form-error" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
-              {error}
-            </motion.p>
-          )}
-          <button className="btn btn-brand btn-lg btn-block" disabled={busy}>
-            {busy ? (
-              <>
-                <Spinner size={18} /> {mode === 'join' ? 'Creating your keys…' : 'Unlocking your keys…'}
-              </>
-            ) : (
-              <>
-                {mode === 'join' ? 'Create account' : 'Sign in'} <ArrowRight size={18} />
-              </>
-            )}
-          </button>
-          <p className="fine">
-            {mode === 'join'
-              ? 'Your password encrypts your keys. If you forget it, nobody — not even the server — can recover your messages.'
-              : 'Signing in on a new device restores everything, decrypted right here.'}
-          </p>
-        </motion.form>
-      </main>
-    </div>
+            <AuthForm mode={mode} onMode={onMode} initialInvite={invite} />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
