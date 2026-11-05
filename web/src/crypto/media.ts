@@ -1,18 +1,21 @@
 import { CryptoError, concat, sodium, u32, u64, utf8 } from './sodium';
 
 /**
- * AGM1 chunked media encryption, mirroring MediaCipher.kt:
- *   header  = "AGM1" || u32 chunkSize || u64 plainLength || noncePrefix(16)
- *   chunk i = XChaCha20-Poly1305(plain_i, nonce = noncePrefix || u64 i, ad = header || u64 i || u8 isFinal)
+ * AezCrypt chunked media encryption, mirroring MediaCipher.kt:
+ *   header  = "AezCrypt" || u32 chunkSize || u64 plainLength || random(12)        (32 bytes)
+ *   chunk i = XChaCha20-Poly1305(plain_i, nonce = random(12) || 0(4) || u64 i, ad = header || u64 i || u8 isFinal)
+ * Files from before the name changed start with "AGM1" (… || random(16), nonce = random(16) || u64 i) and still open.
  */
 export const HEADER_BYTES = 32;
 export const DEFAULT_CHUNK = 64 * 1024;
 export const TAG_BYTES = 16;
-const MAGIC = utf8('AGM1');
+const MAGIC = utf8('AezCrypt');
+const LEGACY_MAGIC = utf8('AGM1');
 
 export interface MediaHeader {
   chunkSize: number;
   plainLength: number;
+  /** The 16 bytes every chunk nonce starts with (AezCrypt: the 12 random ones and 4 zeros). */
   noncePrefix: Uint8Array;
   bytes: Uint8Array;
 }
@@ -39,11 +42,15 @@ export function cipherRange(header: MediaHeader, index: number): [number, number
 }
 
 export function parseHeader(bytes: Uint8Array): MediaHeader {
-  if (bytes.length < HEADER_BYTES || !MAGIC.every((b, i) => bytes[i] === b)) throw new CryptoError('not an AGM1 file');
+  if (bytes.length < HEADER_BYTES) throw new CryptoError('not an AezCrypt file');
+  const legacy = LEGACY_MAGIC.every((b, i) => bytes[i] === b);
+  if (!legacy && !MAGIC.every((b, i) => bytes[i] === b)) throw new CryptoError('not an AezCrypt file');
   const view = new DataView(bytes.buffer, bytes.byteOffset, HEADER_BYTES);
-  const chunkSize = view.getUint32(4);
-  const plainLength = Number(view.getBigUint64(8));
-  return { chunkSize, plainLength, noncePrefix: bytes.slice(16, 32), bytes: bytes.slice(0, HEADER_BYTES) };
+  const at = legacy ? 4 : 8;
+  const chunkSize = view.getUint32(at);
+  const plainLength = Number(view.getBigUint64(at + 4));
+  const noncePrefix = legacy ? bytes.slice(16, 32) : concat(bytes.slice(20, 32), new Uint8Array(4));
+  return { chunkSize, plainLength, noncePrefix, bytes: bytes.slice(0, HEADER_BYTES) };
 }
 
 function chunkAd(header: MediaHeader, index: number): Uint8Array {
@@ -69,9 +76,9 @@ export function openChunk(header: MediaHeader, index: number, cipher: Uint8Array
 }
 
 export function newHeader(plainLength: number, chunkSize = DEFAULT_CHUNK): MediaHeader {
-  const noncePrefix = sodium.randombytes_buf(16);
-  const bytes = concat(MAGIC, u32(chunkSize), u64(plainLength), noncePrefix);
-  return { chunkSize, plainLength, noncePrefix, bytes };
+  const random = sodium.randombytes_buf(12);
+  const bytes = concat(MAGIC, u32(chunkSize), u64(plainLength), random);
+  return { chunkSize, plainLength, noncePrefix: concat(random, new Uint8Array(4)), bytes };
 }
 
 export function encryptMedia(plain: Uint8Array, key: Uint8Array, chunkSize = DEFAULT_CHUNK): Uint8Array {
@@ -89,7 +96,7 @@ export function encryptMedia(plain: Uint8Array, key: Uint8Array, chunkSize = DEF
 
 export function decryptMedia(cipher: Uint8Array, key: Uint8Array): Uint8Array {
   const header = parseHeader(cipher);
-  if (cipher.length !== cipherLength(header.plainLength, header.chunkSize)) throw new CryptoError('AGM1 file has the wrong length');
+  if (cipher.length !== cipherLength(header.plainLength, header.chunkSize)) throw new CryptoError('AezCrypt file has the wrong length');
   const out = new Uint8Array(header.plainLength);
   const count = chunkCount(header.plainLength, header.chunkSize);
   for (let i = 0; i < count; i++) {

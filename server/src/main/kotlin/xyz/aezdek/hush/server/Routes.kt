@@ -389,6 +389,7 @@ fun Route.api(s: Services) = route("/api/v1") {
         val file = blocking { s.blobs.file(session.userId, call.param("id")) }
         call.response.header(HttpHeaders.CacheControl, "private, max-age=31536000, immutable")
         call.response.header(HttpHeaders.ETag, "\"${call.param("id")}\"")
+        call.response.header("X-Sealed-With", "AezCrypt")
         call.respondFile(file)
     }
 

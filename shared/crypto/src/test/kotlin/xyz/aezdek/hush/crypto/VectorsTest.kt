@@ -43,6 +43,38 @@ class VectorsTest {
         verify(json.parseToJsonElement(file.readText()).jsonObject)
     }
 
+    /** Media in the AezCrypt format (the v1 files above hold "AGM1" media, which must keep opening too). */
+    @Test
+    fun kotlinMediaVectorsVerify() {
+        val file = File(dir, "kotlin-media-v2.json")
+        if (!file.exists() || System.getProperty("hush.writeVectors") == "true") {
+            dir.mkdirs()
+            val fileKey = Sodium.random(32)
+            val plain = ByteArray(1000) { (it * 7 + 3).toByte() }
+            val vector = buildJsonObject {
+                put("fileKey", B64.encode(fileKey))
+                put("chunkSize", 256)
+                put("plain", B64.encode(plain))
+                put("cipher", B64.encode(MediaCipher.encrypt(plain, fileKey, chunkSize = 256)))
+            }
+            file.writeText(json.encodeToString(JsonObject.serializer(), vector) + "\n")
+        }
+        verifyMedia(json.parseToJsonElement(file.readText()).jsonObject)
+    }
+
+    @Test
+    fun webMediaVectorsVerify() {
+        val file = File(dir, "web-media-v2.json")
+        if (!file.exists()) return
+        verifyMedia(json.parseToJsonElement(file.readText()).jsonObject)
+    }
+
+    private fun verifyMedia(media: JsonObject) {
+        val cipher = media.b("cipher")
+        assertEquals("AezCrypt", cipher.copyOfRange(0, 8).decodeToString())
+        assertArrayEquals(media.b("plain"), MediaCipher.decrypt(cipher, media.b("fileKey")))
+    }
+
     private fun generate(): JsonObject {
         val password = "pässwörd ✓ 🔐"
         val salt = ByteArray(16) { (it * 7).toByte() }

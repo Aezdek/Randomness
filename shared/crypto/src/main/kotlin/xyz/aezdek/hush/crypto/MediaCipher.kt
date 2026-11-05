@@ -6,22 +6,29 @@ import java.io.OutputStream
 import java.nio.ByteBuffer
 
 /**
- * Chunked media encryption ("AGM1"): random access, so video can stream and seek without decrypting from the start.
+ * Chunked media encryption, "AezCrypt": random access, so video can stream and seek without decrypting from the
+ * start.
  *
  * ```
- * header  = "AGM1" || u32 chunkSize || u64 plainLength || noncePrefix(16)         (32 bytes)
- * chunk i = XChaCha20-Poly1305(plain_i, nonce = noncePrefix || u64 i,
+ * header  = "AezCrypt" || u32 chunkSize || u64 plainLength || random(12)          (32 bytes)
+ * chunk i = XChaCha20-Poly1305(plain_i, nonce = random(12) || 0(4) || u64 i,
  *                              ad = header || u64 i || u8 isFinal, key = fileKey)  (plain_i + 16 bytes)
  * ```
  * The header (with the total length) is in every chunk's associated data, so truncation, reordering and splicing
- * chunks between files are all detected. An empty file is one empty, final chunk.
+ * chunks between files are all detected. An empty file is one empty, final chunk. Every file has its own key, so
+ * twelve random nonce bytes are plenty.
+ *
+ * Files written before the name changed start with "AGM1" (u32 chunkSize || u64 plainLength || random(16)), with the
+ * same 32-byte header and nonce = random(16) || u64 i. They still open; nothing writes them any more.
  */
 object MediaCipher {
     const val HEADER_BYTES = 32
     const val DEFAULT_CHUNK = 64 * 1024
     const val TAG_BYTES = 16
-    private val MAGIC = utf8("AGM1")
+    private val MAGIC = utf8("AezCrypt")
+    private val LEGACY_MAGIC = utf8("AGM1")
 
+    /** [noncePrefix] is the 16 bytes every chunk nonce starts with (for AezCrypt files: the 12 random ones and 4 zeros). */
     class Header(val chunkSize: Int, val plainLength: Long, val noncePrefix: ByteArray, val bytes: ByteArray) {
         val chunkCount: Long get() = chunkCount(plainLength, chunkSize)
 
@@ -44,17 +51,26 @@ object MediaCipher {
         HEADER_BYTES + plainLength + chunkCount(plainLength, chunkSize) * TAG_BYTES
 
     fun parseHeader(bytes: ByteArray): Header {
-        if (bytes.size < HEADER_BYTES || !bytes.copyOfRange(0, 4).contentEquals(MAGIC)) {
-            throw CryptoException("not an AGM1 file")
-        }
-        val buffer = ByteBuffer.wrap(bytes, 4, 12)
+        if (bytes.size < HEADER_BYTES) throw CryptoException("not an AezCrypt file")
+        val legacy = bytes.copyOfRange(0, 4).contentEquals(LEGACY_MAGIC)
+        if (!legacy && !bytes.copyOfRange(0, 8).contentEquals(MAGIC)) throw CryptoException("not an AezCrypt file")
+        val buffer = ByteBuffer.wrap(bytes, if (legacy) 4 else 8, 12)
         val chunkSize = buffer.int
         val plainLength = buffer.long
-        if (chunkSize <= 0 || plainLength < 0) throw CryptoException("bad AGM1 header")
-        return Header(chunkSize, plainLength, bytes.copyOfRange(16, 32), bytes.copyOfRange(0, HEADER_BYTES))
+        if (chunkSize <= 0 || plainLength < 0) throw CryptoException("bad AezCrypt header")
+        val noncePrefix = if (legacy) bytes.copyOfRange(16, 32) else concat(bytes.copyOfRange(20, 32), ByteArray(4))
+        return Header(chunkSize, plainLength, noncePrefix, bytes.copyOfRange(0, HEADER_BYTES))
     }
 
-    /** Streams [plainLength] bytes from [input] to [output] as AGM1. */
+    /** A new file's header: [plainLength] bytes in [chunkSize] chunks, with fresh random nonce bytes. */
+    fun newHeader(plainLength: Long, chunkSize: Int = DEFAULT_CHUNK): Header {
+        Sodium.init()
+        val random = Sodium.random(12)
+        val bytes = concat(MAGIC, u32(chunkSize), u64(plainLength), random)
+        return Header(chunkSize, plainLength, concat(random, ByteArray(4)), bytes)
+    }
+
+    /** Streams [plainLength] bytes from [input] to [output] as AezCrypt. */
     fun encrypt(
         input: InputStream,
         plainLength: Long,
@@ -62,11 +78,8 @@ object MediaCipher {
         output: OutputStream,
         chunkSize: Int = DEFAULT_CHUNK,
     ) {
-        Sodium.init()
-        val noncePrefix = Sodium.random(16)
-        val headerBytes = concat(MAGIC, u32(chunkSize), u64(plainLength), noncePrefix)
-        val header = Header(chunkSize, plainLength, noncePrefix, headerBytes)
-        output.write(headerBytes)
+        val header = newHeader(plainLength, chunkSize)
+        output.write(header.bytes)
         val buffer = ByteArray(chunkSize)
         for (index in 0 until header.chunkCount) {
             val length = header.plainChunkLength(index)
@@ -84,7 +97,7 @@ object MediaCipher {
     fun decrypt(cipher: ByteArray, fileKey: ByteArray): ByteArray {
         val header = parseHeader(cipher)
         if (cipher.size.toLong() != cipherLength(header.plainLength, header.chunkSize)) {
-            throw CryptoException("AGM1 file has the wrong length")
+            throw CryptoException("AezCrypt file has the wrong length")
         }
         val out = java.io.ByteArrayOutputStream(header.plainLength.toInt())
         for (index in 0 until header.chunkCount) {

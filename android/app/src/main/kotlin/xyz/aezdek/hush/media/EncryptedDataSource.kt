@@ -14,7 +14,7 @@ import xyz.aezdek.hush.protocol.MediaRef
 import java.io.IOException
 
 /**
- * ExoPlayer reads `hush://blob/<id>` through this: each read fetches the AGM1 chunks covering it (HTTP Range),
+ * ExoPlayer reads `hush://blob/<id>` through this: each read fetches the AezCrypt chunks covering it (HTTP Range),
  * decrypts and returns plaintext, so videos start at once and seek anywhere without ever touching the disk.
  */
 @OptIn(UnstableApi::class)

@@ -1,6 +1,7 @@
 package xyz.aezdek.hush.ui.settings
 
 import android.text.format.Formatter
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -44,7 +45,10 @@ internal fun UpdatesSection() {
     var auto by remember { mutableStateOf(Graph.prefs.autoUpdate) }
     LaunchedEffect(Unit) { AutoUpdater.check(context, force = true) }
     Card("This phone") {
-        Text("Hush ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", color = Aez.colors.text)
+        Text(
+            "Hush ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", color = Aez.colors.text,
+            modifier = Modifier.combinedClickable(onLongClick = { Graph.toast("Everything here is sealed with AezCrypt 🔒") }, onClick = {}),
+        )
     }
     Card("From your server") {
         when (val s = state) {

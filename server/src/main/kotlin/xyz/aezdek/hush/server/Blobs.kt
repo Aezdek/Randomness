@@ -13,7 +13,7 @@ import java.security.MessageDigest
 /**
  * Encrypted media on disk, content-addressed by the SHA-256 of the ciphertext. Uploads are resumable and arrive in
  * pieces of at most [CHUNK] bytes, well under Cloudflare's 100 MB request limit. The server never decodes media: it
- * cannot, everything here is AGM1 ciphertext.
+ * cannot, everything here is AezCrypt ciphertext.
  */
 class Blobs(private val db: Db, private val clock: Clock, private val config: ServerConfig, private val objects: Objects) {
 

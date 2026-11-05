@@ -54,7 +54,11 @@ async function headerOf(blobId: string, token: string | null) {
   if (cached) return cached;
   const bytes = await fetchRange(blobId, token, 0, HEADER);
   const view = new DataView(bytes.buffer, bytes.byteOffset, HEADER);
-  const header = { chunkSize: view.getUint32(4), plainLength: Number(view.getBigUint64(8)), noncePrefix: bytes.slice(16, 32), bytes: bytes.slice(0, 32) };
+  // "AezCrypt" files (see crypto/media.ts), or "AGM1" ones from before the name changed.
+  const legacy = String.fromCharCode(...bytes.subarray(0, 4)) === 'AGM1';
+  const at = legacy ? 4 : 8;
+  const noncePrefix = legacy ? bytes.slice(16, 32) : concat(bytes.slice(20, 32), new Uint8Array(4));
+  const header = { chunkSize: view.getUint32(at), plainLength: Number(view.getBigUint64(at + 4)), noncePrefix, bytes: bytes.slice(0, 32) };
   headers.set(blobId, header);
   return header;
 }

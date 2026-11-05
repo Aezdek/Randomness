@@ -433,7 +433,7 @@ export function Settings() {
         <button className="settings-link danger" onClick={() => void signOut()}>
           <LogOut size={20} /> Log out
         </button>
-        <p className="settings-foot faint">
+        <p className="settings-foot faint" onClick={(e) => e.detail === 3 && toast('Everything here is sealed with AezCrypt 🔒')}>
           <Moon size={12} /> Hush · end-to-end encrypted
         </p>
       </nav>

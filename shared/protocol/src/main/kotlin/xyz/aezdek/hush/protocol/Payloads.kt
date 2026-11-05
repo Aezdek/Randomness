@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * web/src/model/payloads.ts; unknown fields are ignored so either client can add optional fields.
  */
 
-/** A media file: an AGM1 blob plus the key to open it. Lives only inside encrypted payloads. */
+/** A media file: an AezCrypt blob plus the key to open it. Lives only inside encrypted payloads. */
 @Serializable
 data class MediaRef(
     val blobId: String,

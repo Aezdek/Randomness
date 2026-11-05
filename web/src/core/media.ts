@@ -288,7 +288,7 @@ export async function prepare(file: File | Blob, kind: MediaKind, onProgress?: (
   return prepareImage(file, kind);
 }
 
-/** Encrypts (AGM1) while uploading in resumable pieces; memory stays bounded however large the file is. */
+/** Encrypts (AezCrypt) while uploading in resumable pieces; memory stays bounded however large the file is. */
 async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => void): Promise<{ blobId: string; key: Uint8Array }> {
   const key = newFileKey();
   const header = newHeader(blob.size);

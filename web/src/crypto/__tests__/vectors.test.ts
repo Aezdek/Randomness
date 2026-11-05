@@ -108,6 +108,28 @@ describe('cross-platform crypto vectors', () => {
     verify(JSON.parse(readFileSync(resolve(dir, 'kotlin-v1.json'), 'utf8')));
   });
 
+  // The v1 files hold "AGM1" media (which must keep opening); these are the AezCrypt format.
+  const verifyMedia = (media: Record<string, string>) => {
+    const cipher = unb64(media.cipher);
+    expect(fromUtf8(cipher.subarray(0, 8))).toBe('AezCrypt');
+    expect(b64(decryptMedia(cipher, unb64(media.fileKey)))).toBe(media.plain);
+  };
+
+  it('opens AezCrypt media from Kotlin', () => {
+    verifyMedia(JSON.parse(readFileSync(resolve(dir, 'kotlin-media-v2.json'), 'utf8')));
+  });
+
+  it('writes AezCrypt media Kotlin can open', () => {
+    const file = resolve(dir, 'web-media-v2.json');
+    if (!existsSync(file) || process.env.WRITE_VECTORS === '1') {
+      const fileKey = new Uint8Array(32).map((_, i) => i * 5 + 1);
+      const plain = new Uint8Array(777).map((_, i) => (i * 11 + 2) & 0xff);
+      const media = { fileKey: b64(fileKey), chunkSize: '100', plain: b64(plain), cipher: b64(encryptMedia(plain, fileKey, 100)) };
+      writeFileSync(file, JSON.stringify(media, null, 2) + '\n');
+    }
+    verifyMedia(JSON.parse(readFileSync(file, 'utf8')));
+  });
+
   it('produces vectors Kotlin can open (and that open here)', () => {
     const file = resolve(dir, 'web-v1.json');
     if (!existsSync(file) || process.env.WRITE_VECTORS === '1') writeFileSync(file, JSON.stringify(generate(), null, 2) + '\n');

@@ -191,6 +191,7 @@ echo "the encrypted database"
 sandbox moved
 bash "$DEPLOY/install.sh" >/dev/null 2>&1
 # New hardware (or a restore): another machine key, so the server can't unlock by itself.
+rm -f "$HUSH_ROOT/secrets/machine.key" # read-only (0400), as it should be
 head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$HUSH_ROOT/secrets/machine.key"
 rm -f "$STUB_STATE/running" # it starts again there
 out=$(HUSH_SERVER_PASSWORD='not the password at all' bash "$DEPLOY/update.sh" --yes 2>&1)

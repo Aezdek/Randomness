@@ -26,7 +26,7 @@ class PreparedMedia(
 )
 
 /**
- * Encrypted media: AGM1-encrypts while uploading in resumable pieces (memory stays bounded however large the file),
+ * Encrypted media: AezCrypt-encrypts while uploading in resumable pieces (memory stays bounded however large the file),
  * and decrypts whole files or arbitrary byte ranges for streaming playback.
  */
 class MediaStore(private val api: Api) {
@@ -109,17 +109,10 @@ class MediaStore(private val api: Api) {
     }
 }
 
-/** AGM1 sealing one chunk at a time, so the upload can suspend for network I/O between chunks. */
+/** AezCrypt sealing one chunk at a time, so the upload can suspend for network I/O between chunks. */
 private class ChunkSealer(plainLength: Long, private val key: ByteArray) {
-    val headerBytes: ByteArray
-    private val header: MediaCipher.Header
-
-    init {
-        val noncePrefix = Sodium.random(16)
-        headerBytes = ByteBuffer.allocate(MediaCipher.HEADER_BYTES)
-            .put("AGM1".encodeToByteArray()).putInt(MediaCipher.DEFAULT_CHUNK).putLong(plainLength).put(noncePrefix).array()
-        header = MediaCipher.Header(MediaCipher.DEFAULT_CHUNK, plainLength, noncePrefix, headerBytes)
-    }
+    private val header: MediaCipher.Header = MediaCipher.newHeader(plainLength)
+    val headerBytes: ByteArray get() = header.bytes
 
     val chunkCount: Long get() = header.chunkCount
     fun plainChunkLength(index: Long) = header.plainChunkLength(index)
