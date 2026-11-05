@@ -81,7 +81,7 @@ fun serverTest(configure: (ServerConfig) -> ServerConfig = { it }, block: suspen
     try {
         testApplication {
             application {
-                services = hush(configure(ServerConfig(dataDir = dir, runJobs = false, minFreeBytes = 0, version = "test")), clock)
+                services = hush(configure(ServerConfig(dataDir = dir, runJobs = false, minFreeBytes = 0, version = "test", dbKey = testDbKey)), clock)
             }
             startApplication()
             Harness(this, services!!, clock, dir).block()
@@ -93,6 +93,9 @@ fun serverTest(configure: (ServerConfig) -> ServerConfig = { it }, block: suspen
 }
 
 private val random = SecureRandom()
+
+/** Every test server's database is encrypted, as in production. */
+val testDbKey: ByteArray = ByteArray(32).also(random::nextBytes)
 fun newId(): String = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(16).also(random::nextBytes))
 
 /**

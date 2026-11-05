@@ -28,6 +28,8 @@ dependencies {
     implementation(libs.ktor.server.compression)
     implementation(libs.ktor.server.call.logging)
     implementation(libs.sqlite.jdbc)
+    // Argon2id and XChaCha20-Poly1305 for the database keyring (see Vault.kt).
+    implementation(project(":shared:crypto"))
     implementation(libs.logback.classic)
     implementation(libs.kotlinx.coroutines.core)
 

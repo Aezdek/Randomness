@@ -76,7 +76,7 @@ class Realtime(
             runCatching {
                 val from = fromUserId?.let { id -> db.tx { one("SELECT username FROM users WHERE id = ?", id) { it.str("username") } } }
                 push.sendToUser(userId, PushMessage(type, from, fromUserId, ref), urgent)
-            }.onFailure { log.warn("push to {} failed: {}", userId, it.message) }
+            }.onFailure { log.warn("a push failed: {}", it.message) }
         }
     }
 }

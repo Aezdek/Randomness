@@ -4,7 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.sql.Connection
-import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Types
@@ -13,10 +12,10 @@ import kotlin.concurrent.withLock
 
 /**
  * One SQLite connection behind a lock. For at most ten people that is plenty, and it makes every request a simple
- * serialisable transaction.
+ * serialisable transaction. The file is encrypted with [key] (see [Vault]); without it, it's noise.
  */
-class Db(file: File) : AutoCloseable {
-    private val connection: Connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
+class Db(file: File, key: ByteArray) : AutoCloseable {
+    private val connection: Connection = Vault.openEncrypted(file, key)
     private val lock = ReentrantLock()
     private var depth = 0
 

@@ -339,7 +339,7 @@ class ThreadsAndMediaTest {
         val target = File(services.config.snapshotsDir, "hush-test.db")
         services.jobs.snapshot(target)
         assertTrue(target.length() > 0)
-        val copy = Db(target)
+        val copy = Db(target, testDbKey)
         assertEquals(1L, copy.tx { long("SELECT COUNT(*) FROM users") })
         copy.close()
     }

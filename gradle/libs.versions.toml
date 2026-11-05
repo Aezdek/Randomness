@@ -28,7 +28,8 @@ androidxTestCore = "1.6.1"
 androidxTestJunit = "1.2.1"
 androidxTestRunner = "1.6.2"
 ktor = "3.6.1"
-sqliteJdbc = "3.54.1.0"
+# SQLite3MultipleCiphers build of sqlite-jdbc (same org.sqlite API): the server database is encrypted at rest.
+sqliteJdbc = "3.53.4.0"
 logback = "1.6.6"
 libsodium = "0.9.5"
 media3 = "1.8.0"
@@ -106,7 +107,7 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+sqlite-jdbc = { module = "io.github.willena:sqlite-jdbc", version.ref = "sqliteJdbc" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 libsodium-bindings = { module = "com.ionspin.kotlin:multiplatform-crypto-libsodium-bindings", version.ref = "libsodium" }
 libsodium-bindings-jvm = { module = "com.ionspin.kotlin:multiplatform-crypto-libsodium-bindings-jvm", version.ref = "libsodium" }

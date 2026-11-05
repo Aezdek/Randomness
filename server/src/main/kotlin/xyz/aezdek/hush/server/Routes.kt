@@ -24,6 +24,8 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.protocol.AddMembersRequest
+import xyz.aezdek.hush.protocol.ServerState
+import xyz.aezdek.hush.protocol.SetupStatus
 import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.AppVersion
 import xyz.aezdek.hush.protocol.SetStatusRequest
@@ -87,6 +89,8 @@ private fun ApplicationCall.param(name: String): String = parameters[name] ?: ba
 private const val MINUTE = 60_000L
 
 fun Route.api(s: Services) = route("/api/v1") {
+    // Set up and unlocked (until then Setup.kt answers this instead).
+    get("/setup") { call.respond(SetupStatus(ServerState.READY)) }
 
     // ---------------------------------------------------------------------------------------------------- auth
     post("/auth/prelogin") {

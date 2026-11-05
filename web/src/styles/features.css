@@ -4698,3 +4698,28 @@ button.info-row:hover {
   flex: none;
   white-space: pre;
 }
+
+/* While the server waits for its server password (App.tsx). */
+.splash.server-waiting {
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+.server-waiting h1 {
+  margin: 10px 0 0;
+  font-size: 22px;
+}
+.server-waiting p {
+  max-width: 380px;
+  margin: 0;
+  line-height: 1.5;
+}
+.server-waiting-seal {
+  margin-top: 18px !important;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  opacity: 0.5;
+}

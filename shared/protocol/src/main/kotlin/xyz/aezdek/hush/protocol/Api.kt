@@ -449,8 +449,31 @@ data class AppVersion(val versionCode: Int, val versionName: String, val sha256:
 @Serializable
 data class ApiError(val error: String, val message: String)
 
+/** [state] is a [ServerState]: whether the server is set up and unlocked (see the server's Vault). */
 @Serializable
-data class Health(val ok: Boolean, val version: String)
+data class Health(val ok: Boolean, val version: String, val state: String = ServerState.READY)
+
+/**
+ * The server keeps its database encrypted with a key only the admin's server password (or this machine's sealed key)
+ * opens. Until it is set up, or after a move to new hardware, the API waits.
+ */
+object ServerState {
+    /** Fresh: nothing is stored until the admin sets the server password (update.sh asks, on the server itself). */
+    const val SETUP = "setup"
+    /** Set up, but this machine can't unseal the key by itself (a restore, new hardware): the password unlocks it. */
+    const val LOCKED = "locked"
+    const val READY = "ready"
+}
+
+@Serializable
+data class SetupStatus(val state: String)
+
+/** [code] is in data/setup-code.txt, readable only on the server. */
+@Serializable
+data class SetupRequest(val code: String, val password: String)
+
+@Serializable
+data class UnlockRequest(val password: String)
 
 @Serializable
 data class OkResponse(@SerialName("ok") val ok: Boolean = true)

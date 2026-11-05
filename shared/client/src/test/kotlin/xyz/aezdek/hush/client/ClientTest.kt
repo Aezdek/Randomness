@@ -55,7 +55,8 @@ class ClientTest {
     fun start() {
         dir = Files.createTempDirectory("hush-client").toFile()
         port = ServerSocket(0).use { it.localPort }
-        val config = ServerConfig(dataDir = dir, host = "127.0.0.1", port = port, runJobs = false, minFreeBytes = 0, version = "test")
+        val config = ServerConfig(dataDir = dir, host = "127.0.0.1", port = port, runJobs = false, minFreeBytes = 0, version = "test",
+            dbKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes))
         server = embeddedServer(CIO, port = port, host = "127.0.0.1") { hush(config) }.start(wait = false)
     }
 

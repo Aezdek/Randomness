@@ -22,7 +22,7 @@ class WebPushTest {
         val ua = WebPush.newP256()
         val uaPublic = WebPush.uncompressed(ua.public as ECPublicKey)
         val auth = ByteArray(16).also(SecureRandom()::nextBytes)
-        val db = Db(java.io.File.createTempFile("push", ".db").also { it.deleteOnExit() })
+        val db = Db(java.io.File.createTempFile("push", ".db").also { it.deleteOnExit() }, testDbKey)
         val push = WebPush(db, Clock.SYSTEM, "mailto:test@example.com")
         val body = push.encrypt("""{"type":"message"}""".encodeToByteArray(), uaPublic, auth)
 

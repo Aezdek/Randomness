@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
  * posts with photos (encrypted media), likes and comments, a story, Direct messages and a real WebRTC video call
  * (Chromium's fake camera). At the end, nothing written to the server's disk contains plaintext.
  *
- * Needs HUSH_DATA_DIR (to read the first invite and scan for plaintext). SHOTS_DIR saves screenshots.
+ * It starts from a fresh server, which stores nothing until its server password is set (as update.sh does, from
+ * the server itself), and checks at the end that the database holds no readable metadata either.
+ *
+ * Needs HUSH_DATA_DIR (to read the setup code and first invite, and scan for plaintext). SHOTS_DIR saves screenshots.
  */
 
 const DATA_DIR = process.env.HUSH_DATA_DIR ?? '';
@@ -100,13 +103,27 @@ function scanForPlaintext(dir: string, needle: string): string[] {
   return hits;
 }
 
-test('three people use Hush end to end', async ({ browser }) => {
+test('three people use Hush end to end', async ({ browser, request }) => {
   expect(DATA_DIR, 'set HUSH_DATA_DIR').not.toBe('');
+
+  // ------------------------------------------------------------------------------------------- server setup
+  // A fresh server waits for its password and has stored nothing yet; the page says so, then carries on by itself.
+  const alice = await person(browser, 'alice');
+  await alice.page.goto('/');
+  await expect(alice.page.getByRole('heading', { name: 'Hush is being set up' })).toBeVisible();
+  expect(readdirSync(DATA_DIR).filter((f) => !['setup-code.txt', 'apk'].includes(f))).toEqual([]);
+  await shot(alice.page, 'server-setup-desktop');
+  const code = readFileSync(join(DATA_DIR, 'setup-code.txt'), 'utf8').trim();
+  // Through the tunnel it's refused; from the server itself (like update.sh) it works.
+  const viaTunnel = await request.post('/api/v1/setup', { data: { code, password: 'the server password, set once' }, headers: { 'CF-Connecting-IP': '203.0.113.7' } });
+  expect(viaTunnel.status()).toBe(403);
+  const setup = await request.post('/api/v1/setup', { data: { code, password: 'the server password, set once' } });
+  expect(setup.status()).toBe(200);
+  await expect.poll(() => existsSync(join(DATA_DIR, 'first-invite.txt')), { timeout: 20_000 }).toBe(true);
   const firstInvite = readFileSync(join(DATA_DIR, 'first-invite.txt'), 'utf8').trim();
 
   // ------------------------------------------------------------------------------------------- accounts
-  const alice = await person(browser, 'alice');
-  await alice.page.goto('/');
+  await expect(alice.page.getByRole('button', { name: 'Create account' }).or(alice.page.getByRole('button', { name: 'Sign in' })).first()).toBeVisible({ timeout: 20_000 });
   await shot(alice.page, 'welcome-desktop');
   await signUp(alice, firstInvite);
   await shot(alice.page, 'home-empty-desktop');
@@ -462,6 +479,10 @@ test('three people use Hush end to end', async ({ browser }) => {
   // ------------------------------------------------------------------------------------- no plaintext
   const hits = scanForPlaintext(DATA_DIR, MARK);
   expect(hits, 'the server stored plaintext').toEqual([]);
+  // Metadata too: the database (usernames, who's in which chat, when) is encrypted at rest, and so are its snapshots.
+  const db = readFileSync(join(DATA_DIR, 'hush.db'));
+  expect(db.subarray(0, 15).toString('latin1')).not.toBe('SQLite format 3');
+  for (const name of ['alice', 'cara', 'Weekend']) expect(db.includes(Buffer.from(name)), `hush.db contains ${name}`).toBe(false);
 
   await Promise.all([alice.ctx.close(), bob.ctx.close(), cara.ctx.close()]);
 });

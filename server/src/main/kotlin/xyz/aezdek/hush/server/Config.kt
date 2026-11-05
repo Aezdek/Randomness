@@ -27,6 +27,10 @@ data class ServerConfig(
     val snapshotHour: Int = 3,
     val snapshotsToKeep: Int = 7,
     val runJobs: Boolean = true,
+    /** The database key, from the [Vault] (unsealed with this machine's key or the server password). */
+    val dbKey: ByteArray? = null,
+    /** This machine's key (compose.yml mounts it read-only); null in tests that don't use one. */
+    val machineKeyFile: File? = null,
 ) {
     val blobsDir get() = File(dataDir, "blobs")
     val uploadsDir get() = File(dataDir, "uploads")
@@ -34,6 +38,8 @@ data class ServerConfig(
     val dbFile get() = File(dataDir, "hush.db")
     val backupStatusFile get() = File(dataDir, "backup-status.json")
     val firstInviteFile get() = File(dataDir, "first-invite.txt")
+    val keyringFile get() = File(dataDir, "keyring.json")
+    val setupCodeFile get() = File(dataDir, "setup-code.txt")
 
     companion object {
         fun fromEnv(env: Map<String, String> = System.getenv()): ServerConfig {
@@ -52,6 +58,7 @@ data class ServerConfig(
                 commit = env["HUSH_COMMIT"]?.takeIf { it.isNotBlank() },
                 releaseUrl = env["HUSH_REPO"]?.takeIf { it.isNotBlank() }
                     ?.let { "https://github.com/$it/releases/download/hush-latest/hush-release.env" },
+                machineKeyFile = File(env["HUSH_MACHINE_KEY_FILE"] ?: "/run/secrets/hush/machine.key"),
             )
         }
     }
