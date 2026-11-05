@@ -5,7 +5,8 @@ Everything lives in `/opt/hl/hush`:
 ```
 compose.yml   .env (0600: port, pinned image, TURN key, rclone remote)
 update.sh  backup.sh  restore.sh  lib.sh  RUNBOOK.md
-data/hush.db  data/blobs/  data/snapshots/  data/backup-status.json  data/first-invite.txt
+secrets/machine.key (0400, or machine.key.cred sealed to the TPM): this machine's database key; never backed up
+data/hush.db (encrypted)  data/keyring.json  data/blobs/  data/snapshots/  data/backup-status.json
 data/signing/ (the Android signing key)  data/apk/ (the signed APK the app updates from)
 ```
 
@@ -28,13 +29,35 @@ The container listens on `127.0.0.1:<HUSH_HOST_PORT>` only. `cloudflared` publis
 There is no Watchtower: the running image only changes when you approve `update.sh`. The image is pinned in
 `.env` (`HUSH_IMAGE_ID`), and `update.sh` refuses to start an image whose digest doesn't match.
 
+## The encrypted database
+
+`data/hush.db` (usernames, who follows and messages whom, when, sessions, devices) is encrypted at rest with a
+random key. That key exists only sealed, in `data/keyring.json` (an *AezCrypt keyring*):
+
+- under the **server password** you chose once when `update.sh` (or `install.sh`) asked for it, and
+- under **this machine's key** in `secrets/` (sealed to the TPM when `systemd-creds` finds one; unsealed into
+  `/run/hush`, memory only, by `hush-unlock.service` at boot). So restarts and reboots unlock by themselves.
+
+The server password is asked for on the server itself and handed to Hush on `127.0.0.1`; Hush refuses it through
+Cloudflare. A fresh server stores nothing until it's set, and the web app says Hush is being set up.
+
+You need the password again only when this machine can't unlock by itself: after a **restore** or on **new
+hardware**. Hush then shows as locked; run `sudo /opt/hl/hush/update.sh` and type it once, and it reseals the key for
+the new machine. **Keep it in your password manager.** Without it, a backup can't be opened by anyone, you
+included. While `secrets/` is intact, Resolute itself keeps working without it.
+
+What it protects: a copy of `data/` or of the backup is noise without the password. What it can't: root on the
+running server (or the whole machine, TPM and all) can read the server's memory. Messages, posts and media are
+end-to-end encrypted on top of this, so even then they stay unreadable.
+
 ## Backups
 
 All of Hush's data is ciphertext, so it goes straight to the encrypted rclone remote (`RCLONE_REMOTE` in
 `.env`, normally `gdrive-crypt:`), never to the external HDD:
 
 - 03:00 the server writes `data/snapshots/hush-DATE.db` (a consistent `VACUUM INTO` copy; 7 kept locally);
-- 03:30 `hush-backup.timer` uploads the snapshots, syncs `data/blobs`, and copies `.env` and `data/signing/`;
+- 03:30 `hush-backup.timer` uploads the snapshots (encrypted like the database), syncs `data/blobs`, and copies
+  `data/keyring.json`, `.env` and `data/signing/`. Never `secrets/`: a backup opens only with the server password;
 - deleted media goes to `hush/deleted/DATE` and, like snapshots, is kept 30 days remotely.
 
 If the remote doesn't exist yet (backups show as off in the app's admin screen):
@@ -54,7 +77,7 @@ On a fresh disk or machine (Docker, cloudflared and the rclone remote set up):
 
 ```
 sudo ./restore.sh                      # newest snapshot; or --date 2026-10-28
-sudo bash install.sh                   # starts it on the restored data
+sudo bash install.sh                   # starts it on the restored data, and asks for the server password once
 ```
 
 Media deleted after the snapshot's night is brought back from `hush/deleted/`, so the snapshot is complete.

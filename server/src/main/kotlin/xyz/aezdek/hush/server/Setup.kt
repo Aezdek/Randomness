@@ -33,7 +33,7 @@ fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteAr
     basePlugins()
     if (vault.state() == ServerState.SETUP) {
         vault.setupCode()
-        log.info("Hush is waiting for its server password. Finish with: sudo /opt/hl/hush/update.sh")
+        log.info("Hush is waiting for its server password, set on the server itself: sudo /opt/hl/hush/update.sh (or re-run install.sh)")
     } else {
         log.info("Hush is locked: this machine can't unseal the database key. Unlock with: sudo /opt/hl/hush/update.sh")
     }

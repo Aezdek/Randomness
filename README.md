@@ -44,7 +44,8 @@ You do four things. Everything else is automatic.
      check that lucifer and print still answer, and roll back if anything got worse;
    - installs the nightly backup.
 
-   It prints the **first invite code**, and whoever uses that code becomes the admin. For calls that work on every
+   It asks you to choose the **server password** once (it encrypts the database; keep it in your password manager),
+   then prints the **first invite code**, and whoever uses that code becomes the admin. For calls that work on every
    mobile network, add Cloudflare TURN:
 
    ```bash
@@ -124,7 +125,11 @@ the rolling `hush-latest` release that `install.sh` and `update.sh` read.
   stores a hash of a separate derived login key, never the password.
 - Call setup (SDP and ICE) is signed and sealed end to end, so TURN only ever relays SRTP ciphertext.
 
-**What the server sees:** usernames, who follows and messages whom, when, and how big things are.
+**What the server sees:** usernames, who follows and messages whom, when, and how big things are. It needs that to
+work, but it keeps none of it readable on disk: the database is encrypted at rest under a key sealed by the
+server password (set once, on the server) and by Resolute's own key, so backups and copies of the disk are noise
+without the password. See [the runbook](deploy/RUNBOOK.md#the-encrypted-database). Root on the running server can
+still read the server's memory; content is end-to-end encrypted, so that stays unreadable even then.
 
 **What the admin can see and do** (Admin in the web sidebar, Settings → Admin on Android): exactly that metadata, per
 member: their devices, which chats they're in and with whom, how many messages each has and when the last came,

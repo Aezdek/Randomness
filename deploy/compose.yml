@@ -12,11 +12,14 @@ services:
       HUSH_DATA_DIR: /data
       HUSH_HOST: 0.0.0.0
       HUSH_PORT: "8080"
+      # This machine's database key (see update.sh / lib.sh: ensure_machine_key). Never in data/ or the backups.
+      HUSH_MACHINE_KEY_FILE: /run/secrets/hush/machine.key
     # Only cloudflared on this machine talks to it.
     ports:
       - "127.0.0.1:${HUSH_HOST_PORT:?}:8080"
     volumes:
       - ./data:/data
+      - ${HUSH_SECRETS_DIR:-./secrets}:/run/secrets/hush:ro
     # Shares 6.7 GB with Immich, Jellyfin, Ollama and openGym: the JVM heap is capped at 384 MB inside this.
     mem_limit: 512m
     read_only: true

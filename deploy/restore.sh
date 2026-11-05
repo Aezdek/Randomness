@@ -5,7 +5,8 @@
 #   sudo ./restore.sh --date 2026-10-28       that night's snapshot
 #   sudo ./restore.sh --to /opt/hl/hush --remote gdrive-crypt: [--force]
 #
-# Afterwards run update.sh --yes (or install.sh on a fresh machine) to start the server on the restored data.
+# Afterwards run update.sh --yes (or install.sh on a fresh machine) to start the server on the restored data. The
+# database is encrypted: on a new machine, update.sh asks for the server password once to unlock it there.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -74,6 +75,16 @@ rclone copy "$SRC/blobs" "$DATA/blobs" --transfers 8
   rclone copy "$SRC/deleted/$day" "$DATA/blobs" --ignore-existing
 done
 
+log "Keyring"
+if rclone copyto "$SRC/keyring/keyring.json" "$DATA/keyring.json" 2>/dev/null; then
+  chmod 600 "$DATA/keyring.json"
+else
+  # Backups from before the database was encrypted have none, and their snapshots are plaintext: the server encrypts
+  # them when you next set the server password.
+  rm -f "$DATA/keyring.json"
+  note "no keyring in the backup (from before encryption): update.sh will ask you to choose a server password"
+fi
+
 if [ ! -e "$DATA/signing" ]; then
   log "Android signing key"
   if ! rclone copy "$SRC/signing" "$DATA/signing" 2>/dev/null || [ ! -s "$DATA/signing/hush.p12" ]; then
@@ -88,4 +99,4 @@ if [ ! -f "$ROOT/.env" ]; then
 fi
 
 chown -R 10001:10001 "$DATA" 2>/dev/null || [ -n "${HUSH_TEST:-}" ] || warn "could not hand $DATA to the container user (10001)"
-log "Restored $snapshot into $ROOT. Start it with: sudo $ROOT/update.sh --yes"
+log "Restored $snapshot into $ROOT. Start it with: sudo $ROOT/update.sh --yes (it asks for the server password)"

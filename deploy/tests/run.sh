@@ -11,7 +11,9 @@ DEPLOY=$(dirname "$TESTS")
 FIX=$TESTS/fixtures
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-export HUSH_TEST=1 HEALTH_POLL_SECONDS=0.1 HEALTH_SECONDS=2 RESTART_SETTLE_SECONDS=1
+export HUSH_TEST=1 HEALTH_POLL_SECONDS=0.1 HEALTH_SECONDS=2 RESTART_SETTLE_SECONDS=1 UNLOCK_SECONDS=2
+# What update.sh would ask for at the terminal.
+export HUSH_SERVER_PASSWORD='a long test server password'
 export PATH="$TESTS/stubs:$PATH"
 # shellcheck source=deploy/lib.sh
 . "$DEPLOY/lib.sh"
@@ -46,7 +48,7 @@ sandbox() {
   export HUSH_ROOT=$box/opt/hl/hush CLOUDFLARED_CONFIG=$box/etc/cloudflared/config.yml
   export PORTS_MD=$box/opt/hl/PORTS.md SYSTEMD_DIR=$box/systemd HUSH_RELEASE_BASE=file://$box/release
   export RCLONE_REMOTE=$box/remote STUB_BOUND_PORTS="8471"
-  unset STUB_BREAK_AFTER_RESTART STUB_VALIDATE_FAIL STUB_BROKEN_VERSION
+  unset STUB_BREAK_AFTER_RESTART STUB_VALIDATE_FAIL STUB_BROKEN_VERSION STUB_TPM
   publish "$box" 1.0.1 1111111111111111111111111111111111111111
   BOX=$box
 }
@@ -62,7 +64,8 @@ HUSH_IMAGE_TAG=hush:${3:0:12}
 HUSH_IMAGE_SHA256=$(sha256sum "$release/hush-image.tar.gz" | cut -c1-64)
 HUSH_BUILT_AT=2026-10-30T10:00:00Z
 EOF
-  tar -czf "$release/hush-deploy.tar.gz" -C "$DEPLOY" lib.sh compose.yml update.sh backup.sh restore.sh RUNBOOK.md systemd
+  tar -czf "$release/hush-deploy.tar.gz" -C "${DEPLOY_SRC:-$DEPLOY}" lib.sh compose.yml update.sh backup.sh restore.sh RUNBOOK.md systemd
+  echo "HUSH_DEPLOY_SHA256=$(sha256sum "$release/hush-deploy.tar.gz" | cut -c1-64)" >>"$release/hush-release.env"
   echo "hush:${3:0:12}" >"$1/state/next-tag"
 }
 
@@ -110,11 +113,18 @@ check ".env pins the image by digest and is private" bash -c "grep -q '^HUSH_IMA
 check "the server runs the published version" test "$(cat "$STUB_STATE/running")" = 1.0.1
 check "the backup timer is installed for this root" bash -c "grep -q 'ExecStart=$HUSH_ROOT/backup.sh' '$BOX/systemd/hush-backup.service' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
 check "the summary shows the first invite" grep -q 'ABCDE-FGHJK' <<<"$out"
+check "the server password was set from the server itself, and the database unlocked" \
+  bash -c "grep -q AezCrypt-keyring-1 '$HUSH_ROOT/data/keyring.json' && [ \$(cat '$STUB_STATE/server-state') = ready ] && ! [ -e '$HUSH_ROOT/data/setup-code.txt' ]"
+check "this machine's key is private, 32 bytes, and outside data/" \
+  bash -c "grep -Eqx '[0-9a-f]{64}' '$HUSH_ROOT/secrets/machine.key' && [ \$(stat -c %a '$HUSH_ROOT/secrets/machine.key') = 400 ] && [ \$(stat -c %a '$HUSH_ROOT/secrets') = 700 ] && grep -qx 'HUSH_SECRETS_DIR=$HUSH_ROOT/secrets' '$HUSH_ROOT/.env'"
+check "the container gets it read-only" grep -q 'HUSH_SECRETS_DIR:-./secrets}:/run/secrets/hush:ro' "$HUSH_ROOT/compose.yml"
+machine_key=$(sha256sum <"$HUSH_ROOT/secrets/machine.key")
 
 edited=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
 backups=$(ls "$BOX"/etc/cloudflared/config.yml.bak-* | wc -l)
 out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "re-running is safe" test $? -eq 0
+check "re-running keeps this machine's key" test "$(sha256sum <"$HUSH_ROOT/secrets/machine.key")" = "$machine_key"
 check "re-running leaves the tunnel config alone" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$edited"
 check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c hush '$BOX/opt/hl/PORTS.md') = 1 ]"
 
@@ -177,7 +187,43 @@ if command -v rclone >/dev/null; then
     bash -c "grep -qx 'RCLONE_REMOTE=vault:' '$HUSH_ROOT/.env' && grep -qx 'RCLONE_CONFIG=$BOX/user-rclone.conf' '$HUSH_ROOT/.env' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
 fi
 
+echo "the encrypted database"
+sandbox moved
+bash "$DEPLOY/install.sh" >/dev/null 2>&1
+# New hardware (or a restore): another machine key, so the server can't unlock by itself.
+head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$HUSH_ROOT/secrets/machine.key"
+rm -f "$STUB_STATE/running" # it starts again there
+out=$(HUSH_SERVER_PASSWORD='not the password at all' bash "$DEPLOY/update.sh" --yes 2>&1)
+check "a locked server isn't opened by a wrong password" bash -c "[ $? -ne 0 ] && grep -q \"isn't the server password\" <<<\"\$1\" && [ \$(cat '$STUB_STATE/server-state') = locked ]" _ "$out"
+out=$(bash "$DEPLOY/update.sh" --yes 2>&1)
+check "the server password unlocks it on the new machine" bash -c "[ $? -eq 0 ] && [ \$(cat '$STUB_STATE/server-state') = ready ]"
+rm -f "$STUB_STATE/running" # a reboot
+out=$(env -u HUSH_SERVER_PASSWORD bash "$DEPLOY/update.sh" --yes </dev/null 2>&1)
+check "... and from then on it unlocks by itself, asking nothing" bash -c "[ $? -eq 0 ] && [ \$(cat '$STUB_STATE/server-state') = ready ]"
+
+sandbox tpm
+export STUB_TPM=1
+out=$(bash "$DEPLOY/install.sh" 2>&1)
+check "with a TPM the machine key is sealed to it, never stored in the clear" \
+  bash -c "[ -s '$HUSH_ROOT/secrets/machine.key.cred' ] && ! [ -e '$HUSH_ROOT/secrets/machine.key' ] && grep -q 'encrypt --with-key=tpm2' '$STUB_STATE/systemd-creds.log'"
+check "... and unsealed into /run/hush at boot, before Docker" \
+  bash -c "grep -q 'Before=docker.service' '$BOX/systemd/hush-unlock.service' && grep -q 'decrypt --name=hush-machine-key $HUSH_ROOT/secrets/machine.key.cred /run/hush/machine.key' '$BOX/systemd/hush-unlock.service' && grep -qx 'HUSH_SECRETS_DIR=/run/hush' '$HUSH_ROOT/.env' && grep -q 'enable hush-unlock.service' '$STUB_STATE/systemctl.log'"
+unset STUB_TPM
+
 echo "update.sh"
+sandbox refresh
+bash "$DEPLOY/install.sh" >/dev/null 2>&1
+mkdir -p "$WORK/newer" && cp -r "$DEPLOY"/. "$WORK/newer/"
+echo "# a newer runbook" >>"$WORK/newer/RUNBOOK.md"
+DEPLOY_SRC=$WORK/newer publish "$BOX" 1.0.9 9999999999999999999999999999999999999999
+out=$(bash "$DEPLOY/update.sh" --yes 2>&1)
+check "update.sh brings the deploy files up to date from the release" bash -c "[ $? -eq 0 ] && grep -q 'a newer runbook' '$HUSH_ROOT/RUNBOOK.md' && [ \$(cat '$STUB_STATE/running') = 1.0.9 ]"
+echo "# tampered" >>"$WORK/newer/RUNBOOK.md"
+DEPLOY_SRC=$WORK/newer publish "$BOX" 1.0.10 1010101010101010101010101010101010101010
+sed -i 's/^HUSH_DEPLOY_SHA256=.*/HUSH_DEPLOY_SHA256=0000000000000000000000000000000000000000000000000000000000000000/' "$BOX/release/hush-release.env"
+out=$(bash "$DEPLOY/update.sh" --yes 2>&1)
+check "... but not ones that don't match the manifest" bash -c "! grep -q tampered '$HUSH_ROOT/RUNBOOK.md' && grep -q \"don't match the manifest\" <<<\"\$1\"" _ "$out"
+
 sandbox update
 bash "$DEPLOY/install.sh" >/dev/null 2>&1
 out=$(bash "$DEPLOY/update.sh" --check 2>&1)
@@ -218,9 +264,16 @@ if command -v rclone >/dev/null; then
   echo "ciphertext one" >"$data/blobs/ab/one"
   echo "ciphertext two" >"$data/blobs/ab/two"
   mkdir -p "$data/signing" && echo "the key" >"$data/signing/hush.p12" && echo "pw" >"$data/signing/password"
+  echo '{"format":"AezCrypt-keyring-1"}' >"$data/keyring.json"
+  mkdir -p "$HUSH_ROOT/secrets" && echo "this machine only" >"$HUSH_ROOT/secrets/machine.key"
+  printf 'SQLite format 3\0old plaintext' >"$WORK/plain.db"
+  mkdir -p "$RCLONE_REMOTE/hush/snapshots" && cp "$WORK/plain.db" "$RCLONE_REMOTE/hush/snapshots/hush-2026-01-01.db"
   out=$(bash "$DEPLOY/backup.sh" 2>&1)
   check "a backup succeeds" test $? -eq 0
   check "... and says so in backup-status.json" grep -q '"ok":true' "$data/backup-status.json"
+  check "... with the keyring (sealed under the server password)" grep -q AezCrypt-keyring-1 "$RCLONE_REMOTE/hush/keyring/keyring.json"
+  check "... but never this machine's key" bash -c "! grep -rq 'this machine only' '$RCLONE_REMOTE'"
+  check "... and plaintext snapshots from before encryption are removed from it" bash -c "! [ -e '$RCLONE_REMOTE/hush/snapshots/hush-2026-01-01.db' ] && [ -e '$RCLONE_REMOTE/hush/snapshots/hush-$today.db' ]"
   rm "$data/blobs/ab/two"
   out=$(bash "$DEPLOY/backup.sh" 2>&1)
   check "media deleted since is kept under deleted/DATE" test -f "$RCLONE_REMOTE/hush/deleted/$today/ab/two"
@@ -230,6 +283,7 @@ if command -v rclone >/dev/null; then
   check "... with the database and every blob the snapshot can reference" \
     bash -c "grep -q 'database of $today' '$restore_root/data/hush.db' && [ -f '$restore_root/data/blobs/ab/one' ] && [ -f '$restore_root/data/blobs/ab/two' ]"
   check "... and the Android signing key" grep -q 'the key' "$restore_root/data/signing/hush.p12"
+  check "... and the keyring, to unlock with the server password" grep -q AezCrypt-keyring-1 "$restore_root/data/keyring.json"
   out=$(bash "$DEPLOY/restore.sh" --to "$restore_root" --remote "$RCLONE_REMOTE" 2>&1)
   check "restoring over existing data needs --force" test $? -ne 0
   RCLONE_REMOTE=nosuchremote: bash "$DEPLOY/backup.sh" >/dev/null 2>&1

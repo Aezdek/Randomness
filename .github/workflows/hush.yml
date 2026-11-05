@@ -250,9 +250,12 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
       - name: Smoke test the image
         run: |
-          mkdir -p "$RUNNER_TEMP/data" && sudo chown 10001:10001 "$RUNNER_TEMP/data"
+          mkdir -p "$RUNNER_TEMP/data" "$RUNNER_TEMP/secrets" && sudo chown 10001:10001 "$RUNNER_TEMP/data"
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$RUNNER_TEMP/secrets/machine.key"
+          sudo chown -R 10001:10001 "$RUNNER_TEMP/secrets" && sudo chmod 400 "$RUNNER_TEMP/secrets/machine.key"
           start() {
-            docker run -d --name smoke --read-only --tmpfs /tmp:exec --memory 512m -p 127.0.0.1:18080:8080 -v "$RUNNER_TEMP/data:/data" "$TAG" >/dev/null
+            docker run -d --name smoke --read-only --tmpfs /tmp:exec --memory 512m -p 127.0.0.1:18080:8080 -v "$RUNNER_TEMP/data:/data" \
+              -v "$RUNNER_TEMP/secrets:/run/secrets/hush:ro" -e HUSH_MACHINE_KEY_FILE=/run/secrets/hush/machine.key "$TAG" >/dev/null
             for i in $(seq 1 90); do
               curl -fsS http://127.0.0.1:18080/healthz 2>/dev/null | grep -q "\"version\":\"$VERSION\"" && return 0
               sleep 1
@@ -274,8 +277,18 @@ jobs:
           "${TOOLS}apksigner" verify --min-sdk-version 29 --print-certs signed.apk | tee signature.txt
           # 16 KB alignment of the native libraries (WebRTC, libsodium), which Android 15+ devices need.
           "${TOOLS}zipalign" -c -P 16 -v 4 signed.apk > /dev/null
-          # A restart keeps the key and does not sign the same build again.
+          # The database: nothing stored until the server password is set from the server itself, then encrypted
+          # (this is where the encryption library proves it loads in the real image, read-only with /tmp for natives).
+          [ "$(curl -fsS http://127.0.0.1:18080/api/v1/setup | jq -r .state)" = setup ]
+          code=$(sudo cat "$RUNNER_TEMP/data/setup-code.txt")
+          curl -fsS -X POST -H 'Content-Type: application/json' --data "{\"code\":\"$code\",\"password\":\"smoke test server password\"}" http://127.0.0.1:18080/api/v1/setup
+          for i in $(seq 1 60); do [ "$(curl -fsS http://127.0.0.1:18080/api/v1/setup 2>/dev/null | jq -r .state)" = ready ] && break; sleep 1; done
+          [ "$(curl -fsS http://127.0.0.1:18080/api/v1/setup | jq -r .state)" = ready ] || { docker logs smoke; exit 1; }
+          [ "$(sudo head -c 15 "$RUNNER_TEMP/data/hush.db")" != "SQLite format 3" ]
+          sudo grep -q AezCrypt-keyring-1 "$RUNNER_TEMP/data/keyring.json"
+          # A restart keeps the key and does not sign the same build again, and the machine key unlocks it by itself.
           docker rm -f smoke >/dev/null && start
+          [ "$(curl -fsS http://127.0.0.1:18080/api/v1/setup | jq -r .state)" = ready ]
           curl -fsS -o again.apk http://127.0.0.1:18080/download/hush.apk
           cmp signed.apk again.apk
           docker logs smoke 2>&1 | grep -q 'signing the Android app' && { echo "::error::re-signed an unchanged build"; exit 1; }
@@ -292,6 +305,7 @@ jobs:
           HUSH_VERSION=$VERSION
           HUSH_IMAGE_TAG=$TAG
           HUSH_IMAGE_SHA256=$SHA
+          HUSH_DEPLOY_SHA256=$(sha256sum out/hush-deploy.tar.gz | cut -c1-64)
           HUSH_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           sed -i 's/^ *//' out/hush-release.env

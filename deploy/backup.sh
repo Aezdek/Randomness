@@ -2,7 +2,10 @@
 # Nightly off-site backup (hush-backup.timer, 03:30). Everything Hush stores is already ciphertext, so it
 # goes straight to the encrypted rclone remote:
 #
-#   <remote>/hush/snapshots/   the server's nightly SQLite snapshots (VACUUM INTO), kept 30 days
+#   <remote>/hush/snapshots/   the server's nightly database snapshots (VACUUM INTO, encrypted like the database),
+#                              kept 30 days
+#   <remote>/hush/keyring/     the AezCrypt keyring: the database key, sealed under your server password. This
+#                              machine's key (secrets/) is never backed up, so a backup opens only with that password
 #   <remote>/hush/blobs/       media, synced incrementally (blobs never change once written)
 #   <remote>/hush/deleted/DATE blobs deleted that day, kept 30 days so a restore from any snapshot is complete
 #   <remote>/hush/env/.env     settings and secrets
@@ -73,6 +76,16 @@ log "Media -> $DEST/blobs"
 rclone sync "$DATA/blobs" "$DEST/blobs" --backup-dir "$DEST/deleted/$today" "${FLAGS[@]}" ||
   fail "syncing media failed"
 
+if [ -f "$DATA/keyring.json" ]; then
+  rclone copyto "$DATA/keyring.json" "$DEST/keyring/keyring.json" "${FLAGS[@]}" || fail "uploading the keyring failed"
+fi
+# Snapshots from before the database was encrypted: plaintext, so gone from the backup too, not just in 30 days.
+if [ -f "$DATA/keyring.json" ]; then
+  { rclone lsf "$DEST/snapshots" --include '*.db' 2>/dev/null || true; } | while read -r name; do
+    [ "$(rclone cat --count 15 "$DEST/snapshots/$name" 2>/dev/null)" = "SQLite format 3" ] || continue
+    rclone deletefile "$DEST/snapshots/$name" "${FLAGS[@]}" && note "removed $name (from before encryption) from the backup"
+  done
+fi
 if [ -f "$ENV_FILE" ]; then
   rclone copyto "$ENV_FILE" "$DEST/env/.env" "${FLAGS[@]}" || fail "uploading .env failed"
 fi

@@ -24,7 +24,20 @@ case "${1:-}" in
         if [ -n "${STUB_BROKEN_VERSION:-}" ] && [ "$version" = "$STUB_BROKEN_VERSION" ]; then echo broken >"$state/running"; else echo "$version" >"$state/running"; fi
         port=$(env_of "$env_file" HUSH_HOST_PORT)
         echo "$port" >"$state/port"
-        [ -f "$root/data/first-invite.txt" ] || echo "ABCDE-FGHJK" >"$root/data/first-invite.txt"
+        echo "$root" >"$state/root"
+        # Like the server: no keyring, nothing stored but the setup code; a keyring the machine key it was last
+        # unlocked with opens, ready; otherwise (a restore, new hardware) locked until the password is entered.
+        secrets=$(env_of "$env_file" HUSH_SECRETS_DIR)
+        cat "$secrets/machine.key" 2>/dev/null >"$state/machine-key-now" || : >"$state/machine-key-now"
+        mkdir -p "$root/data"
+        if [ ! -f "$root/data/keyring.json" ]; then
+          echo setup >"$state/server-state"
+          echo "SETUP-CODE1-23456" >"$root/data/setup-code.txt"
+        elif [ -s "$state/machine-key-now" ] && cmp -s "$state/machine-key-now" "$state/unlocked-with"; then
+          echo ready >"$state/server-state"
+        else
+          echo locked >"$state/server-state"
+        fi
         ;;
       stop) rm -f "$state/running" ;;
       ps) [ -f "$state/running" ] && echo "c0ffee" || true ;;

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Test double for systemd-creds: a TPM only when $STUB_TPM is set; "sealing" just marks the file.
+echo "systemd-creds $*" >>"${STUB_STATE:?}/systemd-creds.log"
+args=("$@")
+in=${args[${#args[@]} - 2]:-}
+out=${args[${#args[@]} - 1]:-}
+case $1 in
+  has-tpm2) if [ -n "${STUB_TPM:-}" ]; then echo yes; else echo no; exit 1; fi ;;
+  encrypt) { echo "SEALED-TO-TPM"; cat "$in"; } >"$out" ;;
+  decrypt) tail -n +2 "$in" >"$out" ;;
+esac

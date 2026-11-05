@@ -218,3 +218,149 @@ wait_healthy() {
   done
   return 1
 }
+
+# --------------------------------------------------------------------------------------- database keys
+#
+# Hush's database is encrypted (AezCrypt keyring, see server/.../Vault.kt). Its key is sealed under the server
+# password you choose once, and under this machine's key, so restarts unlock by themselves. The machine key never
+# goes in the data folder or the backups: a copy of either is useless without the server password.
+
+# tpm_available: systemd-creds can seal to this machine's TPM.
+tpm_available() {
+  [ -z "${HUSH_NO_TPM:-}" ] && command -v systemd-creds >/dev/null && systemd-creds has-tpm2 >/dev/null 2>&1
+}
+
+# ensure_machine_key ROOT [SYSTEMD_DIR]: makes this machine's key once, and points the container at it. With a TPM it
+# is sealed to it (hush-unlock.service unseals it into /run/hush at boot, before Docker starts); otherwise it's a file
+# only root and the container's user can read.
+ensure_machine_key() {
+  local root=$1 units=${2:-${SYSTEMD_DIR:-/etc/systemd/system}} dir=$1/secrets key
+  install -d -m 700 "$dir"
+  if [ ! -s "$dir/machine.key" ] && [ ! -s "$dir/machine.key.cred" ]; then
+    key=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    if tpm_available; then
+      printf '%s\n' "$key" | systemd-creds encrypt --with-key=tpm2 --name=hush-machine-key - "$dir/machine.key.cred"
+      note "This machine's database key is sealed to its TPM"
+    else
+      (umask 077 && printf '%s\n' "$key" >"$dir/machine.key")
+      note "This machine's database key is in $dir (root only)"
+    fi
+    unset key
+  fi
+  if [ -s "$dir/machine.key.cred" ]; then
+    # Unseals it into /run/hush (memory only) at boot, before Docker starts the container.
+    cat >"$units/hush-unlock.service" <<UNIT
+[Unit]
+Description=Hush: unseal this machine's database key
+After=local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/usr/bin/install -d -m 700 -o 10001 -g 10001 /run/hush
+ExecStart=/usr/bin/systemd-creds decrypt --name=hush-machine-key $dir/machine.key.cred /run/hush/machine.key
+ExecStart=/usr/bin/chown 10001:10001 /run/hush/machine.key
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload
+    systemctl enable hush-unlock.service >/dev/null 2>&1 || true
+    systemctl restart hush-unlock.service || warn "could not unseal the machine key from the TPM; Hush will ask for its server password"
+    env_set "$root/.env" HUSH_SECRETS_DIR /run/hush
+  else
+    chmod 400 "$dir/machine.key"
+    chown 10001:10001 "$dir" "$dir/machine.key" 2>/dev/null || [ -n "${HUSH_TEST:-}" ] || warn "could not hand $dir to the container user"
+    env_set "$root/.env" HUSH_SECRETS_DIR "$dir"
+  fi
+}
+
+# server_state PORT: setup, locked or ready (empty for a server from before encryption, or none answering).
+server_state() {
+  curl -fsS --max-time 5 "http://127.0.0.1:$1/api/v1/setup" 2>/dev/null | sed -n 's/.*"state":"\([a-z]*\)".*/\1/p'
+}
+
+# json_string TEXT: TEXT as a JSON string body (no quotes); fails on control characters.
+json_string() {
+  local s=$1
+  [[ $s != *[[:cntrl:]]* ]] || return 1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  printf '%s' "$s"
+}
+
+# ask_password new|existing: from HUSH_SERVER_PASSWORD, else typed at the terminal (never echoed).
+ask_password() {
+  local first second
+  if [ -n "${HUSH_SERVER_PASSWORD:-}" ]; then
+    printf '%s' "$HUSH_SERVER_PASSWORD"
+    return 0
+  fi
+  { : </dev/tty; } 2>/dev/null || die "Hush needs its server password: run this in a terminal on the server (or set HUSH_SERVER_PASSWORD)"
+  while :; do
+    read -rsp "    Server password: " first </dev/tty || die "no password given"
+    echo >&2
+    if [ "$1" = new ]; then
+      [ ${#first} -ge 12 ] || { warn "use at least 12 characters"; continue; }
+      read -rsp "    Again, to be sure: " second </dev/tty || die "no password given"
+      echo >&2
+      [ "$first" = "$second" ] || { warn "they don't match; once more"; continue; }
+    fi
+    printf '%s' "$first"
+    return 0
+  done
+}
+
+# ensure_unlocked ROOT PORT: sets the server password (a fresh server, or one from before encryption) or enters it
+# (restored or on new hardware), here on the server itself, so it never crosses the internet. Then waits for Hush.
+ensure_unlocked() {
+  local root=$1 port=$2 state code password body answer attempt deadline
+  state=$(server_state "$port")
+  case $state in
+    setup)
+      deadline=$((SECONDS + 15))
+      until [ -s "$root/data/setup-code.txt" ] || ((SECONDS >= deadline)); do sleep 0.5; done
+      code=$(tr -d '[:space:]' <"$root/data/setup-code.txt" 2>/dev/null) || die "no setup code in $root/data/setup-code.txt"
+      log "Choose Hush's server password"
+      note "It encrypts everything Hush keeps on this machine (who's who, who talks to whom, when)."
+      note "You type it once. After that Hush unlocks by itself here; you need it again only to restore a"
+      note "backup or move to new hardware. Keep it in your password manager: without it and this machine,"
+      note "a backup can't be opened by anyone, you included."
+      while :; do
+        password=$(ask_password new)
+        body=$(json_string "$password") || { warn "no control characters, please"; [ -n "${HUSH_SERVER_PASSWORD:-}" ] && die "HUSH_SERVER_PASSWORD has control characters"; continue; }
+        answer=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data-binary @- \
+          "http://127.0.0.1:$port/api/v1/setup" <<<"{\"code\":\"$code\",\"password\":\"$body\"}") || answer=000
+        [ "$answer" = 200 ] && break
+        [ -n "${HUSH_SERVER_PASSWORD:-}" ] && die "the server refused the setup ($answer)"
+        warn "the server refused it ($answer); try again"
+      done
+      ;;
+    locked)
+      log "Hush is locked"
+      note "This machine can't unseal the database key by itself (a restore, or new hardware)."
+      note "Enter the server password you chose when you set Hush up."
+      for attempt in 1 2 3 4 5; do
+        password=$(ask_password existing)
+        body=$(json_string "$password") || { warn "no control characters, please"; continue; }
+        answer=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data-binary @- \
+          "http://127.0.0.1:$port/api/v1/setup/unlock" <<<"{\"password\":\"$body\"}") || answer=000
+        [ "$answer" = 200 ] && break
+        [ -n "${HUSH_SERVER_PASSWORD:-}" ] && die "that isn't the server password"
+        warn "that isn't it ($answer)"
+        sleep 2
+        [ "$attempt" = 5 ] && die "still locked; run sudo $root/update.sh again when you have the password"
+      done
+      ;;
+    *) return 0 ;;
+  esac
+  unset password body
+  deadline=$((SECONDS + ${UNLOCK_SECONDS:-120}))
+  until [ "$(server_state "$port")" = ready ]; do
+    ((SECONDS < deadline)) || die "Hush took too long to start after unlocking; see: docker compose -f $root/compose.yml logs"
+    sleep "${HEALTH_POLL_SECONDS:-2}"
+  done
+  note "Unlocked: the database is encrypted, and this machine opens it by itself from now on"
+}

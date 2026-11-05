@@ -3,18 +3,55 @@
 # version "running"; tunnel hostnames answer 200, or 530 after a cloudflared restart if listed in
 # $STUB_BREAK_AFTER_RESTART.
 state=${STUB_STATE:?}
-url="" want_code=false out=""
+url="" want_code=false out="" method=GET
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   case ${args[i]} in
     -w) want_code=true; i=$((i + 1)) ;;
     -o) out=${args[i + 1]}; i=$((i + 1)) ;;
-    -H | -X | --data | --max-time | --retry | -d) i=$((i + 1)) ;;
+    -X) method=${args[i + 1]}; i=$((i + 1)) ;;
+    -H | --data | --data-binary | --max-time | --retry | -d) i=$((i + 1)) ;;
     http://* | https://* | file://*) url=${args[i]} ;;
   esac
 done
+# The encrypted database's states, as the docker double set them (see its `up`).
+root=$(cat "$state/root" 2>/dev/null || true)
+answer() { # answer CODE BODY
+  [ -n "$out" ] && [ "$out" != /dev/null ] && printf '%s' "$2" >"$out"
+  if $want_code; then printf '%s' "$1"; else [ -z "$2" ] || echo "$2"; fi
+  [ "$1" -lt 400 ] || $want_code || exit 22
+}
 case $url in
   file://*) exec /usr/bin/curl "$@" ;;
+  http://127.0.0.1:*/api/v1/setup)
+    [ -f "$state/running" ] || exit 7
+    if [ "$method" = POST ]; then
+      body=$(cat)
+      code=$(sed -n 's/.*"code":"\([^"]*\)".*/\1/p' <<<"$body")
+      password=$(sed -n 's/.*"password":"\(.*\)"}$/\1/p' <<<"$body")
+      [ "$code" = "$(cat "$root/data/setup-code.txt" 2>/dev/null)" ] || { answer 403 '{"error":"forbidden"}'; exit 0; }
+      [ ${#password} -ge 12 ] || { answer 400 '{"error":"weak_password"}'; exit 0; }
+      printf '{"format":"AezCrypt-keyring-1","stub-password":"%s"}\n' "$password" >"$root/data/keyring.json"
+      rm -f "$root/data/setup-code.txt"
+      echo ready >"$state/server-state"
+      cp "$state/machine-key-now" "$state/unlocked-with"
+      echo "ABCDE-FGHJK" >"$root/data/first-invite.txt"
+      answer 200 '{"state":"ready"}'
+    else
+      answer 200 "{\"state\":\"$(cat "$state/server-state" 2>/dev/null || echo ready)\"}"
+    fi
+    ;;
+  http://127.0.0.1:*/api/v1/setup/unlock)
+    body=$(cat)
+    password=$(sed -n 's/.*"password":"\(.*\)"}$/\1/p' <<<"$body")
+    if grep -qF "\"stub-password\":\"$password\"" "$root/data/keyring.json"; then
+      echo ready >"$state/server-state"
+      cp "$state/machine-key-now" "$state/unlocked-with"
+      answer 200 '{"state":"ready"}'
+    else
+      answer 403 '{"error":"forbidden"}'
+    fi
+    ;;
   http://127.0.0.1:*/healthz)
     running=$(cat "$state/running" 2>/dev/null || true)
     [ -n "$running" ] && [ "$running" != broken ] || exit 7

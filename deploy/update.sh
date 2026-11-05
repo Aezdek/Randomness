@@ -53,12 +53,16 @@ start_pinned() {
   wait_healthy "$PORT" "$(env_get "$ENV_FILE" HUSH_VERSION)" "$HEALTH_SECONDS"
 }
 
+# The database is encrypted with a key this machine unseals by itself; made once (see lib.sh).
+[ "$mode" = check ] || ensure_machine_key "$ROOT"
+
 if [ "$mode" = rollback ]; then
   [ -f "$ROOT/.env.previous" ] || die "there is no previous version to roll back to"
   cp "$ENV_FILE" "$ROOT/.env.rolled-back"
   cat "$ROOT/.env.previous" >"$ENV_FILE"
   log "Rolling back to $(env_get "$ENV_FILE" HUSH_VERSION) ($(env_get "$ENV_FILE" HUSH_COMMIT | cut -c1-12))"
   start_pinned || die "the previous version did not come up either; see: docker compose -f $ROOT/compose.yml logs"
+  ensure_unlocked "$ROOT" "$PORT"
   log "Rolled back. The version you left is in .env.rolled-back."
   exit 0
 fi
@@ -75,12 +79,39 @@ tar_sha=$(release_value "$work/release.env" HUSH_IMAGE_SHA256 '[0-9a-f]{64}')
 tag=$(release_value "$work/release.env" HUSH_IMAGE_TAG 'hush:[0-9A-Za-z._-]{1,64}')
 built=$(env_get "$work/release.env" HUSH_BUILT_AT)
 
+# This script, compose.yml and the others come with each release too: bring them up to date first, so a change in
+# how Hush is run (like the encrypted database's key) arrives with the image that needs it.
+if [ "$mode" = update ] && [ -z "${HUSH_DEPLOY_REFRESHED:-}" ]; then
+  deploy_sha=$(env_get "$work/release.env" HUSH_DEPLOY_SHA256)
+  if curl -fsSL --retry 3 -o "$work/deploy.tar.gz" "$RELEASE_BASE/hush-deploy.tar.gz"; then
+    if [ -z "$deploy_sha" ] || echo "$deploy_sha  $work/deploy.tar.gz" | sha256sum -c --quiet - 2>/dev/null; then
+      mkdir -p "$work/deploy" && tar -xzf "$work/deploy.tar.gz" -C "$work/deploy"
+      changed=false
+      for file in compose.yml update.sh backup.sh restore.sh lib.sh RUNBOOK.md; do
+        [ -f "$work/deploy/$file" ] || continue
+        cmp -s "$work/deploy/$file" "$ROOT/$file" && continue
+        install -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"
+        changed=true
+      done
+      if $changed; then
+        log "Updated the deploy scripts from this release; continuing with them"
+        rm -rf "$work"
+        exec 9>&-
+        HUSH_DEPLOY_REFRESHED=1 exec "$ROOT/update.sh" "$@"
+      fi
+    else
+      warn "the deploy files don't match the manifest; keeping the installed ones"
+    fi
+  fi
+fi
+
 if [ "$commit" = "$current_commit" ]; then
   log "Already on the newest build: $version (${commit:0:12})."
   if [ "$mode" = update ] && ! wait_healthy "$PORT" "" 5; then
     log "It isn't answering, so starting it."
     start_pinned || die "Hush did not become healthy; see: docker compose -f $ROOT/compose.yml logs"
   fi
+  [ "$mode" = update ] && ensure_unlocked "$ROOT" "$PORT"
   exit 0
 fi
 
@@ -138,6 +169,7 @@ env_set "$ENV_FILE" HUSH_VERSION "$version"
 
 log "Starting $version"
 if start_pinned; then
+  ensure_unlocked "$ROOT" "$PORT"
   log "Hush $version is up on 127.0.0.1:$PORT."
 else
   if [ -f "$ROOT/.env.previous" ] && [ -n "$current_commit" ]; then

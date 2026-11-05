@@ -271,6 +271,7 @@ log "Hush is installed."
 note "Open:           https://$HOST"
 invite=$(cat "$ROOT/data/first-invite.txt" 2>/dev/null || true)
 [ -n "$invite" ] && note "First invite:   $invite   (whoever uses it becomes the admin)"
+[ -f "$ROOT/data/keyring.json" ] && note "Database:       encrypted; this machine unlocks it by itself (the server password is for restores)"
 note "Android app:    https://$HOST/download/hush.apk"
 note "Update later:   sudo $ROOT/update.sh"
 [ -n "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] || note "Calls:          STUN only. For TURN, re-run with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
