@@ -1,9 +1,19 @@
-import { ArrowRight, ChevronDown, KeyRound, LockKeyhole, MessageCircle, Server, Share2, ShieldCheck, Smartphone, Users, Video, X } from 'lucide-react';
-import { AnimatePresence, MotionConfig, motion, useMotionValueEvent, useScroll, useTransform, type MotionValue } from 'motion/react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowRight, ChevronDown, KeyRound, LockKeyhole, MessageCircle, Server, Share2, Smartphone, Users, Video, X } from 'lucide-react';
+import {
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from 'motion/react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { BrandMark, Wordmark } from '../../ui/Brand';
 import { AuthForm, type AuthMode } from './AuthForm';
-import { CallPanel, PhoneMock, SharePanel, Starfield, TalkPanel } from './LandingArt';
+import { CallPanel, DesktopScreen, Hand, PhoneScreen, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
 /*
  * What someone sees at hush.aezdek.xyz before signing in: what Hush is, why it's private, and the door in
@@ -85,65 +95,149 @@ function Nav({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
-const HERO_CARDS = [
-  { icon: LockKeyhole, title: 'Encrypted on your device', text: 'Posts, stories and messages are sealed before they leave your phone.', className: 'c1' },
-  { icon: Video, title: 'Calls, peer to peer', text: 'Voice and video connect you directly, encrypted end to end.', className: 'c2' },
-  { icon: ShieldCheck, title: 'Nothing for the server', text: 'It stores sealed data it has no key to open.', className: 'c3' },
-];
+/** The screen drawings are laid out at these sizes, then zoomed to fit the device (so they stay sharp). */
+const DESK = { w: 1200, corner: 32 };
+const PHONE = { w: 280, corner: 70 };
+/** Phones, and tablets held upright: the headline goes above the screen rather than over it. */
+const PHONE_QUERY = '(max-width: 760px), (orientation: portrait) and (max-width: 1100px)';
 
+function usePhoneLayout() {
+  const [phone, setPhone] = useState(() => matchMedia(PHONE_QUERY).matches);
+  useEffect(() => {
+    const query = matchMedia(PHONE_QUERY);
+    const onChange = () => setPhone(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return phone;
+}
+
+/** Eases in and out, so the screen starts and settles gently. */
+const smooth = (t: number) => t * t * (3 - 2 * t);
+const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+const span = (p: number, from: number, to: number) => clamp01((p - from) / (to - from));
+
+/*
+ * The hero, after the template: your own two hands hold a screen with Hush on it, the headline over it. Scrolling
+ * brings the screen closer until it fills the view; then the page carries on. The device is laid out at its final,
+ * full size and shrunk at the start, so it ends pin-sharp.
+ */
 function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
-  const { scrollY } = useScroll();
-  const phoneY = useTransform(scrollY, [0, 700], [0, -60]);
-  const cardsY = useTransform(scrollY, [0, 700], [0, -120]);
+  const section = useRef<HTMLElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const held = useRef<HTMLDivElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
+  const copy = useRef<HTMLDivElement>(null);
+  const phone = usePhoneLayout();
+  const still = useReducedMotion() ?? false;
+  const { scrollYProgress } = useScroll({ target: section, offset: ['start start', 'end end'] });
+  const none = useMotionValue(0);
+  const p = still ? none : scrollYProgress;
+
+  // Where the screen starts: its scale and how far below the middle, measured from the layout.
+  const startScale = useMotionValue(0.55);
+  const startY = useMotionValue(0);
+  const copyY0 = useMotionValue(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const st = stage.current;
+      const h = held.current;
+      const sc = screen.current;
+      const c = copy.current;
+      if (!st || !h || !sc || !c) return;
+      const vw = st.clientWidth;
+      const vh = st.clientHeight;
+      if (phone) {
+        const top = c.offsetTop + c.offsetHeight + 22;
+        const height = Math.max(vh - top - 14, h.offsetHeight * 0.3);
+        startScale.set(Math.min(height / h.offsetHeight, 0.85));
+        startY.set(top + height / 2 - vh / 2);
+        copyY0.set(0);
+      } else {
+        const width = Math.min(vw * 0.56, 800, (vh - 170) * 1.28);
+        startScale.set(Math.min(width / h.offsetWidth, 0.85));
+        startY.set(vh * 0.05);
+        copyY0.set(vh * 0.05);
+      }
+      const design = phone ? PHONE.w : DESK.w;
+      const zoom = sc.clientWidth / design;
+      sc.style.setProperty('--z', String(zoom));
+      sc.style.setProperty('--ih', `${sc.clientHeight / zoom}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (stage.current) observer.observe(stage.current);
+    if (copy.current) observer.observe(copy.current);
+    return () => observer.disconnect();
+  }, [phone, startScale, startY, copyY0]);
+
+  const zoom = useTransform(() => smooth(span(p.get(), 0, 0.8)));
+  const scale = useTransform(() => startScale.get() + (1 - startScale.get()) * zoom.get());
+  const y = useTransform(() => startY.get() * (1 - zoom.get()));
+  const dim = useTransform(p, [0.02, 0.42], [0.86, 0]);
+  const copyOpacity = useTransform(p, [0, 0.16], [1, 0]);
+  const copyBlur = useTransform(p, [0, 0.16], ['blur(0px)', 'blur(10px)']);
+  const copyShift = useTransform(p, [0, 0.26], [0, -70]);
+  const copyTop = useTransform(() => copyY0.get() + copyShift.get());
+  const copyEvents = useTransform(p, (v) => (v > 0.12 ? 'none' : 'auto'));
+  const handsOut = useTransform(() => smooth(span(p.get(), 0.32, 0.8)));
+  const leftX = useTransform(handsOut, (t) => `${-14 * t}%`);
+  const rightX = useTransform(handsOut, (t) => `${14 * t}%`);
+  const handsY = useTransform(handsOut, (t) => `${26 * t}%`);
+  const handsOpacity = useTransform(p, [0.55, 0.8], [1, 0]);
+  const cue = useTransform(p, [0, 0.06], [1, 0]);
+  const corner = phone ? PHONE.corner : DESK.corner;
+
   return (
-    <section className="lp-hero" id="top">
-      <div className="lp-hero-bg" aria-hidden>
-        <Starfield />
-      </div>
-      <motion.div className="lp-hero-copy" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: EASE }}>
-        <span className="lp-chip">
-          <LockKeyhole size={13} /> Private · end-to-end encrypted
-        </span>
-        <h1>
-          Your people.
-          <br />
-          Nobody else.
-        </h1>
-        <p className="lp-lede">
-          Hush is a private place for photos, stories, messages and calls with the few people who matter. Everything is encrypted on your device, so the server
-          only keeps what it can’t read.
-        </p>
-        <div className="lp-ctas">
-          <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
-            Sign in <ArrowRight size={18} />
-          </button>
-          <button className="btn btn-glass btn-lg" onClick={() => onStart('join')}>
-            Join with an invite
-          </button>
+    <section ref={section} className={`lp-zoom ${phone ? 'phone' : ''} ${still ? 'still' : ''}`} id="top">
+      <div ref={stage} className="lp-zoom-stage">
+        <div className="lp-hero-bg" aria-hidden>
+          <Starfield />
+          <span className="lp-hero-glow a" />
+          <span className="lp-hero-glow b" />
         </div>
-      </motion.div>
-      <motion.div className="lp-hero-art" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.15, ease: EASE }}>
-        <motion.div style={{ y: phoneY }}>
-          <PhoneMock />
+        <motion.div ref={held} className={`lp-held ${phone ? 'phone' : 'desk'}`} style={{ scale, y }} aria-hidden>
+          <div className="la-device">
+            <div ref={screen} className="la-device-screen">
+              <div className="la-screen-zoom">{phone ? <PhoneScreen /> : <DesktopScreen />}</div>
+              <motion.span className="la-dim" style={{ opacity: dim }} />
+            </div>
+          </div>
+          <motion.div className="lp-hand l" style={{ x: leftX, y: handsY, opacity: handsOpacity }}>
+            <Hand corner={corner} />
+          </motion.div>
+          <motion.div className="lp-hand r" style={{ x: rightX, y: handsY, opacity: handsOpacity }}>
+            <Hand corner={corner} />
+          </motion.div>
         </motion.div>
-        <motion.div className="lp-float-cards" style={{ y: cardsY }}>
-          {HERO_CARDS.map(({ icon: Icon, title, text, className }, i) => (
-            <motion.div
-              key={title}
-              className={`lp-glass-card ${className}`}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 + i * 0.12, ease: EASE }}
-            >
-              <span className="lp-icon">
-                <Icon size={16} />
-              </span>
-              <b>{title}</b>
-              <p>{text}</p>
-            </motion.div>
-          ))}
+        <motion.div ref={copy} className="lp-hero-copy" style={{ y: copyTop, opacity: copyOpacity, filter: copyBlur, pointerEvents: copyEvents }}>
+          <motion.div className="lp-hero-copy-in" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: EASE }}>
+            <span className="lp-chip">
+              <LockKeyhole size={13} /> Private · end-to-end encrypted
+            </span>
+            <h1>
+              Your people.
+              <br />
+              Nobody else.
+            </h1>
+            <p className="lp-lede">Photos, stories, messages and calls with the few people who matter, encrypted on your device before they go anywhere.</p>
+            <div className="lp-ctas">
+              <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
+                Sign in <ArrowRight size={18} />
+              </button>
+              <button className="btn btn-glass btn-lg" onClick={() => onStart('join')}>
+                Join with an invite
+              </button>
+            </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+        {!still && (
+          <motion.span className="lp-scroll-cue" style={{ opacity: cue }} aria-hidden>
+            <span />
+            Scroll
+          </motion.span>
+        )}
+      </div>
     </section>
   );
 }
@@ -358,10 +452,6 @@ const QUESTIONS = [
     q: 'Is there a phone app?',
     a: 'Yes: the Android app downloads straight from this server and keeps itself up to date. On iPhone, open this page in Safari and add it to your Home Screen.',
     link: { href: '/download/hush.apk', label: 'Download for Android' },
-  },
-  {
-    q: 'Do calls go through the server?',
-    a: 'Calls connect you directly whenever your networks allow. When they can’t, a relay passes the encrypted stream along without being able to see or hear it.',
   },
 ];
 

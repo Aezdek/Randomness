@@ -69,7 +69,7 @@ html:has(.landing) {
   padding: 140px 24px 0;
 }
 .lp-section h2,
-.lp-hero h1 {
+.lp-zoom h1 {
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -212,22 +212,29 @@ html:has(.landing) {
 }
 
 /* ---------------------------------------------------------------------------------------------------------- hero */
-.lp-hero {
+/* The section is tall and its stage sticks, so scrolling through it drives the zoom (Welcome.tsx). */
+.lp-zoom {
   position: relative;
-  padding: 150px 24px 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  height: 260vh;
+  height: 260svh;
+}
+.lp-zoom-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.lp-zoom-stage > * {
+  grid-area: 1 / 1;
 }
 .lp-hero-bg {
   position: absolute;
-  inset: 0 0 auto;
-  height: 1100px;
+  inset: 0;
   overflow: hidden;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
-  mask-image: linear-gradient(180deg, #000 55%, transparent);
 }
 .starfield {
   position: absolute;
@@ -248,12 +255,120 @@ html:has(.landing) {
     transform: translateY(0);
   }
   to {
-    transform: translateY(-1100px);
+    transform: translateY(-100vh);
   }
 }
-.lp-hero-copy {
+.lp-hero-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+}
+.lp-hero-glow.a {
+  width: 560px;
+  height: 420px;
+  left: calc(50% - 460px);
+  top: calc(50% - 170px);
+  background: var(--violet);
+  opacity: 0.34;
+}
+.lp-hero-glow.b {
+  width: 420px;
+  height: 320px;
+  left: calc(50% + 30px);
+  top: calc(50% - 10px);
+  background: var(--pink);
+  opacity: 0.24;
+}
+
+/* The held screen. Laid out at its final size; Welcome.tsx shrinks it to start. */
+.lp-held {
+  --hw: 28; /* a hand's width, in % of the screen's */
+  --corner: 32; /* the screen's corner radius, in the hand drawing's units (Welcome.tsx passes the same) */
+  --radius: calc(var(--corner) * var(--hw) / 260 * 1cqw);
+  --bezel: 1.5cqw;
   position: relative;
   z-index: 1;
+  width: min(94vw, calc((100vh - 150px) * 1.6));
+  aspect-ratio: 1.6;
+  container-type: inline-size;
+  will-change: transform;
+}
+.lp-held.phone {
+  --hw: 46;
+  --corner: 70;
+  --bezel: 3.2cqw;
+  width: min(92vw, calc((100vh - 128px) * 300 / 620), calc((100svh - 128px) * 300 / 620));
+  aspect-ratio: 300 / 620;
+}
+.la-device {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: var(--bezel);
+  border-radius: var(--radius);
+  background: #141419;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 50px 120px -40px rgba(0, 0, 0, 0.95);
+}
+.la-device-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - var(--bezel));
+  background: #000;
+}
+/* The drawing inside is laid out at a fixed width, then zoomed (not scaled) to fit, so it stays sharp. */
+.la-screen-zoom {
+  position: relative;
+  z-index: 0;
+  width: 1200px;
+  height: var(--ih, 736px);
+  zoom: var(--z, 1);
+}
+.lp-held.phone .la-screen-zoom {
+  width: 280px;
+}
+.la-screen-zoom .la-screen {
+  border-radius: 0;
+}
+.la-dim {
+  position: absolute;
+  z-index: 1;
+  inset: -2px;
+  background: #08080a;
+  pointer-events: none;
+}
+.lp-hand {
+  position: absolute;
+  z-index: 2;
+  top: 100%;
+  width: calc(var(--hw) * 1%);
+  margin-top: calc(var(--hw) * -200% / 260);
+  pointer-events: none;
+}
+.lp-hand.l {
+  left: calc(var(--hw) * -110% / 260);
+}
+.lp-hand.r {
+  right: calc(var(--hw) * -110% / 260);
+}
+.lp-hand svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.lp-hand.r svg {
+  transform: scaleX(-1);
+}
+
+.lp-hero-copy {
+  position: relative;
+  z-index: 3;
+  width: min(640px, 50vw);
+  text-align: center;
+}
+.lp-hero-copy-in {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -275,98 +390,275 @@ html:has(.landing) {
 .lp-chip svg {
   color: var(--bold);
 }
-.lp-hero h1 {
-  margin: 26px 0 22px;
-  font-size: clamp(46px, 7.6vw, 88px);
+.lp-zoom h1 {
+  margin: 24px 0 18px;
+  font-size: clamp(44px, 5.6vw, 80px);
   line-height: 1;
   letter-spacing: -0.05em;
 }
-.lp-hero h1 > :first-child {
-  color: inherit;
-}
 .lp-lede {
-  max-width: 580px;
-  margin: 0 0 34px;
+  max-width: 480px;
+  margin: 0 0 30px;
   color: var(--text-2);
-  font-size: clamp(16px, 1.55vw, 19px);
+  font-size: clamp(16px, 1.4vw, 18px);
   line-height: 1.55;
   text-wrap: pretty;
 }
-.lp-hero-art {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 1000px;
-  margin-top: 80px;
-  display: flex;
-  justify-content: center;
-}
-.lp-hero-art::before,
-.lp-hero-art::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(110px);
-  pointer-events: none;
-}
-.lp-hero-art::before {
-  width: 360px;
-  height: 460px;
-  left: calc(50% - 250px);
-  top: 40px;
-  background: var(--violet);
-  opacity: 0.4;
-}
-.lp-hero-art::after {
-  width: 260px;
-  height: 320px;
-  left: calc(50% + 10px);
-  top: 260px;
-  background: var(--pink);
-  opacity: 0.3;
-}
-.lp-float-cards {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.lp-glass-card {
-  position: absolute;
-  width: 262px;
-  padding: 18px;
-  text-align: left;
-  border-radius: 16px;
-  background: rgba(22, 18, 34, 0.48);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 30px 60px -24px rgba(0, 0, 0, 0.75);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  backdrop-filter: blur(22px) saturate(150%);
-}
-.lp-glass-card .lp-icon {
+.lp-scroll-cue {
+  align-self: end;
+  z-index: 3;
   margin-bottom: 22px;
-}
-.lp-glass-card b {
-  display: block;
-  font-size: 15.5px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
-.lp-glass-card p {
-  margin: 6px 0 0;
-  color: var(--text-2);
+.lp-scroll-cue span {
+  width: 1px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.45);
+  transform-origin: top;
+  animation: lp-cue 1.8s var(--ease) infinite;
+}
+@keyframes lp-cue {
+  0% {
+    transform: scaleY(0);
+  }
+  55% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+/* Phones and upright tablets: the headline sits above the screen, which then rises and grows. */
+.lp-zoom.phone {
+  height: 230vh;
+  height: 230svh;
+}
+.lp-zoom.phone .lp-hero-copy {
+  align-self: start;
+  width: min(560px, calc(100% - 40px));
+  margin-top: 92px;
+}
+.lp-zoom.phone .lp-scroll-cue {
+  display: none;
+}
+.lp-zoom.still {
+  height: 100vh;
+  height: 100svh;
+}
+/* Short landscape screens: keep the headline inside the screen it sits on. */
+@media (max-height: 600px) and (min-width: 761px) {
+  .lp-zoom h1 {
+    margin: 0 0 14px;
+    font-size: 34px;
+  }
+  .lp-zoom .lp-chip,
+  .lp-zoom .lp-lede {
+    display: none;
+  }
+  .lp-zoom .lp-ctas .btn {
+    height: 40px;
+    padding-inline: 14px;
+    font-size: 14px;
+  }
+}
+
+/* The Hush web app, drawn for the held screen at 1200px wide. */
+.la-desk {
+  display: grid;
+  grid-template-columns: 230px 1fr 330px;
+  height: 100%;
+  background: #000;
+  color: #f5f5f7;
   font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+}
+.la-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 28px 12px 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.la-side-brand {
+  padding: 0 12px 24px;
+}
+.la-side-brand .wordmark {
+  font-size: 28px;
+}
+.la-side-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  font-size: 15.5px;
+}
+.la-side-item.on {
+  font-weight: 700;
+}
+.la-side-item.end {
+  margin-top: auto;
+}
+.la-side-icon {
+  position: relative;
+  display: inline-flex;
+}
+.la-side-icon i {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--heart);
+  box-shadow: 0 0 0 2px #000;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+.la-desk-feed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 24px;
+  overflow: hidden;
+}
+.la-desk-stories {
+  display: flex;
+  gap: 16px;
+  width: 520px;
+  padding: 0 8px 22px;
+  overflow: hidden;
+}
+.la-desk-stories .la-story small {
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.la-desk-post {
+  width: 470px;
+}
+.la-desk-post .la-post-head {
+  gap: 10px;
+  padding: 0 0 12px;
+}
+.la-desk-post .la-post-head b {
+  font-size: 14px;
+}
+.la-desk-post .la-post-head small {
+  font-size: 12.5px;
+}
+.la-desk-post .la-post-head small.inline {
+  display: inline;
+  font-size: 14px;
+}
+.la-desk-post .la-post-head .end {
+  margin-left: auto;
+}
+.la-desk-post .la-photo {
+  aspect-ratio: 1;
+  border-radius: 6px;
+}
+.la-desk-post .la-actions {
+  gap: 18px;
+  padding: 14px 0 8px;
+}
+.la-desk-post .la-caption {
+  padding: 0;
+  font-size: 14px;
+}
+.la-desk-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 36px 32px 20px 12px;
+}
+.la-me,
+.la-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+}
+.la-me > span,
+.la-chat-row > span {
+  min-width: 0;
+}
+.la-me b,
+.la-chat-row b {
+  display: block;
+  font-size: 14px;
+}
+.la-me small,
+.la-chat-row small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a7a7b0;
+  font-size: 13px;
+}
+.la-me {
+  margin-bottom: 18px;
+}
+.la-right-title {
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+.la-chat-row.unread small {
+  color: #f5f5f7;
+  font-weight: 600;
+}
+.la-dot {
+  flex: none;
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--violet);
+}
+.la-e2ee {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #111114;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.la-e2ee svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--bold);
+}
+.la-e2ee b {
+  display: block;
+  font-size: 14px;
+}
+.la-e2ee small {
+  display: block;
+  margin-top: 3px;
+  color: #a7a7b0;
+  font-size: 13px;
   line-height: 1.45;
-}
-.lp-glass-card.c1 {
-  left: 2%;
-  top: 34%;
-}
-.lp-glass-card.c2 {
-  right: 0;
-  top: 4%;
-}
-.lp-glass-card.c3 {
-  right: 9%;
-  bottom: 10%;
 }
 
 /* ----------------------------------------------------------------------------------------- phone and app mocks */
@@ -395,17 +687,6 @@ html:has(.landing) {
   background: #b93680;
 }
 
-.la-phone {
-  position: relative;
-  width: 300px;
-  height: 620px;
-  padding: 10px;
-  border-radius: 50px;
-  background: #18181d;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 60px 120px -40px rgba(124, 92, 255, 0.55),
-    0 40px 80px -30px rgba(0, 0, 0, 0.9);
-  text-align: left;
-}
 .la-screen {
   position: relative;
   height: 100%;
@@ -1229,15 +1510,6 @@ html:has(.landing) {
 
 /* ---------------------------------------------------------------------------------------------------- responsive */
 @media (max-width: 1000px) {
-  .lp-glass-card {
-    width: 230px;
-  }
-  .lp-glass-card.c1 {
-    left: 0;
-  }
-  .lp-glass-card.c3 {
-    right: 0;
-  }
   .lp-feature-card {
     grid-template-columns: 1fr;
     padding: 36px;
@@ -1288,31 +1560,32 @@ html:has(.landing) {
     padding: 0 18px;
     height: 60px;
   }
-  .lp-hero {
-    padding: 116px 20px 20px;
+  .lp-zoom h1 {
+    margin: 20px 0 14px;
+    font-size: clamp(38px, 11.4vw, 46px);
   }
-  .lp-hero-art {
-    flex-direction: column;
-    align-items: center;
-    margin-top: 56px;
+  .lp-lede {
+    margin-bottom: 22px;
+    font-size: 15.5px;
   }
-  .lp-float-cards {
-    position: static;
-    display: grid;
-    gap: 12px;
+  .lp-hero-copy .lp-ctas {
     width: 100%;
-    margin-top: 28px;
-    transform: none !important;
+    gap: 10px;
+    flex-wrap: nowrap;
   }
-  .lp-glass-card,
-  .lp-glass-card.c1,
-  .lp-glass-card.c2,
-  .lp-glass-card.c3 {
-    position: static;
-    width: 100%;
+  .lp-hero-copy .lp-ctas .btn {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 10px;
+    font-size: 15px;
   }
-  .lp-glass-card .lp-icon {
-    margin-bottom: 14px;
+  .lp-hero-glow.a {
+    width: 320px;
+    left: calc(50% - 260px);
+  }
+  .lp-hero-glow.b {
+    width: 260px;
+    left: calc(50% - 20px);
   }
   .lp-section {
     padding: 96px 20px 0;
@@ -1376,13 +1649,11 @@ html:has(.landing) {
   .lp-cta {
     padding: 90px 20px;
   }
-  .lp-cta .lp-ctas,
-  .lp-hero .lp-ctas {
+  .lp-cta .lp-ctas {
     width: 100%;
     flex-direction: column;
   }
-  .lp-cta .lp-ctas .btn,
-  .lp-hero .lp-ctas .btn {
+  .lp-cta .lp-ctas .btn {
     width: 100%;
   }
   .lp-footer {
@@ -1408,14 +1679,6 @@ html:has(.landing) {
     max-height: 92dvh;
     border-radius: 28px 28px 0 0;
     padding-bottom: calc(22px + var(--safe-b));
-  }
-}
-
-@media (max-width: 360px) {
-  .la-phone {
-    transform: scale(0.92);
-    transform-origin: top center;
-    margin-bottom: -50px;
   }
 }
 
