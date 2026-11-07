@@ -680,9 +680,11 @@ export function Chat() {
     try {
       await sendMessage(threadId, { type: MessageType.TEXT, text: item.text.value, replyTo: item.text.replyTo }, { audience: item.text.audience });
       setOutbox((o) => o.filter((x) => x.id !== item.id));
-    } catch {
-      // The message itself says it didn't go, with a retry; no toast on top.
+    } catch (e) {
       setOutbox((o) => o.map((x) => (x.id === item.id ? { ...x, failed: true } : x)));
+      // The message itself says it didn't go, with a retry. A lost connection needs nothing more; a refusal from the
+      // server (an admin paused this account, say) says why.
+      if (!(e instanceof TypeError)) toast(messageOf(e), 'error');
     }
   };
 
