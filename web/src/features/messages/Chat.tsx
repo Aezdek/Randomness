@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Smile, Square, Video, X } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Send, Smile, Square, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -17,17 +17,11 @@ import { Sheet } from '../../ui/Sheet';
 import { calls } from '../calls/calls';
 import { coverOf } from '../profile/PostGrid';
 import { ThreadList } from './Inbox';
+import { EmojiPicker } from '../../ui/EmojiPicker';
 import { ShareSheet } from './ShareSheet';
 import { ThreadInfo } from './ThreadInfo';
 
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
-/** The "+" in the reaction row: the emojis people react with most, as on Instagram. */
-const MORE_EMOJI = [
-  '😀', '😃', '😄', '😁', '😆', '🥹', '😅', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘',
-  '😋', '😜', '🤪', '😎', '🤩', '🥳', '😏', '😒', '😔', '😟', '🥺', '😭', '😤', '🤯', '😳', '😱',
-  '🤔', '🫡', '🤭', '🫢', '😶', '🙄', '😬', '😴', '🤤', '🤢', '🤮', '🤧', '😵', '🤠', '😈', '💀',
-  '👏', '🙌', '🙏', '🤝', '👌', '✌️', '🤞', '🫶', '💪', '👀', '🔥', '✨', '💯', '🎉', '💔', '💕',
-];
 
 /** "14:32" in the viewer's own clock format. */
 const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -138,13 +132,27 @@ function useLongPress(onLong: () => void) {
   };
 }
 
-/** A photo, video or voice note on its way (converting, then encrypting and uploading). */
+/**
+ * Something you sent that is on its way: a text (shown straight away, as on Instagram, with a paper plane beside it
+ * until the server has it), or a photo, video or voice note (converting, then encrypting and uploading).
+ */
 interface Outgoing {
   id: string;
   label: string;
   preview: string | null;
   phase: 'converting' | 'sending';
   progress: number;
+  text?: { value: string; replyTo: string | null; audience: string };
+  failed?: boolean;
+}
+
+/** The paper plane beside a message that's still sending; a red mark if it didn't go. */
+function SendStatus({ failed }: { failed?: boolean }) {
+  return (
+    <span className={`send-status ${failed ? 'failed' : ''}`} role="img" aria-label={failed ? 'Not sent' : 'Sending'}>
+      {failed ? <AlertCircle size={16} /> : <Send size={13} />}
+    </span>
+  );
 }
 
 function useVanish(threadId: string) {
@@ -371,12 +379,8 @@ function Bubble({
           </button>
         </div>
         {moreEmoji && (
-          <div className="emoji-grid react-grid">
-            {MORE_EMOJI.map((e) => (
-              <button key={e} onClick={() => (setMenu(false), setMoreEmoji(false), void reactTo(message, e))}>
-                {e}
-              </button>
-            ))}
+          <div className="react-picker">
+            <EmojiPicker onPick={(e) => (setMenu(false), setMoreEmoji(false), void reactTo(message, e))} autoFocus={false} />
           </div>
         )}
         <div className="menu">
@@ -575,6 +579,8 @@ export function Chat() {
   const [polling, setPolling] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const lastTyping = useRef(0);
   // Scrolled up to read? New messages then don't yank the chat down; a "jump to latest" button counts them instead.
   const atBottom = useRef(true);
@@ -662,7 +668,33 @@ export function Chat() {
     }
     const reply = replyTo?.dto.id ?? null;
     setReplyTo(null);
-    await send({ type: MessageType.TEXT, text: value, replyTo: reply });
+    const item: Outgoing = { id: crypto.randomUUID(), label: value, preview: null, phase: 'sending', progress: 0, text: { value, replyTo: reply, audience } };
+    setOutbox((o) => [...o, item]);
+    void deliver(item);
+  };
+
+  /** Sends a text from the outbox; once the server has it the real message replaces it, else it waits for a retry. */
+  const deliver = async (item: Outgoing) => {
+    if (!item.text) return;
+    setOutbox((o) => o.map((x) => (x.id === item.id ? { ...x, failed: false } : x)));
+    try {
+      await sendMessage(threadId, { type: MessageType.TEXT, text: item.text.value, replyTo: item.text.replyTo }, { audience: item.text.audience });
+      setOutbox((o) => o.filter((x) => x.id !== item.id));
+    } catch {
+      // The message itself says it didn't go, with a retry; no toast on top.
+      setOutbox((o) => o.map((x) => (x.id === item.id ? { ...x, failed: true } : x)));
+    }
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const el = input.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus({ preventScroll: true });
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
   };
 
   const attach = (list: FileList) => {
@@ -842,9 +874,26 @@ export function Chat() {
               </Fragment>
             );
           })}
-          {outbox.map((item) => (
+          {outbox.map((item) =>
+            item.text ? (
+              <div className={`msg mine outgoing ${item.failed ? 'failed' : ''}`} key={item.id}>
+                <div className="msg-col">
+                  <div className="outgoing-row">
+                    <SendStatus failed={item.failed} />
+                    <div className="bubble">{item.text.value}</div>
+                  </div>
+                  {item.failed && (
+                    <button className="outgoing-retry" onClick={() => void deliver(item)}>
+                      Not sent. Tap to retry
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="msg mine outgoing" key={item.id}>
               <div className="msg-col">
+                <div className="outgoing-row">
+                <SendStatus />
                 <div className="outgoing-bubble">
                   {item.preview ? <img src={item.preview} alt="" /> : <span className="outgoing-icon">{item.label === 'Voice message' ? <Mic size={18} /> : <ImagePlus size={18} />}</span>}
                   <span className="outgoing-text">
@@ -857,9 +906,11 @@ export function Chat() {
                     </span>
                   </span>
                 </div>
+                </div>
               </div>
             </div>
-          ))}
+            ),
+          )}
           <AnimatePresence>
             {typers.length > 0 && (
               <motion.div className="msg theirs" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -911,6 +962,14 @@ export function Chat() {
           </div>
         )}
         <div className="composer-bar">
+          {emojiOpen && !recording && (
+            <>
+              <div className="composer-emoji-scrim" onPointerDown={() => setEmojiOpen(false)} />
+              <div className="composer-emoji">
+                <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} autoFocus={false} />
+              </div>
+            </>
+          )}
           {recording ? (
             <Recorder onDone={voice} onCancel={() => setRecording(false)} />
           ) : (
@@ -918,7 +977,17 @@ export function Chat() {
               <button type="button" className="icon-btn sm cam" onClick={() => file.current?.click()} aria-label="Send photo or video">
                 <Camera size={18} />
               </button>
+              <button
+                type="button"
+                className={`icon-btn sm emoji-toggle ${emojiOpen ? 'on' : ''}`}
+                onClick={() => setEmojiOpen((o) => !o)}
+                aria-label="Emoji"
+                aria-expanded={emojiOpen}
+              >
+                <Smile size={20} />
+              </button>
               <input
+                ref={input}
                 id="chat-input"
                 className="input bare"
                 placeholder={vanish ? 'Vanish message…' : 'Message…'}

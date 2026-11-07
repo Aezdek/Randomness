@@ -2,6 +2,7 @@ package xyz.aezdek.hush.ui.messages
 
 import xyz.aezdek.hush.ui.components.AezButton
 import xyz.aezdek.hush.ui.components.AezField
+import xyz.aezdek.hush.ui.components.EmojiPicker
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.material3.ModalBottomSheet
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -63,7 +65,6 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -152,13 +153,6 @@ import java.util.Date
 private val EMOJI = Regex("^(\\p{So}|\\p{Cn}|[\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\u200D\\uFE0F\\u2600-\\u27BF]){1,8}$")
 private val QUICK = listOf("❤️", "😂", "😮", "😢", "😡", "👍")
 /** The "+" in the reaction row: the emojis people react with most, as on Instagram (same list as the web app). */
-private val MORE_EMOJI = listOf(
-    "😀", "😃", "😄", "😁", "😆", "🥹", "😅", "🤣", "😊", "😇", "🙂", "😉", "😌", "😍", "🥰", "😘",
-    "😋", "😜", "🤪", "😎", "🤩", "🥳", "😏", "😒", "😔", "😟", "🥺", "😭", "😤", "🤯", "😳", "😱",
-    "🤔", "🫡", "🤭", "🫢", "😶", "🙄", "😬", "😴", "🤤", "🤢", "🤮", "🤧", "😵", "🤠", "😈", "💀",
-    "👏", "🙌", "🙏", "🤝", "👌", "✌️", "🤞", "🫶", "💪", "👀", "🔥", "✨", "💯", "🎉", "💔", "💕",
-)
-
 @Composable
 fun Chat(threadId: String, focus: String? = null) {
     val nav = LocalNav.current
@@ -188,6 +182,7 @@ fun Chat(threadId: String, focus: String? = null) {
     var forwarding by remember { mutableStateOf<MessagePayload?>(null) }
     var polling by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf<String?>(null) }
+    val pending = remember(threadId) { mutableStateListOf<PendingText>() }
     var once by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -201,6 +196,21 @@ fun Chat(threadId: String, focus: String? = null) {
         val mine = thread.members.firstOrNull { it.userId == me.id }
         val last = messages.lastOrNull()
         if (mine != null && last != null && last.dto.receivedAt > mine.lastReadAt) runCatching { Graph.client.composer.markRead(threadId) }
+    }
+
+    /** Sends a text you just wrote; it shows at once with a paper plane, and waits for a retry if it doesn't go. */
+    fun deliver(item: PendingText) {
+        item.failed = false
+        Graph.scope.launch {
+            val sent = try {
+                Graph.client.composer.sendMessage(threadId, MessagePayload(MessageType.TEXT, text = item.text, replyTo = item.replyTo), audience = item.audience)
+                true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                false
+            }
+            if (sent) pending.remove(item) else item.failed = true
+        }
     }
 
     fun send(payload: MessagePayload, audience: String = if (vanish) Audience.VANISH else Audience.THREAD) {
@@ -336,6 +346,10 @@ fun Chat(threadId: String, focus: String? = null) {
         val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM }
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize().clipToBounds(), state = listState, reverseLayout = true) {
+            sending?.let { label -> item(key = "uploading") { UploadingRow(label, accent) } }
+            items(pending.reversed(), key = { it.id }) { item ->
+                PendingBubble(item, themeBrush, Color(theme.mineText)) { deliver(item) }
+            }
             if (typing.isNotEmpty()) item { TypingBubble(typing.first(), index, state) }
             itemsIndexed(reversed, key = { _, m -> m.id }) { reversedIndex, message ->
                 val i = messages.lastIndex - reversedIndex
@@ -384,12 +398,6 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             }
         }
-        sending?.let {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text(it, fontSize = 12.sp, color = Aez.colors.text2)
-                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = Brand.pink, trackColor = Aez.colors.elev2)
-            }
-        }
         Composer(
             threadId = threadId,
             replyTo = replyTo, editing = editing, vanish = vanish, once = once,
@@ -405,7 +413,9 @@ fun Chat(threadId: String, focus: String? = null) {
                     val p = edit.payloadAs<MessagePayload>() ?: return@Composer
                     Graph.launch { Graph.client.composer.edit(edit, p.copy(text = text, edited = true)) }
                 } else {
-                    send(MessagePayload(MessageType.TEXT, text = text, replyTo = reply?.id))
+                    val item = PendingText(java.util.UUID.randomUUID().toString(), text, reply?.id, if (vanish) Audience.VANISH else Audience.THREAD)
+                    pending.add(item)
+                    deliver(item)
                 }
             },
             quickReaction = custom.quickReaction,
@@ -450,16 +460,10 @@ fun Chat(threadId: String, focus: String? = null) {
                 ) { Text("+", fontSize = 24.sp, color = Aez.colors.text2) }
             }
             if (more) {
-                for (row in MORE_EMOJI.chunked(8)) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                        for (emoji in row) {
-                            Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(10.dp)).clickable {
-                                menu = null
-                                Graph.launch { Graph.client.composer.react(message, emoji) }
-                            }, contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
-                        }
-                    }
-                }
+                EmojiPicker(onPick = { emoji ->
+                    menu = null
+                    Graph.launch { Graph.client.composer.react(message, emoji) }
+                })
             }
             SheetItem("Reply", Icons.AutoMirrored.Outlined.Reply) { menu = null; replyTo = message }
             val forwardable = message.dto.audience != Audience.VANISH && message.dto.audience != Audience.ONCE &&

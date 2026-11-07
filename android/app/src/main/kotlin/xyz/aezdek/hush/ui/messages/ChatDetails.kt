@@ -71,6 +71,7 @@ import xyz.aezdek.hush.ui.components.AezField
 import xyz.aezdek.hush.ui.components.Avatar
 import xyz.aezdek.hush.ui.components.MediaImage
 import xyz.aezdek.hush.ui.components.SectionLabel
+import xyz.aezdek.hush.ui.components.EmojiPicker
 import xyz.aezdek.hush.ui.theme.Aez
 import java.text.DateFormat
 import java.util.Date
@@ -228,6 +229,10 @@ internal fun ReactionSheet(threadId: String, current: String, onDismiss: () -> U
                 repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+        EmojiPicker(onPick = { emoji ->
+            onDismiss()
+            if (emoji != current) change(threadId, ChatEvent(quickReaction = emoji))
+        }, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         Spacer(Modifier.navigationBarsPadding().size(16.dp))
     }
 }

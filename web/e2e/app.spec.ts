@@ -258,7 +258,9 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await bob.page.waitForTimeout(700);
   await target.dispatchEvent('pointerup', { pointerType: 'touch', clientX: 20, clientY: 20, isPrimary: true });
   await bob.page.getByRole('button', { name: 'More emojis' }).click();
-  await bob.page.locator('.react-grid').getByRole('button', { name: '🔥' }).click();
+  // The picker has every emoji; search finds one by name.
+  await bob.page.getByLabel('Search emoji').fill('fire');
+  await bob.page.locator('.react-picker .emoji-cell', { hasText: '🔥' }).first().click();
   await expect(alice.page.locator('.msg.mine', { hasText: 'typing while it uploads' }).locator('.reactions')).toContainText('🔥', { timeout: 20_000 });
 
   // ----------------------------------------------------------------------------------------------- notes

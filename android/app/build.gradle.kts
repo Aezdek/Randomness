@@ -105,6 +105,7 @@ dependencies {
     implementation(libs.media3.common)
     implementation(libs.webrtc)
     implementation(libs.zxing.core)
+    implementation(libs.androidx.emoji2.picker)
     implementation(libs.play.services.code.scanner)
 
     testImplementation(libs.junit)

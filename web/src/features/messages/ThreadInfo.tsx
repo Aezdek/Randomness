@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatCustom, MAX_NICKNAME, themeBackground, themeGradient, themeOf, THEMES } from '../../core/chat';
 import { useDarkMode } from '../../core/ui';
+import { EmojiPicker } from '../../ui/EmojiPicker';
 import { addMembers, edit, leaveThread, saveSettings, sendChatEvent } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Audience, MessageType, type ChatEvent, type MessagePayload, type ThreadPayload } from '../../core/payloads';
@@ -259,6 +260,9 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
                 {e}
               </button>
             ))}
+          </div>
+          <div className="reaction-picker">
+            <EmojiPicker autoFocus={false} onPick={(e) => (setPanel(null), e !== custom.quickReaction && void change({ quickReaction: e }))} />
           </div>
         </Sheet>
       )}

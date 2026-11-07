@@ -12,6 +12,7 @@
     "dev:sw": "vite build -c vite.sw.config.ts --outDir public --watch"
   },
   "dependencies": {
+    "@infolektuell/noto-color-emoji": "0.2.0",
     "@mediabunny/aac-encoder": "1.64.0",
     "blurhash": "2.0.5",
     "idb": "8.0.4",

@@ -1,6 +1,8 @@
 package xyz.aezdek.hush.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,7 +70,8 @@ fun TopBar(
 @Composable
 fun ActionSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 24.dp)) { content() }
+        // Scrolls when it's taller than the screen (the message menu with every emoji open, on a small phone).
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).padding(bottom = 24.dp)) { content() }
     }
 }
 
