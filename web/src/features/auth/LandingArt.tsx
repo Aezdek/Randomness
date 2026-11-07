@@ -4,7 +4,6 @@ import {
   Compass,
   Heart,
   Home,
-  LockKeyhole,
   Menu,
   MessageCircle,
   Mic,
@@ -15,14 +14,25 @@ import {
   PlusSquare,
   Search,
   Send,
+  Smile,
   Video,
 } from 'lucide-react';
 import { useId, useMemo } from 'react';
 import { Wordmark } from '../../ui/Brand';
+import { Photo } from './DemoPhotos';
+import ava from './demo/ava.svg';
+import jules from './demo/jules.svg';
+import kai from './demo/kai.svg';
+import leo from './demo/leo.svg';
+import maya from './demo/maya.svg';
+import noor from './demo/noor.svg';
+import sam from './demo/sam.svg';
+import theo from './demo/theo.svg';
 
 /*
- * The landing page's illustrations, drawn with HTML and CSS rather than screenshots: they stay sharp at any size,
- * cost nothing to load, and the made-up people in them never need real photos.
+ * The landing page's illustrations, drawn with HTML, CSS and SVG rather than screenshots: they stay sharp at any
+ * size and cost little to load. The people in them are made up; their portraits are DiceBear's "Notionists" by
+ * Zoish (CC0), and the photos are drawings (DemoPhotos.tsx).
  */
 
 /** A seeded shuffle, so the stars are where they were last time. */
@@ -65,19 +75,46 @@ export function Starfield({ count = 56 }: { count?: number }) {
   );
 }
 
-const PEOPLE = [
-  { name: 'You', initial: 'Y', tone: 'a' },
-  { name: 'maya', initial: 'M', tone: 'b' },
-  { name: 'leo', initial: 'L', tone: 'c' },
-  { name: 'noor', initial: 'N', tone: 'd' },
-  { name: 'sam', initial: 'S', tone: 'e' },
+/** The made-up circle in the demo screens. */
+const P = {
+  jules: { user: 'jules.moreau', name: 'Jules Moreau', src: jules },
+  maya: { user: 'maya.lin', name: 'Maya Lin', src: maya },
+  leo: { user: 'leo.martins', name: 'Leo Martins', src: leo },
+  noor: { user: 'noor.haddad', name: 'Noor Haddad', src: noor },
+  sam: { user: 'sam.okafor', name: 'Sam Okafor', src: sam },
+  ava: { user: 'ava.rossi', name: 'Ava Rossi', src: ava },
+  kai: { user: 'kai.tanaka', name: 'Kai Tanaka', src: kai },
+  theo: { user: 'theo.grant', name: 'Theo Grant', src: theo },
+};
+type Person = (typeof P)[keyof typeof P];
+
+const STORIES: { who: Person; ring: '' | 'is-seen' | 'is-close' }[] = [
+  { who: P.maya, ring: '' },
+  { who: P.leo, ring: 'is-close' },
+  { who: P.noor, ring: '' },
+  { who: P.sam, ring: '' },
+  { who: P.ava, ring: 'is-seen' },
+  { who: P.kai, ring: 'is-seen' },
+  { who: P.theo, ring: 'is-seen' },
 ];
 
-function Face({ initial, tone, size = 32 }: { initial: string; tone: string; size?: number }) {
+function Face({ who, size = 32 }: { who: Person; size?: number }) {
+  return <img className="la-face" src={who.src} alt="" width={size} height={size} draggable={false} />;
+}
+
+/** "Liked by leo.martins and 23 others", with the first few likers' faces. */
+function LikedBy({ size = 18 }: { size?: number }) {
   return (
-    <span className={`la-face tone-${tone}`} style={{ width: size, height: size, fontSize: size * 0.42 }}>
-      {initial}
-    </span>
+    <p className="la-liked">
+      <span className="la-stack">
+        {[P.leo, P.noor, P.sam].map((who) => (
+          <Face key={who.user} who={who} size={size} />
+        ))}
+      </span>
+      <span>
+        Liked by <b>{P.leo.user}</b> and <b>23 others</b>
+      </span>
+    </p>
   );
 }
 
@@ -102,44 +139,58 @@ export function PhoneScreen() {
         </span>
       </div>
       <div className="la-stories">
-        {PEOPLE.map((p, i) => (
-          <span key={p.name} className="la-story">
-            <span className={`la-ring ${i === 0 ? 'seen' : i === 3 ? 'close' : ''}`}>
-              <Face initial={p.initial} tone={p.tone} size={46} />
+        <span className="la-story">
+          <span className="la-ring is-seen">
+            <Face who={P.jules} size={50} />
+          </span>
+          <small>Your story</small>
+        </span>
+        {STORIES.slice(0, 4).map(({ who, ring }) => (
+          <span key={who.user} className="la-story">
+            <span className={`la-ring ${ring}`}>
+              <Face who={who} size={50} />
             </span>
-            <small>{p.name}</small>
+            <small>{who.user}</small>
           </span>
         ))}
       </div>
       <div className="la-post">
         <div className="la-post-head">
-          <Face initial="M" tone="b" size={26} />
+          <Face who={P.maya} size={28} />
           <span>
-            <b>maya</b>
-            <small>Lisbon</small>
+            <b>{P.maya.user}</b>
+            <small>Lisbon, Portugal</small>
           </span>
+          <MoreHorizontal size={16} className="end" />
         </div>
-        <div className="la-photo sunset">
-          <span className="la-count">1/3</span>
-        </div>
+        <Photo scene="lisbon">
+          <span className="la-count">1/4</span>
+        </Photo>
         <div className="la-actions">
           <Heart size={21} className="liked" fill="currentColor" />
           <MessageCircle size={21} />
           <Send size={21} />
+          <span className="la-dots">
+            <i className="on" />
+            <i />
+            <i />
+            <i />
+          </span>
           <Bookmark size={21} className="end" />
         </div>
+        <LikedBy size={16} />
         <p className="la-caption">
-          <b>8 likes</b>
-          <br />
-          <b>maya</b> golden hour with the best people
+          <b>{P.maya.user}</b> golden hour from the miradouro, with the best people 🧡
         </p>
+        <p className="la-more">View all 6 comments</p>
+        <p className="la-when">2 hours ago</p>
       </div>
       <div className="la-tabbar">
-        <Home size={22} />
+        <Home size={22} strokeWidth={2.4} />
         <Search size={22} />
         <PlusSquare size={22} />
-        <Play size={22} />
-        <Face initial="Y" tone="a" size={22} />
+        <Clapperboard size={22} />
+        <Face who={P.jules} size={23} />
       </div>
     </div>
   );
@@ -155,14 +206,14 @@ const DESK_NAV = [
   { icon: PlusSquare, label: 'Create' },
 ];
 
-const DESK_CHATS = [
-  { name: 'leo', initial: 'L', tone: 'c', text: 'dinner saturday? 🍝', time: '2m', unread: true },
-  { name: 'noor', initial: 'N', tone: 'd', text: 'Sent a voice note', time: '1h', unread: true },
-  { name: 'Lisbon crew', initial: 'L', tone: 'e', text: 'maya: photos are up!', time: '3h' },
-  { name: 'sam', initial: 'S', tone: 'e', text: 'Liked your story', time: '5h' },
+const SUGGESTED = [
+  { who: P.kai, why: `Followed by ${P.maya.user} + 2 more` },
+  { who: P.theo, why: `Followed by ${P.leo.user}` },
+  { who: P.ava, why: `Followed by ${P.noor.user} + 1 more` },
+  { who: P.sam, why: 'Follows you' },
 ];
 
-/** Hush on a big screen: sidebar, feed and messages, the way the web app lays them out. Drawn at 1200px wide. */
+/** Hush on a big screen: sidebar, feed and suggestions, the way the web app lays them out. Drawn at 1200px wide. */
 export function DesktopScreen() {
   return (
     <div className="la-desk">
@@ -180,7 +231,7 @@ export function DesktopScreen() {
           </span>
         ))}
         <span className="la-side-item">
-          <Face initial="Y" tone="a" size={24} />
+          <Face who={P.jules} size={26} />
           Profile
         </span>
         <span className="la-side-item end">
@@ -190,65 +241,84 @@ export function DesktopScreen() {
       </aside>
       <div className="la-desk-feed">
         <div className="la-desk-stories">
-          {[...PEOPLE, { name: 'ava', initial: 'A', tone: 'c' }, { name: 'kai', initial: 'K', tone: 'd' }].map((p, i) => (
-            <span key={p.name} className="la-story">
-              <span className={`la-ring ${i === 0 ? 'seen' : i === 3 ? 'close' : ''}`}>
-                <Face initial={p.initial} tone={p.tone} size={62} />
+          {STORIES.map(({ who, ring }) => (
+            <span key={who.user} className="la-story">
+              <span className={`la-ring ${ring}`}>
+                <Face who={who} size={62} />
               </span>
-              <small>{p.name === 'You' ? 'Your story' : p.name}</small>
+              <small>{who.user}</small>
             </span>
           ))}
         </div>
         <article className="la-desk-post">
           <div className="la-post-head">
-            <Face initial="M" tone="b" size={34} />
+            <Face who={P.maya} size={34} />
             <span>
-              <b>maya</b> <small className="inline">· 2h</small>
-              <small>Lisbon</small>
+              <b>{P.maya.user}</b> <small className="inline">· 2h</small>
+              <small>Lisbon, Portugal</small>
             </span>
             <MoreHorizontal size={20} className="end" />
           </div>
-          <div className="la-photo sunset">
-            <span className="la-count">1/3</span>
-          </div>
+          <Photo scene="lisbon">
+            <span className="la-count">1/4</span>
+          </Photo>
           <div className="la-actions">
             <Heart size={25} className="liked" fill="currentColor" />
             <MessageCircle size={25} />
             <Send size={25} />
+            <span className="la-dots">
+              <i className="on" />
+              <i />
+              <i />
+              <i />
+            </span>
             <Bookmark size={25} className="end" />
           </div>
+          <LikedBy size={20} />
           <p className="la-caption">
-            <b>8 likes</b>
+            <b>{P.maya.user}</b> golden hour from the miradouro, with the best people 🧡
           </p>
+          <p className="la-more">View all 6 comments</p>
         </article>
       </div>
       <aside className="la-desk-right">
         <div className="la-me">
-          <Face initial="Y" tone="a" size={46} />
+          <Face who={P.jules} size={48} />
           <span>
-            <b>you</b>
-            <small>Your profile</small>
+            <b>{P.jules.user}</b>
+            <small>{P.jules.name}</small>
           </span>
+          <em>Switch</em>
         </div>
-        <b className="la-right-title">Messages</b>
-        {DESK_CHATS.map((c) => (
-          <div key={c.name} className={`la-chat-row ${c.unread ? 'unread' : ''}`}>
-            <Face initial={c.initial} tone={c.tone} size={46} />
+        <div className="la-right-title">
+          <b>Suggested for you</b>
+          <em>See all</em>
+        </div>
+        {SUGGESTED.map(({ who, why }) => (
+          <div key={who.user} className="la-suggest">
+            <Face who={who} size={46} />
             <span>
-              <b>{c.name}</b>
-              <small>
-                {c.text} · {c.time}
-              </small>
+              <b>{who.user}</b>
+              <small>{why}</small>
             </span>
-            {c.unread && <i className="la-dot" />}
+            <em>Follow</em>
           </div>
         ))}
-        <div className="la-e2ee">
-          <LockKeyhole size={18} />
-          <span>
-            <b>End-to-end encrypted</b>
-            <small>Only the people you share with can see your posts, stories and messages.</small>
-          </span>
+        <div className="la-notes">
+          <b>Notes</b>
+          <div className="la-note-row">
+            {[
+              { who: P.noor, text: 'bake sale sunday 🍪' },
+              { who: P.leo, text: 'new album on repeat' },
+              { who: P.ava, text: 'back in town!' },
+            ].map(({ who, text }) => (
+              <span key={who.user} className="la-note">
+                <i>{text}</i>
+                <Face who={who} size={52} />
+                <small>{who.user.split('.')[0]}</small>
+              </span>
+            ))}
+          </div>
         </div>
       </aside>
     </div>
@@ -301,30 +371,49 @@ export function Hand({ corner }: { corner: number }) {
   );
 }
 
-/** Posts, reels and stories: a profile grid. */
+/** Posts, reels and stories: a profile. */
 export function SharePanel() {
-  const tiles = ['sunset', 'dusk', 'bloom', 'tide', 'ember', 'haze', 'grape', 'peach', 'night'];
+  const tiles = ['lisbon', 'lake', 'dinner', 'tulips', 'city', 'coffee'] as const;
   return (
     <div className="la-panel la-share" aria-hidden>
       <div className="la-share-head">
-        <Face initial="M" tone="b" size={58} />
+        <span className="la-ring">
+          <Face who={P.maya} size={54} />
+        </span>
         <div>
-          <b>maya</b>
+          <b>{P.maya.user}</b>
           <span className="la-counts">
             <span>
-              <b>42</b> posts
+              <b>48</b> posts
             </span>
             <span>
               <b>9</b> followers
             </span>
+            <span>
+              <b>9</b> following
+            </span>
           </span>
         </div>
       </div>
+      <p className="la-bio">
+        <b>{P.maya.name}</b>
+        <br />
+        film photos, long walks, too much coffee
+      </p>
+      <p className="la-mutual">
+        <span className="la-stack">
+          <Face who={P.leo} size={16} />
+          <Face who={P.noor} size={16} />
+        </span>
+        <span>
+          Followed by <b>{P.leo.user}</b>, <b>{P.noor.user}</b> and 5 others
+        </span>
+      </p>
       <div className="la-grid">
         {tiles.map((t, i) => (
-          <span key={t} className={`la-photo ${t}`}>
-            {i === 1 && <Play size={14} className="la-tile-icon" fill="currentColor" />}
-          </span>
+          <Photo key={t} scene={t}>
+            {i === 1 && <Clapperboard size={13} className="la-tile-icon" />}
+          </Photo>
         ))}
       </div>
     </div>
@@ -336,32 +425,44 @@ export function TalkPanel() {
   return (
     <div className="la-panel la-talk" aria-hidden>
       <div className="la-chat-head">
-        <Face initial="L" tone="c" size={34} />
+        <span className="la-online">
+          <Face who={P.leo} size={36} />
+        </span>
         <span>
-          <b>leo</b>
+          <b>{P.leo.name}</b>
           <small>Active now</small>
+        </span>
+        <span className="la-chat-icons">
+          <Video size={19} />
         </span>
       </div>
       <div className="la-bubbles">
         <span className="la-time">Today 19:02</span>
-        <span className="la-bubble them">dinner saturday? 🍝</span>
+        <span className="la-row them">
+          <Face who={P.leo} size={22} />
+          <span className="la-bubble them">dinner saturday? 🍝</span>
+        </span>
         <span className="la-bubble me">yes!! I’ll bring dessert</span>
         <span className="la-bubble me reacted">
-          and the good playlist
+          and the good playlist 🎶
           <i className="la-reaction">❤️</i>
         </span>
-        <span className="la-bubble them voice">
-          <Play size={14} fill="currentColor" />
-          <span className="la-wave">
-            {[6, 12, 18, 10, 16, 22, 14, 8, 16, 20, 12, 7, 14, 18, 9].map((h, i) => (
-              <i key={i} style={{ height: h }} />
-            ))}
+        <span className="la-row them">
+          <Face who={P.leo} size={22} />
+          <span className="la-bubble them voice">
+            <Play size={14} fill="currentColor" />
+            <span className="la-wave">
+              {[6, 12, 18, 10, 16, 22, 14, 8, 16, 20, 12, 7, 14, 18, 9].map((h, i) => (
+                <i key={i} style={{ height: h }} />
+              ))}
+            </span>
+            <small>0:07</small>
           </span>
-          <small>0:07</small>
         </span>
         <span className="la-seen">Seen</span>
       </div>
       <div className="la-composer">
+        <Smile size={18} />
         <span>Message…</span>
         <Mic size={18} />
       </div>
@@ -371,13 +472,14 @@ export function TalkPanel() {
 
 /** A group video call. */
 export function CallPanel() {
+  const tiles = [P.maya, P.leo, P.noor, P.sam];
   return (
     <div className="la-panel la-call" aria-hidden>
       <div className="la-tiles">
-        {PEOPLE.slice(1).map((p, i) => (
-          <span key={p.name} className={`la-tile tone-${p.tone} ${i === 0 ? 'speaking' : ''}`}>
-            <Face initial={p.initial} tone={p.tone} size={54} />
-            <small>{p.name}</small>
+        {tiles.map((who, i) => (
+          <span key={who.user} className={`la-tile ${i === 0 ? 'speaking' : ''}`}>
+            <img src={who.src} alt="" draggable={false} />
+            <small>{who.name.split(' ')[0]}</small>
           </span>
         ))}
       </div>

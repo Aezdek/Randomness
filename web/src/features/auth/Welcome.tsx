@@ -16,7 +16,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BrandMark, Wordmark } from '../../ui/Brand';
 import { AuthForm, type AuthMode } from './AuthForm';
 import { Downloads } from './Downloads';
-import { EASE, Eyebrow, Reveal, useFitScreen } from './LandingBits';
+import { CountUp, Drift, EASE, Eyebrow, Reveal, RiseText, ScrollGrow, useFitScreen } from './LandingBits';
 import { CallPanel, DesktopScreen, Hand, PhoneScreen, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
 /*
@@ -300,12 +300,16 @@ function Features({ onStart }: { onStart: (m: AuthMode) => void }) {
   const feature = FEATURES[active];
   return (
     <section className="lp-section" id="features">
-      <Reveal className="lp-head center">
-        <Eyebrow>Features</Eyebrow>
-        <h2>Everything you’d expect. Nothing you wouldn’t.</h2>
-        <p className="lp-sub">The app you already know, for your own circle: no ads, no strangers, no feed deciding what you see.</p>
-      </Reveal>
-      <Reveal className="lp-feature-card" delay={0.05}>
+      <div className="lp-head center">
+        <Reveal>
+          <Eyebrow>Features</Eyebrow>
+        </Reveal>
+        <RiseText text="Everything you’d expect. Nothing you wouldn’t." />
+        <Reveal delay={0.2}>
+          <p className="lp-sub">Photos, stories, messages and calls for your own circle. No ads, no strangers, and no feed deciding what you see.</p>
+        </Reveal>
+      </div>
+      <ScrollGrow className="lp-feature-card">
         <div className="lp-feature-left">
           <div className="lp-tabs" role="tablist" aria-label="Features">
             {FEATURES.map((f, i) => (
@@ -352,7 +356,7 @@ function Features({ onStart }: { onStart: (m: AuthMode) => void }) {
             </motion.div>
           </AnimatePresence>
         </div>
-      </Reveal>
+      </ScrollGrow>
     </section>
   );
 }
@@ -399,24 +403,30 @@ function Pillars() {
   return (
     <section className="lp-section lp-pillars">
       <span className="lp-glow center" aria-hidden />
-      <Reveal className="lp-split-head">
+      <div className="lp-split-head">
         <div>
-          <Eyebrow>How it stays private</Eyebrow>
-          <h2>Private by design, not by promise.</h2>
+          <Reveal>
+            <Eyebrow>How it stays private</Eyebrow>
+          </Reveal>
+          <RiseText text="Private by design, not by promise." />
         </div>
-        <p className="lp-sub">Privacy that doesn’t depend on anyone behaving well, the server included. The maths keeps it private, whoever runs it.</p>
-      </Reveal>
+        <Reveal delay={0.15}>
+          <p className="lp-sub">Privacy that doesn’t depend on anyone behaving well, the server included. The maths keeps it private, whoever runs it.</p>
+        </Reveal>
+      </div>
       <div className="lp-pillar-grid">
         {PILLARS.map(({ icon: Icon, title, text }, i) => (
-          <Reveal key={title} className="lp-pillar" delay={i * 0.08}>
-            <span className="lp-icon lg">
-              <Icon size={22} />
-            </span>
-            <div>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </div>
-          </Reveal>
+          <Drift key={title} className="lp-pillar-cell" speed={[18, 42, 66][i]}>
+            <Reveal className="lp-pillar" delay={i * 0.1}>
+              <span className="lp-icon lg">
+                <Icon size={22} />
+              </span>
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+            </Reveal>
+          </Drift>
         ))}
       </div>
     </section>
@@ -424,9 +434,9 @@ function Pillars() {
 }
 
 const NUMBERS = [
-  { value: '0', title: 'Readable bytes on its disk', text: 'Your posts and messages are encrypted end to end, and everything else under the server password.' },
-  { value: '10', title: 'People, at most', text: 'Hush is for your circle, not the whole internet. Small on purpose.' },
-  { value: '1', title: 'Server, run by your circle', text: 'No company in the middle. Hush runs on a home server one of you looks after.' },
+  { value: 0, from: 4096, title: 'Readable bytes on its disk', text: 'Your posts and messages are encrypted end to end, and everything else under the server password.' },
+  { value: 10, from: 0, title: 'People, at most', text: 'Hush is for your circle, not the whole internet. Small on purpose.' },
+  { value: 1, from: 0, title: 'Server, run by your circle', text: 'No company in the middle. Hush runs on a home server one of you looks after.' },
 ];
 
 function Numbers({ onStart }: { onStart: (m: AuthMode) => void }) {
@@ -435,11 +445,11 @@ function Numbers({ onStart }: { onStart: (m: AuthMode) => void }) {
       <span className="lp-glow center" aria-hidden />
       <div className="lp-numbers">
         <div className="lp-numbers-left">
-          <Eyebrow>By the numbers</Eyebrow>
-          <h2>
-            Small on purpose.
-            <span className="dim"> Sealed by default.</span>
-          </h2>
+          <Reveal>
+            <Eyebrow>By the numbers</Eyebrow>
+          </Reveal>
+          <RiseText text="Small on purpose." />
+          <RiseText text="Sealed by default." className="dim" />
           <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
             Sign in <ArrowRight size={18} />
           </button>
@@ -447,7 +457,7 @@ function Numbers({ onStart }: { onStart: (m: AuthMode) => void }) {
         <div className="lp-numbers-right">
           {NUMBERS.map((n, i) => (
             <Reveal key={n.title} className="lp-number" delay={i * 0.06}>
-              <span className="lp-big">{n.value}</span>
+              <CountUp className="lp-big" from={n.from} to={n.value} />
               <b>{n.title}</b>
               <p>{n.text}</p>
             </Reveal>
@@ -484,7 +494,7 @@ function Faq() {
     <section className="lp-section lp-faq" id="faq">
       <Reveal className="lp-faq-head">
         <Eyebrow>FAQ</Eyebrow>
-        <h2>Questions, answered.</h2>
+        <RiseText text="Questions, answered." />
         <p className="lp-sub">Anything else? Ask whoever invited you.</p>
       </Reveal>
       <div className="lp-faq-list">
@@ -526,10 +536,10 @@ function Faq() {
 function FinalCta({ onStart }: { onStart: (m: AuthMode) => void }) {
   return (
     <section className="lp-section">
-      <Reveal className="lp-cta">
+      <ScrollGrow className="lp-cta" from={0.84}>
         <span className="lp-rays" aria-hidden />
         <BrandMark size={52} />
-        <h2>Your people are waiting.</h2>
+        <RiseText text="Your people are waiting." />
         <p className="lp-sub">Sign in, or open the invite someone sent you.</p>
         <div className="lp-ctas">
           <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
@@ -539,7 +549,7 @@ function FinalCta({ onStart }: { onStart: (m: AuthMode) => void }) {
             <Download size={18} /> Download Hush
           </Link>
         </div>
-      </Reveal>
+      </ScrollGrow>
     </section>
   );
 }

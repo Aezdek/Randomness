@@ -538,10 +538,11 @@ html:has(.landing) {
   overflow: hidden;
 }
 .la-desk-stories {
+  flex: none;
   display: flex;
   gap: 16px;
   width: 520px;
-  padding: 0 8px 22px;
+  padding: 4px 8px 22px;
   overflow: hidden;
 }
 .la-desk-stories .la-story small {
@@ -552,6 +553,7 @@ html:has(.landing) {
   font-size: 12px;
 }
 .la-desk-post {
+  flex: none;
   width: 470px;
 }
 .la-desk-post .la-post-head {
@@ -583,6 +585,15 @@ html:has(.landing) {
   padding: 0;
   font-size: 14px;
 }
+.la-desk-post .la-liked,
+.la-desk-post .la-more {
+  padding: 0;
+  font-size: 14px;
+}
+.la-desk-post .la-dots i {
+  width: 6px;
+  height: 6px;
+}
 .la-desk-right {
   display: flex;
   flex-direction: column;
@@ -591,100 +602,105 @@ html:has(.landing) {
   padding: 36px 32px 20px 12px;
 }
 .la-me,
-.la-chat-row {
+.la-suggest {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 7px 0;
 }
 .la-me > span,
-.la-chat-row > span {
+.la-suggest > span {
+  flex: 1;
   min-width: 0;
 }
 .la-me b,
-.la-chat-row b {
+.la-suggest b {
   display: block;
   font-size: 14px;
 }
 .la-me small,
-.la-chat-row small {
+.la-suggest small {
   display: block;
   margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #a7a7b0;
-  font-size: 13px;
+  font-size: 12.5px;
+}
+.la-me em,
+.la-suggest em,
+.la-right-title em {
+  flex: none;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 650;
+  color: #8f7bff;
 }
 .la-me {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .la-right-title {
-  margin-bottom: 6px;
-  font-size: 15px;
-}
-.la-chat-row.unread small {
-  color: #f5f5f7;
-  font-weight: 600;
-}
-.la-dot {
-  flex: none;
-  margin-left: auto;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--violet);
-}
-.la-e2ee {
   display: flex;
-  gap: 12px;
-  margin-top: 22px;
-  padding: 16px;
-  border-radius: 14px;
-  background: #111114;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-.la-e2ee svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--bold);
-}
-.la-e2ee b {
-  display: block;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: #a7a7b0;
   font-size: 14px;
 }
-.la-e2ee small {
-  display: block;
-  margin-top: 3px;
+.la-right-title em {
+  color: #f5f5f7;
+}
+.la-notes {
+  margin-top: 22px;
+}
+.la-notes > b {
+  font-size: 14px;
   color: #a7a7b0;
-  font-size: 13px;
-  line-height: 1.45;
+}
+.la-note-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+}
+.la-note {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 84px;
+  padding-top: 30px;
+}
+.la-note i {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  max-width: 100px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #26262c;
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.la-note small {
+  color: #a7a7b0;
+  font-size: 12px;
 }
 
 /* ----------------------------------------------------------------------------------------- phone and app mocks */
 .la-face {
   flex: none;
-  display: grid;
-  place-items: center;
+  display: block;
   border-radius: 50%;
-  color: #fff;
-  font-weight: 700;
-  line-height: 1;
-}
-.tone-a {
-  background: #6a52f0;
-}
-.tone-b {
-  background: #e84393;
-}
-.tone-c {
-  background: #7c5cff;
-}
-.tone-d {
-  background: #ff8a3d;
-}
-.tone-e {
-  background: #b93680;
+  object-fit: cover;
+  background: #26262c;
 }
 
 .la-screen {
@@ -754,24 +770,30 @@ html:has(.landing) {
   padding: 2px 12px 12px;
 }
 .la-story {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
 }
 .la-story small {
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10.5px;
   color: #c9c9d1;
 }
 .la-ring {
+  display: inline-flex;
   padding: 2.5px;
   border-radius: 50%;
   background: var(--pink);
 }
-.la-ring.seen {
+.la-ring.is-seen {
   background: #3a3a41;
 }
-.la-ring.close {
+.la-ring.is-close {
   background: #2fd38a;
 }
 .la-ring .la-face {
@@ -793,10 +815,15 @@ html:has(.landing) {
 }
 .la-photo {
   position: relative;
+  display: block;
   overflow: hidden;
-}
-.la-screen .la-photo {
   aspect-ratio: 1;
+}
+.la-photo > .la-photo-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .la-count {
   position: absolute;
@@ -809,42 +836,6 @@ html:has(.landing) {
   font-weight: 600;
   background: rgba(0, 0, 0, 0.55);
 }
-/* Stand-in photos: flat colours and simple shapes (hard-edged circles, no colour ramps). */
-.la-photo.sunset {
-  background: radial-gradient(circle at 50% 56%, #ffc27a 0 12%, transparent 12.5%), #6a4ee6;
-}
-.la-photo.sunset::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: 44%;
-  background: radial-gradient(130% 80% at 18% 100%, #1a1140 60%, transparent 60.5%), radial-gradient(120% 100% at 88% 100%, #e84393 56%, transparent 56.5%);
-}
-.la-photo.dusk {
-  background: radial-gradient(circle at 68% 34%, #c9b8ff 0 14%, transparent 14.5%), #7c5cff;
-}
-.la-photo.bloom {
-  background: radial-gradient(circle at 34% 36%, #ff9ad1 0 22%, transparent 22.5%), #e84393;
-}
-.la-photo.tide {
-  background: radial-gradient(120% 60% at 50% 100%, #5b6cff 50%, transparent 50.5%), #2a2d8f;
-}
-.la-photo.ember {
-  background: radial-gradient(circle at 64% 62%, #ffc27a 0 20%, transparent 20.5%), #ff8a3d;
-}
-.la-photo.haze {
-  background: radial-gradient(140% 70% at 30% 100%, #6e6484 50%, transparent 50.5%), #9a8fb0;
-}
-.la-photo.grape {
-  background: radial-gradient(circle at 72% 30%, #a77de0 0 16%, transparent 16.5%), #5a2fa0;
-}
-.la-photo.peach {
-  background: radial-gradient(circle at 30% 70%, #ff8f8f 0 26%, transparent 26.5%), #ffc08a;
-}
-.la-photo.night {
-  background: radial-gradient(circle at 72% 30%, #fff 0 1.2%, transparent 1.8%), radial-gradient(circle at 28% 58%, #fff 0 0.9%, transparent 1.4%),
-    radial-gradient(circle at 52% 22%, #fff 0 0.7%, transparent 1.2%), radial-gradient(circle at 30% 26%, #e8e2ff 0 10%, transparent 10.5%), #0f0c2a;
-}
 .la-actions {
   display: flex;
   gap: 15px;
@@ -853,8 +844,63 @@ html:has(.landing) {
 .la-actions .liked {
   color: var(--heart);
 }
-.la-actions .end {
+.la-actions .end,
+.la-post-head .end {
   margin-left: auto;
+}
+.la-actions {
+  position: relative;
+}
+.la-dots {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: flex;
+  gap: 3px;
+}
+.la-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+.la-dots i.on {
+  background: #8f7bff;
+}
+.la-liked {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 4px;
+  padding: 0 12px;
+}
+.la-stack {
+  display: inline-flex;
+}
+.la-stack .la-face {
+  box-shadow: 0 0 0 1.5px #000;
+}
+.la-stack .la-face + .la-face {
+  margin-left: -6px;
+}
+.la-more,
+.la-when {
+  margin: 4px 0 0;
+  padding: 0 12px;
+  color: #a7a7b0;
+}
+.la-when {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+.la-screen .la-post {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.la-screen .la-tabbar {
+  flex: none;
 }
 .la-caption {
   margin: 0;
@@ -888,17 +934,41 @@ html:has(.landing) {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+}
+.la-bio {
+  margin: 0 0 8px;
+  color: #d8d8de;
+  font-size: 12.5px;
+}
+.la-bio b {
+  color: #fff;
+}
+.la-mutual {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  color: #a7a7b0;
+  font-size: 11.5px;
+}
+.la-mutual b {
+  color: #e6e6ea;
+  font-weight: 600;
+}
+.la-mutual .la-stack .la-face {
+  box-shadow: 0 0 0 1.5px #0a0a0c;
 }
 .la-share-head > div > b {
   font-size: 15px;
 }
 .la-counts {
   display: flex;
-  gap: 14px;
+  gap: 10px;
+  white-space: nowrap;
   margin-top: 3px;
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 .la-counts b {
   color: #fff;
@@ -909,9 +979,6 @@ html:has(.landing) {
   gap: 3px;
   overflow: hidden;
   border-radius: 12px;
-}
-.la-grid .la-photo {
-  aspect-ratio: 1;
 }
 .la-tile-icon {
   position: absolute;
@@ -928,6 +995,35 @@ html:has(.landing) {
 }
 .la-chat-head b {
   font-size: 14px;
+}
+.la-chat-head > span:nth-child(2) {
+  flex: 1;
+}
+.la-chat-icons {
+  color: #e6e6ea;
+}
+.la-online {
+  position: relative;
+  display: inline-flex;
+}
+.la-online::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2fd38a;
+  box-shadow: 0 0 0 2px #0a0a0c;
+}
+.la-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+}
+.la-row .la-bubble {
+  max-width: 100%;
 }
 .la-chat-head small {
   display: block;
@@ -999,10 +1095,13 @@ html:has(.landing) {
   font-size: 11px;
   color: var(--text-3);
 }
+.la-composer > span {
+  flex: 1;
+}
 .la-composer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 10px 14px;
   border-radius: 22px;
   color: var(--text-3);
@@ -1024,23 +1123,29 @@ html:has(.landing) {
   overflow: hidden;
   border-radius: 14px;
 }
-.la-tile::before {
+.la-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+}
+.la-tile.speaking::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(6, 6, 10, 0.62);
-}
-.la-tile.speaking {
+  border-radius: inherit;
   box-shadow: inset 0 0 0 2px var(--bold);
-}
-.la-tile .la-face {
-  position: relative;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
 }
 .la-tile small {
   position: absolute;
-  left: 10px;
-  bottom: 8px;
+  left: 8px;
+  bottom: 7px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
   font-size: 12px;
   font-weight: 600;
 }
@@ -1227,6 +1332,9 @@ html:has(.landing) {
   gap: 18px;
   margin-top: 60px;
 }
+.lp-pillar-cell {
+  height: 100%;
+}
 .lp-pillar {
   height: 100%;
   display: flex;
@@ -1277,7 +1385,8 @@ html:has(.landing) {
   font-size: clamp(28px, 3.4vw, 40px);
   line-height: 1.18;
 }
-.lp-numbers-left .dim {
+.lp-numbers-left h2.dim {
+  margin-top: -10px;
   color: var(--text-3);
 }
 .lp-numbers-right {
@@ -1396,13 +1505,36 @@ html:has(.landing) {
 .lp-cta .lp-ctas {
   margin-top: 14px;
 }
+/* Light rays from above the panel, turning slowly. The element is a big square centred where the rays meet, so it
+   can spin on the compositor; its fade is round, so it looks the same at every angle. */
 .lp-rays {
   position: absolute;
-  inset: 0;
+  width: 1800px;
+  height: 1800px;
+  left: calc(50% - 900px);
+  top: -1050px;
   pointer-events: none;
-  background: repeating-conic-gradient(from 0deg at 50% -30%, transparent 0deg 5deg, rgba(170, 140, 255, 0.09) 5deg 7deg, transparent 7deg 11deg, rgba(240, 110, 180, 0.07) 11deg 12.5deg);
-  -webkit-mask-image: radial-gradient(90% 80% at 50% 0%, #000, transparent 75%);
-  mask-image: radial-gradient(90% 80% at 50% 0%, #000, transparent 75%);
+  background: repeating-conic-gradient(from 0deg, transparent 0deg 5deg, rgba(170, 140, 255, 0.1) 5deg 7deg, transparent 7deg 11deg, rgba(240, 110, 180, 0.08) 11deg 12.5deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 40%, transparent 78%);
+  mask-image: radial-gradient(closest-side, #000 40%, transparent 78%);
+  animation: lp-spin 140s linear infinite;
+}
+@keyframes lp-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Words of a heading rising into place, each masked by its own line box. */
+.lp-rise-word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+.lp-rise-word > span {
+  display: inline-block;
 }
 
 /* -------------------------------------------------------------------------------------------------------- footer */
@@ -1790,7 +1922,7 @@ html:has(.landing) {
   .lp-pillar-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .lp-pillar:last-child {
+  .lp-pillar-cell:last-child {
     grid-column: span 2;
   }
   .lp-pillar {
@@ -1885,7 +2017,7 @@ html:has(.landing) {
     grid-template-columns: 1fr;
     margin-top: 36px;
   }
-  .lp-pillar:last-child {
+  .lp-pillar-cell:last-child {
     grid-column: auto;
   }
   .lp-pillar {
@@ -1945,7 +2077,8 @@ html:has(.landing) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .starfield span {
+  .starfield span,
+  .lp-rays {
     animation: none;
   }
 }
