@@ -84,6 +84,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -177,6 +179,8 @@ fun Chat(threadId: String, focus: String? = null) {
     val custom = index.chatCustom(threadId)
     val theme = ChatThemes.byId(custom.theme) ?: ChatThemes.all.first()
     val themeBrush = Brush.linearGradient(theme.colors.map { Color(it) })
+    val look = theme.look(Aez.colors.isDark)
+    val accent = Color(look?.accent ?: theme.colors[0])
     var vanish by remember(threadId) { mutableStateOf(Graph.prefs.vanish(threadId)) }
     var replyTo by remember { mutableStateOf<Entity?>(null) }
     var editing by remember { mutableStateOf<Entity?>(null) }
@@ -235,14 +239,30 @@ fun Chat(threadId: String, focus: String? = null) {
         else -> null
     }
 
-    // A theme with a background turns the whole chat into its palette, as on Instagram.
+    // A theme with a background turns the whole chat into its palette: its dark or light version, as the app is.
     val base = Aez.colors
-    val palette = if (!theme.hasBackground) base else base.copy(
-        isDark = true, bg = Color.Transparent, elev1 = Color(0x1AFFFFFF), elev2 = Color(0x26FFFFFF), elev3 = Color(0x33FFFFFF),
-        text = Color.White, text2 = Color(0xB8FFFFFF), text3 = Color(0x80FFFFFF), border = Color(0x1AFFFFFF), borderStrong = Color(0x33FFFFFF),
-        glass = Color(0x33000000), bubbleOther = Color(theme.received),
-    )
-    val chatBackground = if (theme.hasBackground) Modifier.background(Brush.verticalGradient(theme.background.map { Color(it) })) else Modifier.background(base.bg)
+    val palette = when {
+        look == null -> base
+        base.isDark -> base.copy(
+            bg = Color.Transparent, elev1 = Color(0x1AFFFFFF), elev2 = Color(0x26FFFFFF), elev3 = Color(0x33FFFFFF),
+            text = Color.White, text2 = Color(0xB8FFFFFF), text3 = Color(0x80FFFFFF), border = Color(0x1AFFFFFF), borderStrong = Color(0x33FFFFFF),
+            glass = Color(0x3D000000), bubbleOther = Color(look.received),
+        )
+        else -> base.copy(
+            bg = Color.Transparent, elev1 = Color(0xB3FFFFFF), elev2 = Color(0xD9FFFFFF), elev3 = Color(0xFFFFFFFF),
+            text = Color(0xFF0B0B0E), text2 = Color(0x9E000000), text3 = Color(0x6B000000), border = Color(0x14000000), borderStrong = Color(0x24000000),
+            glass = Color(0x9EFFFFFF), bubbleOther = Color(look.received),
+        )
+    }
+    val chatBackground = if (look != null) {
+        Modifier.background(Brush.verticalGradient(look.background.map { Color(it) }))
+            .drawBehind {
+                // A soft glow of the theme's accent at the top, as on the web.
+                val glow = accent.copy(alpha = if (base.isDark) 0.18f else 0.12f)
+                drawRect(Brush.radialGradient(listOf(glow, Color.Transparent), center = Offset(size.width / 2f, 0f), radius = size.width * 0.9f))
+            }
+            .chatPattern(theme.pattern, onDark = base.isDark)
+    } else Modifier.background(base.bg)
     CompositionLocalProvider(LocalAez provides palette) {
     Column(Modifier.fillMaxSize().then(chatBackground)) {
         TopBar(
@@ -330,7 +350,7 @@ fun Chat(threadId: String, focus: String? = null) {
                     }
                     fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type == MessageType.SYSTEM
                     Bubble(
-                        message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]),
+                        message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]), mineText = Color(theme.mineText),
                         firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || gap || isEvent(prev),
                         lastOfGroup = next?.dto?.authorId != message.dto.authorId || isEvent(next),
                         flash = flash == message.id,
@@ -351,7 +371,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it / 2 },
             ) {
                 Row(
-                    Modifier.clip(CircleShape).background(if (newBelow > 0) Color(theme.accent) else Aez.colors.elev2)
+                    Modifier.clip(CircleShape).background(if (newBelow > 0) accent else Aez.colors.elev2)
                         .clickable { scope.launch { listState.animateScrollToItem(0) } }
                         .padding(start = 10.dp, end = if (newBelow > 0) 14.dp else 10.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -389,7 +409,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 }
             },
             quickReaction = custom.quickReaction,
-            accent = Color(theme.accent),
+            accent = accent,
             themed = theme.hasBackground,
             onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
             onPoll = if (thread.isGroup) ({ polling = true }) else null,
@@ -602,6 +622,7 @@ private fun TypingBubble(userId: String, index: Index, state: AppState) {
 @Composable
 private fun Bubble(
     message: Entity, index: Index, state: AppState, isGroup: Boolean, themeBrush: Brush, themeColor: Color, firstOfGroup: Boolean, lastOfGroup: Boolean,
+    mineText: Color = Color.White,
     flash: Boolean, reveal: TimeReveal, onLongPress: () -> Unit, onReply: () -> Unit,
 ) {
     val nav = LocalNav.current
@@ -720,7 +741,7 @@ private fun Bubble(
                     p.text?.takeIf { it.isNotBlank() }?.let { Text(it, modifier = Modifier.background(Aez.colors.bubbleOther).padding(10.dp), color = Aez.colors.text) }
                 }
                 p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) themeColor else Aez.colors.bubbleOther)) {
-                    VoiceBubble(p.media.first(), if (mine) Color.White else Aez.colors.text)
+                    VoiceBubble(p.media.first(), if (mine) mineText else Aez.colors.text)
                 }
                 p.type == MessageType.SHARE -> SharedPost(p, state, clickModifier)
                 p.type == MessageType.POLL && p.poll != null -> PollCard(message, p.poll!!, index, state, themeColor, clickModifier)
@@ -752,7 +773,7 @@ private fun Bubble(
                                 .then(if (flash) Modifier.border(2.dp, themeColor, shape) else Modifier)
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         ) {
-                            RichText(p.text.orEmpty(), style = TextStyle(color = if (mine) Color.White else Aez.colors.text, fontSize = 15.sp, lineHeight = 20.sp))
+                            RichText(p.text.orEmpty(), style = TextStyle(color = if (mine) mineText else Aez.colors.text, fontSize = 15.sp, lineHeight = 20.sp))
                         }
                     }
                 }

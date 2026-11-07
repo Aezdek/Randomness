@@ -2,6 +2,7 @@ import { Bell, BellOff, Check, ChevronRight, Ghost, LogOut, Palette, Pin, Search
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatCustom, MAX_NICKNAME, themeBackground, themeGradient, themeOf, THEMES } from '../../core/chat';
+import { useDarkMode } from '../../core/ui';
 import { addMembers, edit, leaveThread, saveSettings, sendChatEvent } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Audience, MessageType, type ChatEvent, type MessagePayload, type ThreadPayload } from '../../core/payloads';
@@ -40,6 +41,7 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
   const [adding, setAdding] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
+  const dark = useDarkMode();
   const isCreator = thread.createdBy === me.id;
   const others = thread.members.filter((m) => m.userId !== me.id).map((m) => m.userId);
   const muted = (settings.mutedThreads ?? []).includes(thread.id);
@@ -219,10 +221,10 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
                 onClick={() => (setPanel(null), t.id !== theme.id && void change({ theme: t.id }))}
               >
                 {/* A little chat in the theme, as Instagram's picker shows them. */}
-                <span className="theme-preview" style={{ background: themeBackground(t) ?? 'var(--bg)' }}>
-                  <span className="theme-preview-them" style={{ background: t.received ?? 'var(--bubble-them)' }} />
+                <span className="theme-preview" style={{ background: themeBackground(t, dark) ?? 'var(--bg)' }}>
+                  <span className="theme-preview-them" style={{ background: (dark ? t.dark : t.light)?.received ?? 'var(--bubble-them)' }} />
                   <span className="theme-preview-me" style={{ background: themeGradient(t) }} />
-                  <span className="theme-preview-them short" style={{ background: t.received ?? 'var(--bubble-them)' }} />
+                  <span className="theme-preview-them short" style={{ background: (dark ? t.dark : t.light)?.received ?? 'var(--bubble-them)' }} />
                   {t.id === theme.id && (
                     <span className="theme-preview-check">
                       <Check size={14} />

@@ -17,51 +17,115 @@ export interface ChatCustom {
 export const DEFAULT_REACTION = '❤️';
 export const MAX_NICKNAME = 40;
 
+/** One side of a theme: how it looks while the app is dark, or while it is light. */
+export interface ChatThemeLook {
+  /** The chat's background, top to bottom. */
+  bg: [string, string];
+  /** Their messages, and the text on them. */
+  received: string;
+  receivedText: string;
+  /** The chat's buttons. */
+  accent: string;
+}
+
+export type ChatPattern = 'dots' | 'petals' | 'sparkles' | 'waves' | 'grid';
+
 /**
- * A chat theme, as on Instagram: a background behind the whole conversation, a gradient for your messages, a translucent
- * tint for theirs and an accent for the chat's buttons. The default keeps the app's own look. Same ids and colours as
- * ChatThemes in the Android app.
+ * A chat theme: your messages in its gradient, and (except for the default, which keeps the app's own look) a
+ * background, a tint for their messages and an accent, in a dark and a light version that follow the app's
+ * appearance. Some add a faint pattern. Same ids and colours as ChatThemes in shared/client (ChatCustom.kt).
  */
 export interface ChatTheme {
   id: string;
   name: string;
-  /** Your messages, one gradient across the screen. */
-  colors: [string, string, string];
-  /** Top to bottom; none keeps the app's background. */
-  background?: [string, string, string];
-  /** Their messages. */
-  received?: string;
-  accent?: string;
+  /** Your messages: a gradient across the screen, and the text on it. */
+  mine: [string, string];
+  mineText: string;
+  dark?: ChatThemeLook;
+  light?: ChatThemeLook;
+  pattern?: ChatPattern;
 }
 
-const RECEIVED = 'rgba(255, 255, 255, 0.14)';
-
 export const THEMES: ChatTheme[] = [
-  { id: 'default', name: 'Hush', colors: ['#7c5cff', '#b34fe0', '#e84393'] },
-  { id: 'love', name: 'Love', colors: ['#ff2d55', '#ff5e7e', '#ff8fa3'], background: ['#8a1240', '#4a0820', '#1e030c'], accent: '#ff7a9a' },
-  { id: 'sunset', name: 'Sunset', colors: ['#f83600', '#ff6a3d', '#f9a23d'], background: ['#8c2f4e', '#4a1838', '#1c0a18'], accent: '#ff8a4d' },
-  { id: 'ocean', name: 'Ocean', colors: ['#0061ff', '#2f9bff', '#60efff'], background: ['#0b4a86', '#07284e', '#020c1c'], accent: '#5cc8ff' },
-  { id: 'mint', name: 'Mint', colors: ['#0ba360', '#1fb97a', '#3cba92'], background: ['#0e5c46', '#06302a', '#02120f'], accent: '#4fe0a8' },
-  { id: 'forest', name: 'Forest', colors: ['#2e7d5b', '#3d8f6e', '#71b280'], background: ['#24432f', '#12241a', '#060d09'], accent: '#8fd3a0' },
-  { id: 'lavender', name: 'Lavender', colors: ['#8e7cf0', '#b894e8', '#e8a6d9'], background: ['#574394', '#2c2152', '#110c22'], accent: '#c9b2ff' },
-  { id: 'berry', name: 'Berry', colors: ['#a43cf0', '#7b2be0', '#5a1de0'], background: ['#5a1878', '#2c0a3c', '#10031a'], accent: '#c77dff' },
-  { id: 'midnight', name: 'Midnight', colors: ['#2d5bd8', '#3b6fe8', '#4f86f7'], background: ['#16234d', '#0a1028', '#03050e'], accent: '#7fa6ff' },
-  { id: 'citrus', name: 'Citrus', colors: ['#f76b1c', '#f7931e', '#f9a825'], background: ['#7a4300', '#3a2000', '#140b00'], accent: '#ffb84d' },
-  { id: 'mono', name: 'Mono', colors: ['#6a6a73', '#55555d', '#45454c'], background: ['#2e2e33', '#161619', '#050506'], accent: '#d0d0d6' },
-].map((t) => ({ received: RECEIVED, ...t }) as ChatTheme);
+  { id: 'default', name: 'Hush', mine: ['#7c5cff', '#e84393'], mineText: '#ffffff' },
+  { id: 'dusk', name: 'Dusk', mine: ['#ff7a59', '#f2497c'], mineText: '#ffffff', dark: { bg: ['#2a1636', '#120a19'], received: '#ffffff1f', receivedText: '#ffffff', accent: '#ff9a7a' }, light: { bg: ['#fff3ec', '#ffe6ee'], received: '#ffffff', receivedText: '#14141a', accent: '#d9502f' } },
+  { id: 'lagoon', name: 'Lagoon', mine: ['#12b5a5', '#1192e8'], mineText: '#ffffff', dark: { bg: ['#05303a', '#03161c'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#5fdccd' }, light: { bg: ['#e7fbf8', '#e2f2ff'], received: '#ffffff', receivedText: '#14141a', accent: '#0b8579' }, pattern: 'waves' },
+  { id: 'moss', name: 'Moss', mine: ['#7fb85e', '#4c9a6a'], mineText: '#ffffff', dark: { bg: ['#18261b', '#0a120c'], received: '#ffffff1a', receivedText: '#ffffff', accent: '#a9dc8c' }, light: { bg: ['#f2f8ec', '#e5efdc'], received: '#ffffff', receivedText: '#14141a', accent: '#437f34' }, pattern: 'dots' },
+  { id: 'ember', name: 'Ember', mine: ['#ffa246', '#ec5a2a'], mineText: '#ffffff', dark: { bg: ['#2c1510', '#130807'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#ffad70' }, light: { bg: ['#fff5ea', '#ffe8d7'], received: '#ffffff', receivedText: '#14141a', accent: '#c9561a' } },
+  { id: 'lilac', name: 'Lilac', mine: ['#9f86ff', '#c77dff'], mineText: '#ffffff', dark: { bg: ['#1e1838', '#0c0a19'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#c8b8ff' }, light: { bg: ['#f6f2ff', '#eee6ff'], received: '#ffffff', receivedText: '#14141a', accent: '#6b4fe0' }, pattern: 'sparkles' },
+  { id: 'blossom', name: 'Blossom', mine: ['#f472b6', '#fb6f84'], mineText: '#ffffff', dark: { bg: ['#2b1121', '#12070e'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#f9a8d4' }, light: { bg: ['#fff1f7', '#ffe5ef'], received: '#ffffff', receivedText: '#14141a', accent: '#c8256a' }, pattern: 'petals' },
+  { id: 'aurora', name: 'Aurora', mine: ['#2fd3a0', '#5b6cf0'], mineText: '#ffffff', dark: { bg: ['#0a1631', '#050914'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#6ff0cf' }, light: { bg: ['#edfcf6', '#eef0ff'], received: '#ffffff', receivedText: '#14141a', accent: '#4148cc' }, pattern: 'sparkles' },
+  { id: 'dune', name: 'Dune', mine: ['#cf8048', '#a85a30'], mineText: '#ffffff', dark: { bg: ['#251b12', '#110c08'], received: '#ffffff1a', receivedText: '#ffffff', accent: '#e9b07e' }, light: { bg: ['#fbf4e9', '#f3e6d1'], received: '#fffdf8', receivedText: '#14141a', accent: '#8f4c26' }, pattern: 'grid' },
+  { id: 'graphite', name: 'Graphite', mine: ['#5a5a63', '#34343b'], mineText: '#ffffff', dark: { bg: ['#1b1b1f', '#0b0b0d'], received: '#ffffff1a', receivedText: '#ffffff', accent: '#d8d8de' }, light: { bg: ['#f5f5f6', '#eaeaec'], received: '#ffffff', receivedText: '#14141a', accent: '#3d3d45' } },
+  { id: 'citron', name: 'Citron', mine: ['#d9f24f', '#9ee03a'], mineText: '#18200a', dark: { bg: ['#151b07', '#080b02'], received: '#ffffff1a', receivedText: '#ffffff', accent: '#dcfa8f' }, light: { bg: ['#fbfde8', '#f2f8d0'], received: '#ffffff', receivedText: '#14141a', accent: '#557f10' }, pattern: 'dots' },
+  { id: 'cobalt', name: 'Cobalt', mine: ['#3f7ff6', '#6a5cf0'], mineText: '#ffffff', dark: { bg: ['#0d1736', '#060a18'], received: '#ffffff1c', receivedText: '#ffffff', accent: '#9cc3ff' }, light: { bg: ['#eef4ff', '#e5ecff'], received: '#ffffff', receivedText: '#14141a', accent: '#2453d0' }, pattern: 'grid' },
+];
 
-/** The CSS for a theme's chat background (a soft glow at the top over the gradient). */
-export const themeBackground = (t: ChatTheme) =>
-  t.background ? `radial-gradient(120% 60% at 50% 0%, ${t.background[0]}cc, transparent 70%), linear-gradient(180deg, ${t.background[0]}, ${t.background[1]} 45%, ${t.background[2]})` : undefined;
+/** Themes from before the redesign map to the closest new one, so chats that used them keep a similar look. */
+const RENAMED: Record<string, string> = { love: 'blossom', sunset: 'dusk', ocean: 'lagoon', mint: 'aurora', forest: 'moss', lavender: 'lilac', berry: 'lilac', midnight: 'cobalt', citrus: 'ember', mono: 'graphite' };
 
-export const themeOf = (id: string | null | undefined) => THEMES.find((t) => t.id === id) ?? THEMES[0];
-export const themeGradient = (t: ChatTheme) => `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]} 55%, ${t.colors[2]})`;
+export const isThemeId = (id: string) => THEMES.some((t) => t.id === id) || id in RENAMED;
+export const themeOf = (id: string | null | undefined) => {
+  const key = id && RENAMED[id] ? RENAMED[id] : id;
+  return THEMES.find((t) => t.id === key) ?? THEMES[0];
+};
+export const themeGradient = (t: ChatTheme) => `linear-gradient(135deg, ${t.mine[0]}, ${t.mine[1]})`;
+
+/** A theme's faint pattern as one tile of SVG, in marks light enough to sit behind text. */
+function patternTile(pattern: ChatPattern, onDark: boolean): string {
+  const c = onDark ? 'rgba(255,255,255,0.075)' : 'rgba(0,0,0,0.055)';
+  const flower = (x: number, y: number, k: number) =>
+    [0, 72, 144, 216, 288].map((a) => {
+      const r = (a * Math.PI) / 180;
+      return `<circle cx="${(x + Math.sin(r) * 3.4 * k).toFixed(2)}" cy="${(y - Math.cos(r) * 3.4 * k).toFixed(2)}" r="${(2.3 * k).toFixed(2)}" fill="${c}"/>`;
+    }).join('');
+  const star = (x: number, y: number, s: number) => `<path d="M${x} ${y - s}Q${x} ${y} ${x + s} ${y}Q${x} ${y} ${x} ${y + s}Q${x} ${y} ${x - s} ${y}Q${x} ${y} ${x} ${y - s}Z" fill="${c}"/>`;
+  const tiles: Record<ChatPattern, [number, string]> = {
+    dots: [44, `<circle cx="11" cy="11" r="1.8" fill="${c}"/><circle cx="33" cy="33" r="1.8" fill="${c}"/>`],
+    petals: [64, flower(16, 18, 1) + flower(46, 46, 0.7)],
+    sparkles: [60, star(15, 18, 5) + star(44, 42, 3.2) + `<circle cx="46" cy="12" r="1.1" fill="${c}"/>`],
+    waves: [48, `<path d="M0 14q12-7 24 0t24 0M0 38q12-7 24 0t24 0" stroke="${c}" stroke-width="1.4" fill="none"/>`],
+    grid: [32, `<path d="M32 0H0V32" stroke="${c}" stroke-width="1" fill="none"/>`],
+  };
+  const [size, marks] = tiles[pattern];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">${marks}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+/** The CSS for one side of a theme's background: a soft glow of its accent at the top, the pattern, the gradient. */
+export function themeBackground(t: ChatTheme, dark: boolean): string | undefined {
+  const look = dark ? t.dark : t.light;
+  if (!look) return undefined;
+  const layers = [`radial-gradient(120% 55% at 50% 0%, ${look.accent}${dark ? '2e' : '1f'}, transparent 70%)`];
+  if (t.pattern) layers.push(patternTile(t.pattern, dark));
+  layers.push(`linear-gradient(180deg, ${look.bg[0]}, ${look.bg[1]})`);
+  return layers.join(', ');
+}
+
+/**
+ * The CSS variables a chat sets for its theme. A themed chat gets both versions, and the stylesheet picks the one for
+ * the app's current appearance; the default theme only colours your messages and the chat's buttons.
+ */
+export function themeStyle(t: ChatTheme): Record<string, string> {
+  const vars: Record<string, string> = { '--chat-bubble': themeGradient(t), '--chat-bubble-text': t.mineText };
+  if (!t.dark || !t.light) return { ...vars, '--chat-accent': t.mine[0] };
+  for (const [side, look, dark] of [
+    ['d', t.dark, true],
+    ['l', t.light, false],
+  ] as const) {
+    vars[`--chat-bg-${side}`] = themeBackground(t, dark)!;
+    vars[`--chat-received-${side}`] = look.received;
+    vars[`--chat-received-text-${side}`] = look.receivedText;
+    vars[`--chat-accent-${side}`] = look.accent;
+  }
+  return vars;
+}
 
 const EMPTY: ChatCustom = { theme: 'default', nicknames: {}, quickReaction: DEFAULT_REACTION, pinned: [] };
 
 export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
   let next = c;
-  if (e.theme != null) next = { ...next, theme: THEMES.some((t) => t.id === e.theme) ? e.theme : 'default' };
+  if (e.theme != null) next = { ...next, theme: isThemeId(e.theme) ? e.theme : 'default' };
   if (e.nicknameFor != null) {
     const name = e.nickname?.trim().slice(0, MAX_NICKNAME);
     const nicknames = { ...next.nicknames };

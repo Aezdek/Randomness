@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatCustom, eventText, THEMES } from './chat';
+import { chatCustom, eventText, themeOf, themeStyle, THEMES } from './chat';
 import { MessageType, type ChatEvent, type MessagePayload } from './payloads';
 import type { Entity } from './store';
 import type { UserDto } from './types';
@@ -49,10 +49,21 @@ describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
     const users = { ana: { username: 'ana.p' } } as unknown as Record<string, UserDto>;
     const nameOf = (id: string) => (id === 'ana' ? 'Nana' : id);
     expect(eventText({ nicknameFor: 'ana', nickname: 'Nana' }, 'me', 'me', users, nameOf)).toBe('You set the nickname for ana.p to Nana');
-    expect(eventText({ theme: 'ocean' }, 'ana', 'me', users, nameOf)).toBe('Nana changed the theme to Ocean');
+    expect(eventText({ theme: 'lagoon' }, 'ana', 'me', users, nameOf)).toBe('Nana changed the theme to Lagoon');
+    // A theme set before the redesign shows as its closest new one.
+    expect(eventText({ theme: 'ocean' }, 'ana', 'me', users, nameOf)).toBe('Nana changed the theme to Lagoon');
   });
 
   it('has the same theme ids as the Android app', () => {
-    expect(THEMES.map((t) => t.id)).toEqual(['default', 'love', 'sunset', 'ocean', 'mint', 'forest', 'lavender', 'berry', 'midnight', 'citrus', 'mono']);
+    expect(THEMES.map((t) => t.id)).toEqual(['default', 'dusk', 'lagoon', 'moss', 'ember', 'lilac', 'blossom', 'aurora', 'dune', 'graphite', 'citron', 'cobalt']);
+  });
+
+  it('gives every theme but the default both a dark and a light look', () => {
+    for (const t of THEMES.slice(1)) {
+      expect(t.dark && t.light).toBeTruthy();
+      expect(themeStyle(t)['--chat-bg-l']).toContain(t.light!.bg[1]);
+    }
+    expect(themeOf('love').id).toBe('blossom');
+    expect(themeOf('no-such-theme').id).toBe('default');
   });
 });

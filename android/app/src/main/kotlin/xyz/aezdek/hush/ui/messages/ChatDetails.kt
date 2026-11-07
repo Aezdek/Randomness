@@ -179,11 +179,12 @@ internal fun ThemeSheet(threadId: String, current: String, onDismiss: () -> Unit
                                 .then(if (on) Modifier.border(2.dp, Aez.colors.text, RoundedCornerShape(14.dp)) else Modifier)
                                 .padding(if (on) 3.dp else 0.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (theme.hasBackground) Brush.verticalGradient(theme.background.map { Color(it) }) else Brush.verticalGradient(listOf(Aez.colors.bg, Aez.colors.bg)))
+                                .background(theme.look(Aez.colors.isDark)?.let { look -> Brush.verticalGradient(look.background.map { Color(it) }) } ?: Brush.verticalGradient(listOf(Aez.colors.bg, Aez.colors.bg)))
+                                .chatPattern(theme.pattern, onDark = Aez.colors.isDark)
                                 .border(1.dp, Aez.colors.border, RoundedCornerShape(12.dp)),
                         ) {
                             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                val them = if (theme.hasBackground) Color(theme.received) else Aez.colors.bubbleOther
+                                val them = theme.look(Aez.colors.isDark)?.let { Color(it.received) } ?: Aez.colors.bubbleOther
                                 Box(Modifier.fillMaxWidth(0.62f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(them))
                                 Box(Modifier.align(Alignment.End).fillMaxWidth(0.7f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(theme.brush()))
                                 Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(them))

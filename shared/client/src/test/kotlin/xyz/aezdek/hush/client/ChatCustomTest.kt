@@ -82,7 +82,20 @@ class ChatCustomTest {
         assertEquals("Nana", index.nameIn("t", "ana", users))
         assertEquals("ana.p", index.nameIn(null, "ana", users))
         assertEquals("You set the nickname for ana.p to Nana", index.eventText("t", "me", ChatEvent(nicknameFor = "ana", nickname = "Nana"), users, "me"))
-        assertEquals("Nana changed the theme to Ocean", index.eventText("t", "ana", ChatEvent(theme = "ocean"), users, "me"))
+        assertEquals("Nana changed the theme to Lagoon", index.eventText("t", "ana", ChatEvent(theme = "lagoon"), users, "me"))
+        // A theme set before the redesign shows as its closest new one.
+        assertEquals("Nana changed the theme to Lagoon", index.eventText("t", "ana", ChatEvent(theme = "ocean"), users, "me"))
+    }
+
+    @Test
+    fun themesMatchTheWebAppAndHaveBothLooks() {
+        assertEquals(
+            listOf("default", "dusk", "lagoon", "moss", "ember", "lilac", "blossom", "aurora", "dune", "graphite", "citron", "cobalt"),
+            ChatThemes.all.map { it.id },
+        )
+        assertEquals("blossom", ChatThemes.byId("love")?.id)
+        assertEquals(null, ChatThemes.byId("no-such-theme"))
+        ChatThemes.all.drop(1).forEach { assertEquals(it.id, true, it.hasBackground) }
     }
 
     private fun user(id: String, name: String) =

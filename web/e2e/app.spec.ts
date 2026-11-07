@@ -285,8 +285,8 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await shot(alice.page, 'chat-details-desktop');
   await alice.page.getByRole('button', { name: /^Theme/ }).click();
   await shot(alice.page, 'chat-theme-picker');
-  await alice.page.getByRole('button', { name: 'Ocean' }).click();
-  await expect(bob.page.locator('.chat-event', { hasText: 'changed the theme to Ocean' })).toBeVisible({ timeout: 20_000 });
+  await alice.page.getByRole('button', { name: 'Lagoon' }).click();
+  await expect(bob.page.locator('.chat-event', { hasText: 'changed the theme to Lagoon' })).toBeVisible({ timeout: 20_000 });
   await alice.page.getByRole('button', { name: /^Nicknames/ }).click();
   await alice.page.locator('.nickname-pick', { hasText: 'bob' }).click();
   await alice.page.getByLabel('Nickname for bob').fill('Bobby');
@@ -442,8 +442,7 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await alice.page.goto('/admin');
   await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
   await shot(alice.page, 'admin-desktop');
-  // The sidebar folds to icons and opens over the page on hover; the choice is remembered.
-  await alice.page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+  // The sidebar starts folded to icons and opens over the page on hover; keeping it open is remembered.
   await expect(alice.page.locator('.shell.nav-collapsed')).toHaveCount(1);
   await alice.page.mouse.move(900, 500);
   await shot(alice.page, 'sidebar-collapsed');
@@ -451,6 +450,9 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await expect(alice.page.locator('.sidenav .nav-item .label', { hasText: 'Messages' })).toBeVisible();
   await shot(alice.page, 'sidebar-hover');
   await alice.page.getByRole('button', { name: 'Keep the sidebar open' }).click();
+  await expect(alice.page.locator('.shell.nav-collapsed')).toHaveCount(0);
+  await alice.page.getByRole('button', { name: 'Collapse the sidebar' }).click();
+  await expect(alice.page.locator('.shell.nav-collapsed')).toHaveCount(1);
   await alice.page.mouse.move(900, 500);
 
   // The admin sees what the server knows about Bob (his chat with her, his devices), never what was said; she pauses

@@ -2673,7 +2673,7 @@ input[type='range'] {
 }
 /* Your messages carry the chat's theme, one gradient across the screen as on Instagram (set on .chat). */
 .msg.mine .bubble:not(.plain) {
-  color: #fff;
+  color: var(--chat-bubble-text, #fff);
   background-image: var(--chat-bubble, linear-gradient(135deg, #7c5cff, #b34fe0 55%, #e84393));
   background-attachment: fixed;
   background-size: 100vw 100vh;
@@ -4100,11 +4100,18 @@ button.info-row:hover {
 }
 
 /* ============================================================================================= themed chats */
-/* A theme with a background turns the whole chat into its palette, as on Instagram: the background behind everything,
-   the header and message box see-through over it, their messages a light tint, your messages the theme's gradient. */
+/* A theme with a background turns the whole chat into its palette: the background (with its faint pattern) behind
+   everything, the header and message box see-through over it, their messages in its tint, yours in its gradient.
+   Each theme has a dark and a light version (set as --chat-*-d and --chat-*-l on .chat), and the one for the app's
+   current appearance is used. */
 .chat.themed {
-  background: var(--chat-bg);
-  color: #fff;
+  --chat-bg: var(--chat-bg-d);
+  --chat-received: var(--chat-received-d);
+  --chat-received-text: var(--chat-received-text-d);
+  --chat-accent: var(--chat-accent-d);
+  --chat-line: rgba(255, 255, 255, 0.1);
+  --chat-glass: rgba(0, 0, 0, 0.24);
+  --chat-soft: rgba(255, 255, 255, 0.62);
   --text: #ffffff;
   --text-2: rgba(255, 255, 255, 0.72);
   --text-3: rgba(255, 255, 255, 0.5);
@@ -4112,22 +4119,62 @@ button.info-row:hover {
   --bg-hover: rgba(255, 255, 255, 0.08);
   --bg-elev: rgba(255, 255, 255, 0.08);
   --bg-elev-2: rgba(255, 255, 255, 0.12);
-  --bubble-them: var(--chat-received);
   color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .chat.themed {
+    --chat-bg: var(--chat-bg-l);
+    --chat-received: var(--chat-received-l);
+    --chat-received-text: var(--chat-received-text-l);
+    --chat-accent: var(--chat-accent-l);
+    --chat-line: rgba(0, 0, 0, 0.08);
+    --chat-glass: rgba(255, 255, 255, 0.62);
+    --chat-soft: rgba(0, 0, 0, 0.5);
+    --text: #0b0b0e;
+    --text-2: rgba(0, 0, 0, 0.62);
+    --text-3: rgba(0, 0, 0, 0.42);
+    --border: rgba(0, 0, 0, 0.08);
+    --bg-hover: rgba(0, 0, 0, 0.05);
+    --bg-elev: rgba(255, 255, 255, 0.7);
+    --bg-elev-2: rgba(255, 255, 255, 0.85);
+    color-scheme: light;
+  }
+}
+:root[data-theme='light'] .chat.themed {
+  --chat-bg: var(--chat-bg-l);
+  --chat-received: var(--chat-received-l);
+  --chat-received-text: var(--chat-received-text-l);
+  --chat-accent: var(--chat-accent-l);
+  --chat-line: rgba(0, 0, 0, 0.08);
+  --chat-glass: rgba(255, 255, 255, 0.62);
+  --chat-soft: rgba(0, 0, 0, 0.5);
+  --text: #0b0b0e;
+  --text-2: rgba(0, 0, 0, 0.62);
+  --text-3: rgba(0, 0, 0, 0.42);
+  --border: rgba(0, 0, 0, 0.08);
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-elev: rgba(255, 255, 255, 0.7);
+  --bg-elev-2: rgba(255, 255, 255, 0.85);
+  color-scheme: light;
+}
+.chat.themed {
+  background: var(--chat-bg);
+  color: var(--text);
+  --bubble-them: var(--chat-received);
 }
 .chat.themed .chat-head,
 .chat.themed .composer-bar,
 .chat.themed .pinned-bar,
 .chat.themed .reply-bar {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--chat-line);
 }
 .chat.themed .chat-scroll {
   background: transparent;
 }
 .chat.themed .chat-composer {
-  background: rgba(0, 0, 0, 0.22);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--chat-glass);
+  border-color: var(--chat-line);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -4138,21 +4185,21 @@ button.info-row:hover {
 }
 .chat.themed .msg.theirs .bubble:not(.plain) {
   background: var(--chat-received);
-  color: #fff;
+  color: var(--chat-received-text);
 }
 .chat.themed .reactions {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--chat-glass);
   border-color: transparent;
 }
 .chat.themed .day,
 .chat.themed .seen,
 .chat.themed .chat-event,
 .chat.themed .e2ee-note {
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--chat-soft);
 }
 .chat.themed .btn-secondary {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: var(--bg-elev-2);
+  color: var(--text);
 }
 
 /* ============================================================================================= admin: a member */
@@ -4245,7 +4292,7 @@ button.info-row:hover {
   background-image: var(--chat-bubble, linear-gradient(135deg, #7c5cff, #b34fe0 55%, #e84393));
   background-attachment: fixed;
   background-size: 100vw 100vh;
-  color: #fff;
+  color: var(--chat-bubble-text, #fff);
   opacity: 0.92;
 }
 .outgoing-bubble img,

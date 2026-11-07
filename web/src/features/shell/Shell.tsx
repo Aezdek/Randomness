@@ -1,11 +1,11 @@
-import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, ShieldCheck, WifiOff } from 'lucide-react';
+import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, Moon, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, Sun, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { usePushPrefsMirror } from '../../core/notifyPrefs';
 import { unreadCount, useIndex } from '../../core/selectors';
 import { useApp } from '../../core/store';
 import { engine } from '../../core/sync';
-import { setNavCollapsed, useUi } from '../../core/ui';
+import { applyTheme, setNavCollapsed, useDarkMode, useUi } from '../../core/ui';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
 import { BrandMark, Wordmark } from '../../ui/Brand';
@@ -90,6 +90,7 @@ function SideNav() {
   const unread = useUnreadMessages();
   const activity = useActivityBadge();
   const collapsed = useUi((s) => s.navCollapsed);
+  const dark = useDarkMode();
   return (
     <nav className="sidenav" aria-label="Main">
       <Link to="/" className="brand" aria-label="Hush home">
@@ -104,13 +105,17 @@ function SideNav() {
       <NavItem to="/reels" label="Reels" icon={(a) => <Clapperboard size={26} strokeWidth={stroke(a)} />} />
       <NavItem to="/direct" label="Messages" badge={unread} icon={(a) => <MessageCircle size={26} strokeWidth={stroke(a)} />} />
       <NavItem to="/activity" label="Notifications" badge={activity} icon={(a) => <Heart size={26} strokeWidth={stroke(a)} fill={a ? 'currentColor' : 'none'} />} />
-      <button className="nav-item" onClick={() => useUi.setState({ createMenu: true })}>
+      <button className="nav-item" onClick={() => useUi.setState({ createMenu: true })} aria-label="Create">
         <PlusSquare size={26} strokeWidth={1.8} />
         <span className="label">Create</span>
       </button>
       {me && <NavItem to={`/u/${me.username}`} label="Profile" icon={() => <Avatar userId={me.id} size={26} />} />}
       <span className="spacer" />
-      {me?.isAdmin && <NavItem to="/admin" label="Admin" icon={(a) => <ShieldCheck size={26} strokeWidth={stroke(a)} />} />}
+      {/* Switch appearance, as on Instagram; Settings → Appearance also offers Auto. */}
+      <button className="nav-item" onClick={() => applyTheme(dark ? 'light' : 'dark')} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+        {dark ? <Sun size={26} strokeWidth={1.8} /> : <Moon size={26} strokeWidth={1.8} />}
+        <span className="label">{dark ? 'Light mode' : 'Dark mode'}</span>
+      </button>
       <NavItem to="/settings" label="More" icon={(a) => <Menu size={26} strokeWidth={stroke(a)} />} />
       <button
         className="nav-item nav-collapse only-wide"

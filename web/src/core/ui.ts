@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 
 /** Purely presentational app state (open sheets, theme). */
@@ -7,15 +8,15 @@ interface UiState {
   create: CreateKind;
   createMenu: boolean;
   theme: 'system' | 'dark' | 'light';
-  /** The desktop sidebar folded to icons (it opens over the page on hover). Remembered on this browser. */
+  /** The desktop sidebar folded to icons (it opens over the page on hover), unless kept open. Remembered here. */
   navCollapsed: boolean;
 }
 
 function initialNav(): boolean {
   try {
-    return localStorage.getItem('hush.nav') === 'collapsed';
+    return localStorage.getItem('hush.nav') !== 'open';
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -47,6 +48,19 @@ export function applyTheme(theme: UiState['theme']) {
     /* private mode */
   }
   useUi.setState({ theme });
+}
+
+/** Whether the app is showing its dark appearance right now (the user's choice, or the system's on Auto). */
+export function useDarkMode(): boolean {
+  const theme = useUi((s) => s.theme);
+  const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const query = matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setSystemDark(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return theme === 'dark' || (theme === 'system' && systemDark);
 }
 
 export const openCreate = (kind: CreateKind) => useUi.setState({ create: kind, createMenu: false });
