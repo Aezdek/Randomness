@@ -8,7 +8,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8080', ws: true },
-      '/download': 'http://127.0.0.1:8080',
+      // The APK and its version come from the server; /download itself is a page of this app.
+      '/download/': 'http://127.0.0.1:8080',
+      '/version': 'http://127.0.0.1:8080',
     },
   },
   build: {

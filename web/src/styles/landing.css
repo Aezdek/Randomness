@@ -207,7 +207,8 @@ html:has(.landing) {
   color: rgba(255, 255, 255, 0.72);
   transition: color var(--t-fast);
 }
-.lp-links a:hover {
+.lp-links a:hover,
+.lp-links a.on {
   color: #fff;
 }
 
@@ -321,21 +322,20 @@ html:has(.landing) {
 .la-screen-zoom {
   position: relative;
   z-index: 0;
-  width: 1200px;
+  width: var(--dw, 1200px);
   height: var(--ih, 736px);
   zoom: var(--z, 1);
-}
-.lp-held.phone .la-screen-zoom {
-  width: 280px;
 }
 .la-screen-zoom .la-screen {
   border-radius: 0;
 }
-.la-dim {
+/* While the headline sits on the screen, the screen is blurred (Welcome.tsx) and darkened by this, so the words
+   stand out sharp; both lift as it comes closer. */
+.la-frost {
   position: absolute;
   z-index: 1;
   inset: -2px;
-  background: #08080a;
+  background: rgba(8, 8, 10, 0.55);
   pointer-events: none;
 }
 .lp-hand {
@@ -1454,6 +1454,268 @@ html:has(.landing) {
   color: var(--text-3);
   font-size: 14px;
   box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ------------------------------------------------------------------------------------------------------ download */
+.dl-hero {
+  position: relative;
+  padding: 150px 24px 0;
+  text-align: center;
+}
+.dl-hero-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.dl-hero h1 {
+  max-width: 760px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+.dl-hero .lp-sub {
+  max-width: 520px;
+}
+.dl-devices {
+  position: relative;
+  z-index: 1;
+  width: min(880px, 100%);
+  aspect-ratio: 880 / 500;
+  margin: 70px auto 0;
+}
+.dl-devices > div {
+  position: absolute;
+}
+.dl-devices > div:first-child {
+  left: 0;
+  top: 0;
+  width: 82%;
+}
+.dl-devices > div:last-child {
+  right: 0;
+  bottom: 0;
+  width: 25%;
+}
+.dl-tablet,
+.dl-phone {
+  position: relative;
+  container-type: inline-size;
+}
+.dl-tablet {
+  --radius: 3.6cqw;
+  --bezel: 1.5cqw;
+  aspect-ratio: 1.6;
+}
+.dl-phone {
+  --radius: 13cqw;
+  --bezel: 3.4cqw;
+  aspect-ratio: 300 / 620;
+}
+.dl-phone .la-device {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.05), -30px 40px 80px -20px rgba(0, 0, 0, 0.9);
+}
+.dl-section {
+  padding-top: 110px;
+}
+.dl-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.dl-cell {
+  height: 100%;
+}
+.dl-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: box-shadow var(--t) var(--ease), transform var(--t) var(--ease);
+}
+.dl-card.here {
+  box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.45), 0 30px 80px -40px rgba(255, 138, 61, 0.35);
+}
+.dl-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.dl-here {
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bold);
+  background: rgba(255, 138, 61, 0.1);
+}
+.dl-card h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.dl-lead {
+  margin: 0 0 8px;
+  min-height: 4.5em;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.dl-meta {
+  margin: -4px 0 0;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+.dl-steps {
+  margin: 8px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dl-steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+}
+.dl-steps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+}
+.dl-inline-icon {
+  vertical-align: -2px;
+}
+.dl-hash {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+}
+.dl-hash span {
+  color: var(--text-3);
+  font-weight: 600;
+}
+.dl-hash code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dl-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.dl-copy:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.dl-card > .dl-copy {
+  height: 48px;
+  border-radius: var(--r);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.dl-why {
+  padding-bottom: 20px;
+}
+.dl-points {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin-top: 64px;
+}
+.dl-point svg {
+  color: var(--bold);
+}
+.dl-point b {
+  display: block;
+  margin: 16px 0 8px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.dl-point p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.55;
+}
+@media (max-width: 1000px) {
+  .dl-grid {
+    grid-template-columns: 1fr;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  .dl-lead {
+    min-height: 0;
+  }
+}
+@media (max-width: 760px) {
+  .dl-hero {
+    padding: 116px 20px 0;
+  }
+  .dl-devices {
+    margin-top: 48px;
+  }
+  .dl-devices > div:first-child {
+    width: 86%;
+  }
+  .dl-devices > div:last-child {
+    width: 30%;
+  }
+  .dl-card {
+    padding: 22px;
+  }
+  .dl-points {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    margin-top: 40px;
+  }
 }
 
 /* -------------------------------------------------------------------------------------------- sign-in dialog */

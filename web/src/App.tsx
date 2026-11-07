@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useLocation } from 'react-router-dom';
 import { registerServiceWorker, restoreSession } from './core/session';
 import { useApp } from './core/store';
 import { Welcome } from './features/auth/Welcome';
@@ -80,14 +80,22 @@ function SignedInOrOut() {
 
   return (
     <BrowserRouter>
-      {phase === 'loading' && (
-        <div className="splash">
-          <BrandMark size={64} />
-        </div>
-      )}
-      {phase === 'signedOut' && <Welcome />}
-      {phase === 'ready' && <Shell />}
+      <Routed phase={phase} />
       <Toasts />
     </BrowserRouter>
   );
+}
+
+/** The downloads page is open to everyone; everything else is the landing page or, once signed in, the app. */
+function Routed({ phase }: { phase: ReturnType<typeof useApp.getState>['phase'] }) {
+  const download = useLocation().pathname.replace(/\/+$/, '') === '/download';
+  if (phase === 'loading')
+    return (
+      <div className="splash">
+        <BrandMark size={64} />
+      </div>
+    );
+  if (phase === 'signedOut') return <Welcome page={download ? 'download' : 'home'} />;
+  if (phase === 'ready') return download ? <Welcome page="download" signedIn /> : <Shell />;
+  return null;
 }

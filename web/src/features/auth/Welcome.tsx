@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, KeyRound, LockKeyhole, MessageCircle, Server, Share2, Smartphone, Users, Video, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, Download, KeyRound, LockKeyhole, MessageCircle, Server, Share2, Users, Video, X } from 'lucide-react';
 import {
   AnimatePresence,
   MotionConfig,
@@ -7,63 +7,59 @@ import {
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
+  useSpring,
   useTransform,
   type MotionValue,
 } from 'motion/react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BrandMark, Wordmark } from '../../ui/Brand';
 import { AuthForm, type AuthMode } from './AuthForm';
+import { Downloads } from './Downloads';
+import { EASE, Eyebrow, Reveal, useFitScreen } from './LandingBits';
 import { CallPanel, DesktopScreen, Hand, PhoneScreen, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
 /*
  * What someone sees at hush.aezdek.xyz before signing in: what Hush is, why it's private, and the door in
  * (sign in, or join with the invite someone sent). An invite link opens the join form straight away.
+ * The same frame carries the downloads page (/download), which signed-in people can open too.
  */
 
-const EASE = [0.16, 1, 0.3, 1] as const;
+export type LandingPage = 'home' | 'download';
 
-function Reveal({ children, delay = 0, className = '' }: { children: ReactNode; delay?: number; className?: string }) {
-  return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 28 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.8, delay, ease: EASE }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="lp-eyebrow">{children}</p>;
-}
-
-export function Welcome() {
+export function Welcome({ page = 'home', signedIn = false }: { page?: LandingPage; signedIn?: boolean }) {
   const invite = new URLSearchParams(location.search).get('invite') ?? '';
   const [mode, setMode] = useState<AuthMode>(invite ? 'join' : 'signin');
   const [authOpen, setAuthOpen] = useState(Boolean(invite));
+  const navigate = useNavigate();
   const start = (m: AuthMode) => {
+    if (signedIn) return navigate('/');
     setMode(m);
     setAuthOpen(true);
   };
+  useScrollOnNavigate();
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="landing">
         <div className="lp-content" inert={authOpen}>
-          <Nav onSignIn={() => start('signin')} />
+          <Nav page={page} signedIn={signedIn} onSignIn={() => start('signin')} />
           <main>
-            <Hero onStart={start} />
-            <Features onStart={start} />
-            <Statement />
-            <Pillars />
-            <Numbers onStart={start} />
-            <Faq />
-            <FinalCta onStart={start} />
+            {page === 'download' ? (
+              <Downloads />
+            ) : (
+              <>
+                <Hero onStart={start} />
+                <Features onStart={start} />
+                <Statement />
+                <Pillars />
+                <Numbers onStart={start} />
+                <Faq />
+                <FinalCta onStart={start} />
+              </>
+            )}
           </main>
-          <Footer onStart={start} />
+          <Footer page={page} onStart={start} />
         </div>
         <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} mode={mode} onMode={setMode} invite={invite} />
       </div>
@@ -71,24 +67,47 @@ export function Welcome() {
   );
 }
 
-function Nav({ onSignIn }: { onSignIn: () => void }) {
+/** Moving between the landing page and the downloads page starts at the top, or at the section a link names. */
+function useScrollOnNavigate() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+    else window.scrollTo(0, 0);
+  }, [pathname, hash]);
+}
+
+/** A link to a section of the landing page, from either page. */
+function SectionLink({ page, id, children }: { page: LandingPage; id: string; children: string }) {
+  return page === 'home' ? <a href={`#${id}`}>{children}</a> : <Link to={`/#${id}`}>{children}</Link>;
+}
+
+function Nav({ page, signedIn, onSignIn }: { page: LandingPage; signedIn: boolean; onSignIn: () => void }) {
   const { scrollY } = useScroll();
   const [scrolled, setScrolled] = useState(false);
   useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 12));
   return (
     <header className={`lp-nav ${scrolled ? 'scrolled' : ''}`}>
       <div className="lp-nav-inner">
-        <a className="lp-logo" href="#top" aria-label="Hush">
+        <Link className="lp-logo" to="/" onClick={() => page === 'home' && window.scrollTo({ top: 0 })} aria-label="Hush">
           <BrandMark size={28} />
           <Wordmark />
-        </a>
+        </Link>
         <nav className="lp-links" aria-label="Sections">
-          <a href="#features">Features</a>
-          <a href="#privacy">Privacy</a>
-          <a href="#faq">FAQ</a>
+          <SectionLink page={page} id="features">
+            Features
+          </SectionLink>
+          <SectionLink page={page} id="privacy">
+            Privacy
+          </SectionLink>
+          <SectionLink page={page} id="faq">
+            FAQ
+          </SectionLink>
+          <Link to="/download" className={page === 'download' ? 'on' : ''} aria-current={page === 'download' ? 'page' : undefined}>
+            Download
+          </Link>
         </nav>
         <button className="btn btn-bold" onClick={onSignIn}>
-          Sign in
+          {signedIn ? 'Open Hush' : 'Sign in'}
         </button>
       </div>
     </header>
@@ -131,8 +150,10 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
   const phone = usePhoneLayout();
   const still = useReducedMotion() ?? false;
   const { scrollYProgress } = useScroll({ target: section, offset: ['start start', 'end end'] });
+  // A touch of inertia, so the zoom glides rather than following every notch of the wheel.
+  const glide = useSpring(scrollYProgress, { stiffness: 220, damping: 34, mass: 0.4, restDelta: 0.0005 });
   const none = useMotionValue(0);
-  const p = still ? none : scrollYProgress;
+  const p = still ? none : glide;
 
   // Where the screen starts: its scale and how far below the middle, measured from the layout.
   const startScale = useMotionValue(0.55);
@@ -142,9 +163,8 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
     const measure = () => {
       const st = stage.current;
       const h = held.current;
-      const sc = screen.current;
       const c = copy.current;
-      if (!st || !h || !sc || !c) return;
+      if (!st || !h || !c) return;
       const vw = st.clientWidth;
       const vh = st.clientHeight;
       if (phone) {
@@ -159,10 +179,6 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
         startY.set(vh * 0.05);
         copyY0.set(vh * 0.05);
       }
-      const design = phone ? PHONE.w : DESK.w;
-      const zoom = sc.clientWidth / design;
-      sc.style.setProperty('--z', String(zoom));
-      sc.style.setProperty('--ih', `${sc.clientHeight / zoom}px`);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -170,16 +186,21 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
     if (copy.current) observer.observe(copy.current);
     return () => observer.disconnect();
   }, [phone, startScale, startY, copyY0]);
+  useFitScreen(screen, phone ? PHONE.w : DESK.w);
 
   const zoom = useTransform(() => smooth(span(p.get(), 0, 0.8)));
   const scale = useTransform(() => startScale.get() + (1 - startScale.get()) * zoom.get());
   const y = useTransform(() => startY.get() * (1 - zoom.get()));
-  const dim = useTransform(p, [0.02, 0.42], [0.86, 0]);
-  const copyOpacity = useTransform(p, [0, 0.16], [1, 0]);
-  const copyBlur = useTransform(p, [0, 0.16], ['blur(0px)', 'blur(10px)']);
-  const copyShift = useTransform(p, [0, 0.26], [0, -70]);
+  // The screen starts frosted behind the headline and comes into focus as it nears; the headline stays sharp and
+  // simply fades and lifts away first.
+  const frost = useTransform(p, [0.1, 0.42], [1, 0]);
+  const frostShown = useTransform(frost, (v) => (v > 0.001 ? 'visible' : 'hidden'));
+  const screenBlur = useTransform(frost, (v) => (v > 0.001 ? `blur(${(24 * v).toFixed(2)}px)` : 'none'));
+  const copyOpacity = useTransform(p, [0, 0.14], [1, 0]);
+  const copyScale = useTransform(p, [0, 0.14], [1, 0.95]);
+  const copyShift = useTransform(p, [0, 0.14], [0, -48]);
   const copyTop = useTransform(() => copyY0.get() + copyShift.get());
-  const copyEvents = useTransform(p, (v) => (v > 0.12 ? 'none' : 'auto'));
+  const copyEvents = useTransform(p, (v) => (v > 0.1 ? 'none' : 'auto'));
   const handsOut = useTransform(() => smooth(span(p.get(), 0.32, 0.8)));
   const leftX = useTransform(handsOut, (t) => `${-14 * t}%`);
   const rightX = useTransform(handsOut, (t) => `${14 * t}%`);
@@ -199,8 +220,10 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
         <motion.div ref={held} className={`lp-held ${phone ? 'phone' : 'desk'}`} style={{ scale, y }} aria-hidden>
           <div className="la-device">
             <div ref={screen} className="la-device-screen">
-              <div className="la-screen-zoom">{phone ? <PhoneScreen /> : <DesktopScreen />}</div>
-              <motion.span className="la-dim" style={{ opacity: dim }} />
+              <motion.div className="la-screen-zoom" style={{ filter: screenBlur }}>
+                {phone ? <PhoneScreen /> : <DesktopScreen />}
+              </motion.div>
+              <motion.span className="la-frost" style={{ opacity: frost, visibility: frostShown }} />
             </div>
           </div>
           <motion.div className="lp-hand l" style={{ x: leftX, y: handsY, opacity: handsOpacity }}>
@@ -210,7 +233,7 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
             <Hand corner={corner} />
           </motion.div>
         </motion.div>
-        <motion.div ref={copy} className="lp-hero-copy" style={{ y: copyTop, opacity: copyOpacity, filter: copyBlur, pointerEvents: copyEvents }}>
+        <motion.div ref={copy} className="lp-hero-copy" style={{ y: copyTop, scale: copyScale, opacity: copyOpacity, pointerEvents: copyEvents }}>
           <motion.div className="lp-hero-copy-in" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease: EASE }}>
             <span className="lp-chip">
               <LockKeyhole size={13} /> Private · end-to-end encrypted
@@ -450,8 +473,8 @@ const QUESTIONS = [
   },
   {
     q: 'Is there a phone app?',
-    a: 'Yes: the Android app downloads straight from this server and keeps itself up to date. On iPhone, open this page in Safari and add it to your Home Screen.',
-    link: { href: '/download/hush.apk', label: 'Download for Android' },
+    a: 'Yes: the Android app downloads straight from this server and keeps itself up to date. On iPhone and iPad, add Hush to your Home Screen from Safari.',
+    link: { to: '/download', label: 'Get Hush for your devices' },
   },
 ];
 
@@ -482,9 +505,9 @@ function Faq() {
                         {item.link && (
                           <>
                             {' '}
-                            <a className="lp-inline-link" href={item.link.href}>
+                            <Link className="lp-inline-link" to={item.link.to}>
                               {item.link.label} →
-                            </a>
+                            </Link>
                           </>
                         )}
                       </p>
@@ -512,24 +535,24 @@ function FinalCta({ onStart }: { onStart: (m: AuthMode) => void }) {
           <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
             Sign in <ArrowRight size={18} />
           </button>
-          <a className="btn btn-glass btn-lg" href="/download/hush.apk">
-            <Smartphone size={18} /> Get the Android app
-          </a>
+          <Link className="btn btn-glass btn-lg" to="/download">
+            <Download size={18} /> Download Hush
+          </Link>
         </div>
       </Reveal>
     </section>
   );
 }
 
-function Footer({ onStart }: { onStart: (m: AuthMode) => void }) {
+function Footer({ page, onStart }: { page: LandingPage; onStart: (m: AuthMode) => void }) {
   return (
     <footer className="lp-footer">
       <div className="lp-footer-top">
         <div className="lp-footer-brand">
-          <a className="lp-logo" href="#top" aria-label="Hush">
+          <Link className="lp-logo" to="/" onClick={() => page === 'home' && window.scrollTo({ top: 0 })} aria-label="Hush">
             <BrandMark size={26} />
             <Wordmark />
-          </a>
+          </Link>
           <p>A private place for your people.</p>
         </div>
         <div className="lp-footer-cols">
@@ -537,13 +560,19 @@ function Footer({ onStart }: { onStart: (m: AuthMode) => void }) {
             <b>Hush</b>
             <button onClick={() => onStart('signin')}>Sign in</button>
             <button onClick={() => onStart('join')}>Join with an invite</button>
-            <a href="/download/hush.apk">Android app</a>
+            <Link to="/download">Download</Link>
           </div>
           <div>
             <b>Learn</b>
-            <a href="#features">Features</a>
-            <a href="#privacy">Privacy</a>
-            <a href="#faq">FAQ</a>
+            <SectionLink page={page} id="features">
+              Features
+            </SectionLink>
+            <SectionLink page={page} id="privacy">
+              Privacy
+            </SectionLink>
+            <SectionLink page={page} id="faq">
+              FAQ
+            </SectionLink>
           </div>
         </div>
       </div>
