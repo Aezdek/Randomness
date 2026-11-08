@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The Hush mark: a keyhole in a rounded frame, in the brand gradient. Same geometry as web/public/favicon.svg. -->
+<!-- The Hush mark: a lowercase h with an orange dot, on the violet tile (ic_launcher_background). Same geometry as
+     web/public/favicon.svg (48 units, scaled 1.5 into the adaptive icon's safe zone). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <group android:translateX="27" android:translateY="27" android:scaleX="1.125" android:scaleY="1.125">
-        <path android:pathData="M18.5,3.5h11a15,15 0 0,1 15,15v11a15,15 0 0,1 -15,15h-11a15,15 0 0,1 -15,-15v-11a15,15 0 0,1 15,-15z" android:strokeWidth="4"><aapt:attr name="android:strokeColor"><gradient android:type="linear" android:startX="0" android:startY="0" android:endX="48" android:endY="48"><item android:offset="0" android:color="#FF7C5CFF"/><item android:offset="0.5" android:color="#FFE84393"/><item android:offset="1" android:color="#FFFF8A3D"/></gradient></aapt:attr></path>
-        <path android:pathData="M18,20.5a6,6 0 1,0 12,0a6,6 0 1,0 -12,0z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="0" android:endX="48" android:endY="48"><item android:offset="0" android:color="#FF7C5CFF"/><item android:offset="0.5" android:color="#FFE84393"/><item android:offset="1" android:color="#FFFF8A3D"/></gradient></aapt:attr></path>
-        <path android:pathData="M21.2,24.5h5.6l2.2,11.2a1.4,1.4 0 0,1 -1.4,1.7h-7.2a1.4,1.4 0 0,1 -1.4,-1.7z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="0" android:startY="0" android:endX="48" android:endY="48"><item android:offset="0" android:color="#FF7C5CFF"/><item android:offset="0.5" android:color="#FFE84393"/><item android:offset="1" android:color="#FFFF8A3D"/></gradient></aapt:attr></path>
+    <group android:translateX="18" android:translateY="18" android:scaleX="1.5" android:scaleY="1.5">
+        <path android:pathData="M16.5,12V36M16.5,26a7.5,7.5 0 0,1 15,0V36" android:strokeColor="#FFFFFFFF" android:strokeWidth="5.2"
+            android:strokeLineCap="round" android:strokeLineJoin="round" />
+        <path android:pathData="M30,13.5a3,3 0 1,0 6,0a3,3 0 1,0 -6,0z" android:fillColor="#FFFF8A3D" />
     </group>
 </vector>
