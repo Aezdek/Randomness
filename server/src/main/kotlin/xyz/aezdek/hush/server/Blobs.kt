@@ -15,7 +15,10 @@ import java.security.MessageDigest
  * pieces of at most [CHUNK] bytes, well under Cloudflare's 100 MB request limit. The server never decodes media: it
  * cannot, everything here is AezCrypt ciphertext.
  */
-class Blobs(private val db: Db, private val clock: Clock, private val config: ServerConfig, private val objects: Objects) {
+class Blobs(private val db: Db, private val clock: Clock, private val config: ServerConfig, private val objects: Objects, private val settings: Settings? = null) {
+    /** Uploads stop below this much free disk (the admin panel's setting, else HUSH_MIN_FREE_GB). */
+    private val minFreeBytes get() = settings?.minFreeBytes ?: config.minFreeBytes
+
 
     companion object {
         /** The largest piece one PUT may carry. Big pieces mean fewer round trips through the tunnel (Cloudflare allows 100 MB). */
@@ -29,11 +32,11 @@ class Blobs(private val db: Db, private val clock: Clock, private val config: Se
         config.uploadsDir.mkdirs()
     }
 
-    fun uploadsBlocked(): Boolean = config.dataDir.usableSpace < config.minFreeBytes
+    fun uploadsBlocked(): Boolean = config.dataDir.usableSpace < minFreeBytes
 
     fun start(userId: String, size: Long): UploadState {
         if (size <= 0 || size > config.maxUploadBytes) badRequest("Files can be up to ${config.maxUploadBytes / (1024 * 1024)} MB")
-        if (config.dataDir.usableSpace - size < config.minFreeBytes) {
+        if (config.dataDir.usableSpace - size < minFreeBytes) {
             throw ApiException(HttpStatusCode.InsufficientStorage, "disk_full", "The server is low on disk space; uploads are paused")
         }
         val id = Ids.random(16)

@@ -1,6 +1,6 @@
-import { Ban, Check, Copy, Eye, HardDrive, LogOut, MoreHorizontal, PauseCircle, PlayCircle, Server, Ticket, UserMinus, Users } from 'lucide-react';
+import { AlertCircle, Ban, Copy, Eye, HardDrive, LogOut, MoreHorizontal, PauseCircle, PlayCircle, Ticket, UserMinus, Users } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../core/api';
 import { messageOf } from '../../core/errors';
 import { bytesLabel } from '../../core/media';
@@ -8,8 +8,9 @@ import { useIndex } from '../../core/selectors';
 import { toast, useApp } from '../../core/store';
 import type { AdminMemberDto, AdminStatus, AdminUserDto, InviteDto } from '../../core/types';
 import { Avatar } from '../../ui/Avatar';
-import { Ago, Center, Spinner } from '../../ui/bits';
+import { Ago, Center, Segmented, Spinner } from '../../ui/bits';
 import { Confirm, Sheet } from '../../ui/Sheet';
+import { ServerPanel, WebAdminOff } from './ServerPanel';
 
 const DAY = 86_400_000;
 const run = (p: Promise<unknown>, done?: string) => p.then(() => done && toast(done, 'success')).catch((e) => toast(messageOf(e), 'error'));
@@ -44,21 +45,12 @@ function Group({ title, action, footer, children }: { title: string; action?: Re
   );
 }
 
-function Command({ label, command }: { label: string; command: string }) {
-  return (
-    <div className="admin-row">
-      <span className="admin-row-main">
-        <b>{label}</b>
-        <code>{command}</code>
-      </span>
-      <button className="btn btn-secondary btn-sm" onClick={() => copy(command, 'Command copied')}>
-        <Copy size={14} /> Copy
-      </button>
-    </div>
-  );
-}
+type AdminTab = 'people' | 'invites' | 'server';
 
-/** The admin panel: how the server is doing, who's on it, invites, backups and the commands that run it. */
+/**
+ * The admin panel, in three tabs: People (how the server is doing, and who's on it), Invites, and Server (updates,
+ * restarts, backups, the server's settings and the web admin switch, behind the server password).
+ */
 export function Admin() {
   const me = useApp((s) => s.me);
   const index = useIndex();
@@ -69,20 +61,35 @@ export function Admin() {
   const [removing, setRemoving] = useState<AdminUserDto | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
+  const [off, setOff] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const tab = (['people', 'invites', 'server'].includes(params.get('tab') ?? '') ? params.get('tab') : 'people') as AdminTab;
+  const setTab = (next: AdminTab) => setParams(next === 'people' ? {} : { tab: next }, { replace: true });
 
   const load = useCallback(() => {
-    void api.get<AdminStatus>('/admin/status').then(setStatus).catch((e) => toast(messageOf(e), 'error'));
+    void api
+      .get<AdminStatus>('/admin/status')
+      .then((s) => (setStatus(s), setOff(false)))
+      .catch((e) => ((e as { code?: string }).code === 'web_admin_off' ? setOff(true) : toast(messageOf(e), 'error')));
     void api.get<AdminUserDto[]>('/admin/users').then(setUsers).catch(() => {});
     void api.get<InviteDto[]>('/admin/invites').then(setInvites).catch(() => {});
   }, []);
   useEffect(load, [load]);
 
   if (me && !me.isAdmin) return <Navigate to="/settings" replace />;
+  if (off) return <WebAdminOff />;
   if (!status) return <Center style={{ minHeight: '60vh' }}><Spinner /></Center>;
 
   const now = Date.now();
   const backupAge = status.lastBackupAt ? now - status.lastBackupAt : null;
   const backupOk = backupAge !== null && backupAge < 2 * DAY && status.lastBackupOk !== false;
+  // What needs a look, in plain words, at the top of People.
+  const attention = [
+    status.updateAvailable && status.latestVersion ? { text: `Hush ${status.latestVersion} is ready to install`, tab: 'server' as const } : null,
+    !backupOk ? { text: status.lastBackupAt ? 'The last backup is over two days old' : 'Backups aren\'t set up yet', tab: 'server' as const } : null,
+    status.uploadsBlocked ? { text: 'Uploads are paused: the disk is nearly full', tab: 'server' as const } : null,
+    status.users >= status.maxUsers ? { text: 'Hush is full; raise the limit in Server settings to invite more', tab: 'server' as const } : null,
+  ].filter((x): x is { text: string; tab: 'server' } => !!x);
 
   return (
     <div className="admin page">
@@ -94,9 +101,37 @@ export function Admin() {
             {status.startedAt ? <> · started <Ago at={status.startedAt} className="" suffix /></> : null}
           </p>
         </div>
-        {status.updateAvailable && status.latestVersion && <span className="admin-pill">Update {status.latestVersion} available</span>}
+        {status.updateAvailable && status.latestVersion && (
+          <button className="admin-pill" onClick={() => setTab('server')}>
+            Update {status.latestVersion} available
+          </button>
+        )}
       </header>
 
+      <div className="admin-tabs">
+        <Segmented
+          id="admin"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: 'people', label: 'People' },
+            { id: 'invites', label: 'Invites' },
+            { id: 'server', label: 'Server' },
+          ]}
+        />
+      </div>
+
+      {tab === 'people' && (
+      <>
+      {attention.length > 0 && (
+        <div className="admin-attention">
+          {attention.map((a) => (
+            <button key={a.text} onClick={() => setTab(a.tab)}>
+              <AlertCircle size={16} /> {a.text}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="admin-stats">
         <Stat label="Members" value={`${status.users} of ${status.maxUsers}`} sub={`${status.maxUsers - status.users} places left`} />
         <Stat label="Stored" value={bytesLabel(status.dataBytes)} sub="encrypted media and data" />
@@ -159,7 +194,10 @@ export function Admin() {
           );
         })}
       </Group>
+      </>
+      )}
 
+      {tab === 'invites' && (
       <Group
         title="Invites"
         action={
@@ -167,7 +205,7 @@ export function Admin() {
             <Ticket size={14} /> New invite
           </button>
         }
-        footer="Each code lets one person join, within 7 days."
+        footer={`Each code lets one person join, within ${status.inviteDays ?? 7} ${status.inviteDays === 1 ? 'day' : 'days'}. ${status.users} of ${status.maxUsers} places are taken.`}
       >
         {invites.length === 0 && (
           <div className="admin-row">
@@ -200,39 +238,9 @@ export function Admin() {
           );
         })}
       </Group>
+      )}
 
-      <Group
-        title="Backups"
-        footer="Snapshots, media and the app's signing key go to your encrypted Google Drive remote every night at 03:30, kept for 30 days."
-      >
-        <div className="admin-row">
-          <span className={`admin-icon ${backupOk ? 'ok' : 'warn'}`}>{backupOk ? <Check size={16} /> : <HardDrive size={16} />}</span>
-          <span className="admin-row-main">
-            <b>{backupOk ? 'Backed up' : status.lastBackupAt ? 'Backup is overdue' : 'Backups are off'}</b>
-            <span className="faint">
-              {status.lastBackupAt ? `Last success ${new Date(status.lastBackupAt).toLocaleString()}` : 'Set up the rclone remote, then run install.sh again.'}
-              {status.backupMessage ? ` · ${status.backupMessage}` : ''}
-            </span>
-          </span>
-        </div>
-        <Command label="Back up now" command="sudo systemctl start hush-backup" />
-      </Group>
-
-      <Group title="Server" footer="Run these on Resolute over SSH. Updates only happen when you run update.sh.">
-        <div className="admin-row">
-          <span className="admin-icon"><Server size={16} /></span>
-          <span className="admin-row-main">
-            <b>{status.updateAvailable && status.latestVersion ? `Hush ${status.latestVersion} is ready to install` : 'Up to date'}</b>
-            <span className="faint">
-              Running {status.version}
-              {status.commit ? ` (${status.commit.slice(0, 12)})` : ''}
-            </span>
-          </span>
-        </div>
-        <Command label="Update" command="sudo /opt/hl/hush/update.sh" />
-        <Command label="Go back a version" command="sudo /opt/hl/hush/update.sh --rollback" />
-        <Command label="Logs" command="docker compose -f /opt/hl/hush/compose.yml logs -f" />
-      </Group>
+      {tab === 'server' && <ServerPanel status={status} onChanged={load} />}
 
       <Sheet open={!!menu} onClose={() => setMenu(null)} hideHeader bottom bodyClass="flush">
         {menu && (

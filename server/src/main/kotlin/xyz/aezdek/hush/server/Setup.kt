@@ -79,6 +79,6 @@ fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteAr
 /** Cloudflare adds these to everything it forwards; update.sh on the server itself sends none of them. */
 private val FORWARDED = listOf("CF-Connecting-IP", "CF-Ray", "CF-IPCountry", "X-Forwarded-For", "X-Forwarded-Proto", "Forwarded", "CDN-Loop")
 
-private fun ApplicationCall.requireLocal() {
+internal fun ApplicationCall.requireLocal() {
     if (FORWARDED.any { request.headers[it] != null }) forbidden("Set the server password on the server itself: sudo /opt/hl/hush/update.sh")
 }

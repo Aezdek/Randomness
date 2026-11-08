@@ -67,8 +67,8 @@ note "Data: $ROOT/data ($(df -h --output=avail "$ROOT/data" | tail -n1 | tr -d '
 
 # ------------------------------------------------------------------------------------------- 2. layout
 log "Files in $ROOT"
-for file in compose.yml update.sh backup.sh restore.sh lib.sh RUNBOOK.md; do
-  [ -f "$SRC/$file" ] && ! [ "$SRC/$file" -ef "$ROOT/$file" ] && install -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$SRC/$file" "$ROOT/$file"
+for file in compose.yml update.sh backup.sh restore.sh control.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
+  [ -f "$SRC/$file" ] && ! [ "$SRC/$file" -ef "$ROOT/$file" ] && install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$SRC/$file" "$ROOT/$file"
 done
 
 ENV_FILE=$ROOT/.env
@@ -264,6 +264,10 @@ else
   printf '{"ok":false,"lastRunAt":%s,"lastSuccessAt":null,"message":"Backups are not set up yet: see RUNBOOK.md"}\n' "$(date +%s)" \
     >"$ROOT/data/backup-status.json"
 fi
+
+# ------------------------------------------------------------------------------------------- server controls
+log "Server controls"
+"$ROOT/control.sh" install
 
 # ------------------------------------------------------------------------------------------- summary
 echo

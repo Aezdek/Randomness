@@ -118,6 +118,8 @@ check "the server password was set from the server itself, and the database unlo
 check "this machine's key is private, 32 bytes, and outside data/" \
   bash -c "grep -Eqx '[0-9a-f]{64}' '$HUSH_ROOT/secrets/machine.key' && [ \$(stat -c %a '$HUSH_ROOT/secrets/machine.key') = 400 ] && [ \$(stat -c %a '$HUSH_ROOT/secrets') = 700 ] && grep -qx 'HUSH_SECRETS_DIR=$HUSH_ROOT/secrets' '$HUSH_ROOT/.env'"
 check "the container gets it read-only" grep -q 'HUSH_SECRETS_DIR:-./secrets}:/run/secrets/hush:ro' "$HUSH_ROOT/compose.yml"
+check "the admin panel's server controls are installed for this root" \
+  bash -c "grep -q 'ExecStart=$HUSH_ROOT/control.sh run' '$BOX/systemd/hush-control.service' && grep -q 'PathExists=$HUSH_ROOT/data/control/request.env' '$BOX/systemd/hush-control.path' && grep -q 'enable --now hush-control.path' '$STUB_STATE/systemctl.log' && [ -f '$HUSH_ROOT/data/control/agent' ]"
 machine_key=$(sha256sum <"$HUSH_ROOT/secrets/machine.key")
 
 edited=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
@@ -292,6 +294,30 @@ if command -v rclone >/dev/null; then
 else
   echo "  (rclone not installed: skipped)"
 fi
+
+echo
+echo "control.sh"
+# The admin panel's jobs, with stand-ins for update.sh and backup.sh.
+croot=$WORK/control-root
+mkdir -p "$croot/data/control"
+cp "$DEPLOY/control.sh" "$DEPLOY/lib.sh" "$croot/"
+printf '#!/usr/bin/env bash\necho "==> Backing up"\necho "==> Backed up 3 files"\n' >"$croot/backup.sh"
+printf '#!/usr/bin/env bash\necho "==> Checking"\necho "something broke" >&2\nexit 1\n' >"$croot/update.sh"
+chmod +x "$croot"/*.sh
+printf 'id=abc123\naction=backup\nrequestedAt=1\nby=admin\n' >"$croot/data/control/request.env"
+HUSH_ROOT=$croot bash "$croot/control.sh" run
+check "a backup the panel asked for runs and reports back" \
+  bash -c "grep -qx 'state=done' '$croot/data/control/status.env' && grep -qx 'id=abc123' '$croot/data/control/status.env' && grep -qx 'message=Backed up 3 files' '$croot/data/control/status.env' && ! [ -e '$croot/data/control/request.env' ]"
+check "... with its output for the panel" grep -q 'Backing up' "$croot/data/control/last.log"
+printf 'id=def456\naction=update\n' >"$croot/data/control/request.env"
+HUSH_ROOT=$croot bash "$croot/control.sh" run
+check "a job that fails says so" bash -c "grep -qx 'state=failed' '$croot/data/control/status.env' && grep -qx 'message=something broke' '$croot/data/control/status.env'"
+printf 'id=x;touch %s/pwned\naction=update --rollback\n' "$croot" >"$croot/data/control/request.env"
+HUSH_ROOT=$croot bash "$croot/control.sh" run
+check "anything but the four jobs is refused, and nothing in the request runs" \
+  bash -c "grep -qx 'state=failed' '$croot/data/control/status.env' && grep -qx 'id=unknown' '$croot/data/control/status.env' && ! [ -e '$croot/pwned' ]"
+HUSH_ROOT=$croot bash "$croot/control.sh" run
+check "with nothing asked for, it does nothing" test $? -eq 0
 
 echo
 echo "$passed passed, $failed failed"

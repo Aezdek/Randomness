@@ -62,7 +62,26 @@ export interface AdminStatus {
   users: number; maxUsers: number; diskFreeBytes: number; dataBytes: number; uploadsBlocked: boolean;
   lastBackupAt?: number | null; lastBackupOk?: boolean | null; backupMessage?: string | null; version: string;
   commit?: string | null; startedAt?: number; latestVersion?: string | null; updateAvailable?: boolean;
+  /** How long a new invite lasts, from the server's settings. */
+  inviteDays?: number;
 }
+/** The server's own settings (data/config.json), changed from the admin panel with the server password. */
+export interface ServerSettingsDto {
+  maxMembers: number; inviteDays: number; minFreeGb: number; webAdmin: boolean;
+}
+export type ServerActionId = 'update' | 'restart' | 'backup' | 'check';
+/** The last job the server's control helper ran or is running. */
+export interface ControlStatusDto {
+  id: string; action: ServerActionId | string; state: 'queued' | 'running' | 'done' | 'failed';
+  requestedAt?: number | null; startedAt?: number | null; finishedAt?: number | null; message?: string | null;
+}
+/** The admin panel's Server tab (see AdminServerDto in Api.kt). */
+export interface AdminServerDto {
+  settings: ServerSettingsDto; version: string; commit?: string | null; latestVersion?: string | null; updateAvailable?: boolean;
+  agent: boolean; control?: ControlStatusDto | null; log?: string | null; unlockedUntil?: number | null;
+}
+/** The bounds the server accepts (ServerLimits in Api.kt). */
+export const SERVER_LIMITS = { members: [2, 50], inviteDays: [1, 30], minFreeGb: [1, 500] } as const;
 export interface AdminUserDto {
   id: string; username: string; isAdmin: boolean; createdAt: number; lastActiveAt?: number | null;
   storageBytes: number; posts: number; sessions: number;

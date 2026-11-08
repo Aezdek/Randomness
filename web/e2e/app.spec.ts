@@ -67,7 +67,7 @@ async function editProfile(p: Person, displayName: string, bio: string) {
 }
 
 async function newInvite(admin: Person): Promise<string> {
-  await admin.page.goto('/admin');
+  await admin.page.goto('/admin?tab=invites');
   await admin.page.getByRole('button', { name: 'New invite' }).click();
   // The list also shows invites already used; wait for the fresh one rather than reading whatever is first.
   const code = admin.page.locator('.admin-row').filter({ has: admin.page.locator('b.tabular') }).filter({ hasNotText: 'Used' }).locator('b.tabular').first();
@@ -479,6 +479,29 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await expect(bob.page.getByText('Close Friends')).toBeVisible();
   await expect(bob.page.getByText('Admin', { exact: true })).toHaveCount(0);
   await shot(bob.page, 'settings-mobile');
+
+  // The Server tab: its controls stay locked until the server password unlocks them; the settings are a form; and
+  // turning the web admin off closes the panel until the server itself turns it back on.
+  await alice.page.goto('/admin?tab=server');
+  await expect(alice.page.getByText('Server controls are locked')).toBeVisible({ timeout: 15_000 });
+  await alice.page.getByRole('button', { name: 'More: Members' }).click();
+  await alice.page.getByRole('button', { name: 'Save settings' }).click();
+  await alice.page.getByLabel('Server password').fill('not the server password');
+  await alice.page.locator('.server-unlock').getByRole('button', { name: 'Unlock' }).click();
+  await expect(alice.page.getByText("That isn't the server password")).toBeVisible({ timeout: 20_000 });
+  await alice.page.getByLabel('Server password').fill('the server password, set once');
+  await alice.page.locator('.server-unlock').getByRole('button', { name: 'Unlock' }).click();
+  await expect(alice.page.getByText('Settings saved')).toBeVisible({ timeout: 20_000 });
+  await expect(alice.page.getByText('Server controls are unlocked')).toBeVisible();
+  await shot(alice.page, 'admin-server-desktop');
+  await alice.page.getByRole('switch', { name: 'Web admin' }).click();
+  await alice.page.getByRole('button', { name: 'Turn off the web admin' }).click();
+  await expect(alice.page.getByRole('heading', { name: 'The web admin is off' })).toBeVisible({ timeout: 15_000 });
+  const throughTunnel = await request.post('/api/v1/local/web-admin', { data: { enabled: true }, headers: { 'CF-Connecting-IP': '203.0.113.7' } });
+  expect(throughTunnel.status()).toBe(403);
+  expect((await request.post('/api/v1/local/web-admin', { data: { enabled: true } })).ok()).toBe(true);
+  await alice.page.goto('/admin');
+  await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
   await alice.page.goto(`/verify/${await bob.page.evaluate(() => '')}`).catch(() => undefined);
 
   // ------------------------------------------------------------------------------------- no plaintext

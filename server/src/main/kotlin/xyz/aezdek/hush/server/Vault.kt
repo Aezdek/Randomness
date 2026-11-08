@@ -91,6 +91,13 @@ class Vault(private val config: ServerConfig) {
         key
     }
 
+    /** Whether [password] is the server password, with nothing else done (the admin panel's unlock). */
+    fun verify(password: String): Boolean = synchronized(lock) {
+        val slot = read()?.password ?: return false
+        val passwordKey = KeySealing.passwordKey(password, B64u.dec(slot.salt, "keyring"), KdfParams(slot.opsLimit, slot.memLimit))
+        KeySealing.open(passwordKey, B64u.dec(slot.sealed, "keyring"), PASSWORD_AD) != null
+    }
+
     private fun checkPassword(password: String) {
         if (password.length < MIN_PASSWORD) badRequest("Use at least $MIN_PASSWORD characters", "weak_password")
     }

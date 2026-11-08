@@ -376,7 +376,77 @@ data class AdminStatus(
     /** The newest published release, checked at most hourly; null when unknown or GitHub can't be reached. */
     val latestVersion: String? = null,
     val updateAvailable: Boolean = false,
+    /** How long a new invite lasts, from the server's settings. */
+    val inviteDays: Int = 7,
 )
+
+/**
+ * The server's own settings, kept in data/config.json and changed from the admin panel (with the server password):
+ * how many members it takes, how long invites last, how much disk to keep free, and whether the web admin is on.
+ */
+@Serializable
+data class ServerSettingsDto(
+    val maxMembers: Int,
+    val inviteDays: Int,
+    val minFreeGb: Int,
+    val webAdmin: Boolean = true,
+)
+
+/** What the admin panel may set, and the bounds it shows. */
+object ServerLimits {
+    const val MIN_MEMBERS = 2
+    const val MAX_MEMBERS_LIMIT = 50
+    const val MIN_INVITE_DAYS = 1
+    const val MAX_INVITE_DAYS = 30
+    const val MIN_FREE_GB = 1
+    const val MAX_FREE_GB = 500
+}
+
+/** The jobs the admin panel can start on the server itself (through its control helper, control.sh). */
+object ServerAction {
+    const val UPDATE = "update"
+    const val RESTART = "restart"
+    const val BACKUP = "backup"
+    const val CHECK = "check"
+    val ALL = setOf(UPDATE, RESTART, BACKUP, CHECK)
+}
+
+/** The last job the control helper ran (or is running): [state] is queued, running, done or failed. */
+@Serializable
+data class ControlStatusDto(
+    val id: String,
+    val action: String,
+    val state: String,
+    val requestedAt: Long? = null,
+    val startedAt: Long? = null,
+    val finishedAt: Long? = null,
+    val message: String? = null,
+)
+
+/** The admin panel's Server tab. [unlockedUntil]: until when this session may change things without the password. */
+@Serializable
+data class AdminServerDto(
+    val settings: ServerSettingsDto,
+    val version: String,
+    val commit: String? = null,
+    val latestVersion: String? = null,
+    val updateAvailable: Boolean = false,
+    /** Whether control.sh is installed on the server (update.sh installs it), which the actions need. */
+    val agent: Boolean,
+    val control: ControlStatusDto? = null,
+    /** The end of the last job's output. */
+    val log: String? = null,
+    val unlockedUntil: Long? = null,
+)
+
+@Serializable
+data class ServerUnlockResponse(val unlockedUntil: Long)
+
+@Serializable
+data class ServerActionRequest(val action: String)
+
+@Serializable
+data class WebAdminRequest(val enabled: Boolean)
 
 /** A member as the admin panel lists them: no content, only what running the server needs. */
 @Serializable

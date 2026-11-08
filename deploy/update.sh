@@ -87,10 +87,10 @@ if [ "$mode" = update ] && [ -z "${HUSH_DEPLOY_REFRESHED:-}" ]; then
     if [ -z "$deploy_sha" ] || echo "$deploy_sha  $work/deploy.tar.gz" | sha256sum -c --quiet - 2>/dev/null; then
       mkdir -p "$work/deploy" && tar -xzf "$work/deploy.tar.gz" -C "$work/deploy"
       changed=false
-      for file in compose.yml update.sh backup.sh restore.sh lib.sh RUNBOOK.md; do
+      for file in compose.yml update.sh backup.sh restore.sh control.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
         [ -f "$work/deploy/$file" ] || continue
         cmp -s "$work/deploy/$file" "$ROOT/$file" && continue
-        install -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"
+        install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"
         changed=true
       done
       if $changed; then
@@ -105,8 +105,19 @@ if [ "$mode" = update ] && [ -z "${HUSH_DEPLOY_REFRESHED:-}" ]; then
   fi
 fi
 
+# The admin panel's server controls (control.sh and its systemd units): set up on the first update that has them,
+# and again whenever their units change.
+ensure_controls() {
+  [ -x "$ROOT/control.sh" ] && [ -f "$ROOT/systemd/hush-control.service" ] || return 0
+  local unit=${SYSTEMD_DIR:-/etc/systemd/system}/hush-control.service
+  if [ ! -f "$ROOT/data/control/agent" ] || ! sed "s#@ROOT@#$ROOT#g" "$ROOT/systemd/hush-control.service" | cmp -s - "$unit"; then
+    "$ROOT/control.sh" install || warn "could not set up the admin panel's server controls"
+  fi
+}
+
 if [ "$commit" = "$current_commit" ]; then
   log "Already on the newest build: $version (${commit:0:12})."
+  [ "$mode" = update ] && ensure_controls
   if [ "$mode" = update ] && ! wait_healthy "$PORT" "" 5; then
     log "It isn't answering, so starting it."
     start_pinned || die "Hush did not become healthy; see: docker compose -f $ROOT/compose.yml logs"
@@ -170,6 +181,7 @@ env_set "$ENV_FILE" HUSH_VERSION "$version"
 log "Starting $version"
 if start_pinned; then
   ensure_unlocked "$ROOT" "$PORT"
+  ensure_controls
   log "Hush $version is up on 127.0.0.1:$PORT."
 else
   if [ -f "$ROOT/.env.previous" ] && [ -n "$current_commit" ]; then

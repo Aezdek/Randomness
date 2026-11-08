@@ -1,0 +1,9 @@
+[Unit]
+Description=Hush: watch for a job the admin panel asked for (update, restart, backup, update check)
+
+[Path]
+PathExists=@ROOT@/data/control/request.env
+Unit=hush-control.service
+
+[Install]
+WantedBy=multi-user.target

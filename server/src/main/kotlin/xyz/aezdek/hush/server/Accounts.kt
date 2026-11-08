@@ -38,7 +38,7 @@ private const val DAY = 24L * 60 * 60 * 1000
  * Accounts, sessions and invites. The server never sees a password: it stores SHA-256 of the client's Argon2id-derived
  * authKey (a 256-bit key, so a fast hash is enough to stop the database being usable as a login).
  */
-class Accounts(private val db: Db, private val clock: Clock, private val presence: Presence) {
+class Accounts(private val db: Db, private val clock: Clock, private val presence: Presence, private val settings: Settings? = null) {
     private val log = LoggerFactory.getLogger(Accounts::class.java)
     private val serverSecret: ByteArray by lazy { db.tx { secret("server_secret") } }
 
@@ -94,7 +94,8 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         }
         if (invite == null || invite.third != null || invite.second < now) forbidden("That invite code is not valid any more")
         val members = long("SELECT COUNT(*) FROM users WHERE deleted = 0")!!
-        if (members >= MAX_MEMBERS) forbidden("Hush is full ($MAX_MEMBERS members)")
+        val limit = settings?.maxMembers ?: MAX_MEMBERS
+        if (members >= limit) forbidden("Hush is full ($limit members)")
         if (exists("SELECT 1 FROM users WHERE username = ?", username)) conflict("That username is taken", "username_taken")
 
         val id = Ids.random(12)
@@ -275,11 +276,19 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
 
     // ----------------------------------------------------------------------------------------------------- invites
 
-    fun Tx.createInvite(createdBy: String?, days: Long = INVITE_DAYS): InviteDto {
+    fun Tx.createInvite(createdBy: String?, days: Long = settings?.inviteDays?.toLong() ?: INVITE_DAYS): InviteDto {
         val now = clock.now()
         val invite = InviteDto(Ids.invite(), now, now + days * DAY)
         exec("INSERT INTO invites (code, created_by, created_at, expires_at) VALUES (?, ?, ?, ?)", invite.code, createdBy, now, invite.expiresAt)
         return invite
+    }
+
+    /** An invite made on the server itself (control.sh invite), for when the web admin is off. */
+    fun createInviteOnServer(): InviteDto = db.tx {
+        val members = long("SELECT COUNT(*) FROM users WHERE deleted = 0") ?: 0
+        val limit = settings?.maxMembers ?: MAX_MEMBERS
+        if (members >= limit) forbidden("Hush is full ($limit members)")
+        createInvite(null)
     }
 
     fun createInvite(session: Session): InviteDto = db.tx {

@@ -100,13 +100,27 @@ internal fun AdminPanel(
     var managing by remember { mutableStateOf<AdminUserDto?>(null) }
     var removing by remember { mutableStateOf<AdminUserDto?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
+    var off by remember { mutableStateOf(false) }
     suspend fun load() {
-        status = Graph.attempt { Graph.client.api.get<AdminStatus>("/admin/status") } ?: status
+        status = try {
+            Graph.client.api.get<AdminStatus>("/admin/status").also { off = false }
+        } catch (e: xyz.aezdek.hush.client.ApiException) {
+            if (e.code == "web_admin_off") off = true else Graph.toast(Graph.messageOf(e), error = true)
+            status
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Graph.toast(Graph.messageOf(e), error = true)
+            status
+        }
         users = Graph.attempt { Graph.client.api.get<List<AdminUserDto>>("/admin/users") } ?: users
         invites = Graph.attempt { Graph.client.api.get<List<InviteDto>>("/admin/invites") } ?: invites
     }
     LaunchedEffect(Unit) { load() }
 
+    if (off) {
+        WebAdminOffNote()
+        return
+    }
     val s = status
     if (s == null) {
         Spinner(Modifier.padding(40.dp))
@@ -126,7 +140,7 @@ internal fun AdminPanel(
                 ) {
                     Icon(Icons.Outlined.SystemUpdate, null, tint = Brand.pink, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(12.dp))
-                    Text("Hush ${s.latestVersion} is ready. Run update.sh on the server to install it.", color = Aez.colors.text, fontSize = 15.sp)
+                    Text("Hush ${s.latestVersion} is ready. Install it from Server below.", color = Aez.colors.text, fontSize = 15.sp)
                 }
             }
 
@@ -245,25 +259,9 @@ internal fun AdminPanel(
                     )
                 }
             }
-            RowDivider()
-            CommandRow(context, "Back up now", "sudo systemctl start hush-backup")
         }
 
-        Group("Server") {
-            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Version", fontSize = 16.sp, color = Aez.colors.text, modifier = Modifier.weight(1f))
-                Text(s.version + (s.commit?.let { " · ${it.take(7)}" } ?: ""), fontSize = 15.sp, color = Aez.colors.text2)
-            }
-            RowDivider(start = 16.dp)
-            CommandRow(context, "Update", "sudo /opt/hl/hush/update.sh")
-            RowDivider(start = 16.dp)
-            CommandRow(context, "Go back a version", "sudo /opt/hl/hush/update.sh --rollback")
-        }
-        Text(
-            "Run these on Resolute over SSH. Nothing changes until you run update.sh.", fontSize = 13.sp, color = Aez.colors.text2,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 7.dp),
-        )
-
+        ServerControls(s, onChanged = { scope.launch { load() } })
     }
     managing?.let { user ->
         ActionSheet({ managing = null }) {

@@ -297,7 +297,7 @@ jobs:
         run: |
           mkdir -p out
           docker save "$TAG" | gzip -n > out/hush-image.tar.gz
-          tar -czf out/hush-deploy.tar.gz -C deploy lib.sh compose.yml update.sh backup.sh restore.sh RUNBOOK.md systemd
+          tar -czf out/hush-deploy.tar.gz -C deploy lib.sh compose.yml update.sh backup.sh restore.sh control.sh RUNBOOK.md systemd
           cp deploy/install.sh out/install.sh
           SHA=$(sha256sum out/hush-image.tar.gz | cut -c1-64)
           cat > out/hush-release.env <<EOF

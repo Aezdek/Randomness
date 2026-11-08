@@ -27,6 +27,12 @@ import xyz.aezdek.hush.protocol.AddMembersRequest
 import xyz.aezdek.hush.protocol.ServerState
 import xyz.aezdek.hush.protocol.SetupStatus
 import xyz.aezdek.hush.protocol.AdminStatus
+import xyz.aezdek.hush.protocol.WebAdminRequest
+import xyz.aezdek.hush.protocol.UnlockRequest
+import xyz.aezdek.hush.protocol.ServerUnlockResponse
+import xyz.aezdek.hush.protocol.ServerSettingsDto
+import xyz.aezdek.hush.protocol.ServerActionRequest
+import xyz.aezdek.hush.protocol.AdminServerDto
 import xyz.aezdek.hush.protocol.AppVersion
 import xyz.aezdek.hush.protocol.SetStatusRequest
 import xyz.aezdek.hush.protocol.ArchiveRequest
@@ -36,7 +42,6 @@ import xyz.aezdek.hush.protocol.DeleteAccountRequest
 import xyz.aezdek.hush.protocol.FollowResult
 import xyz.aezdek.hush.protocol.IdList
 import xyz.aezdek.hush.protocol.LoginRequest
-import xyz.aezdek.hush.protocol.MAX_MEMBERS
 import xyz.aezdek.hush.protocol.ObjectUpload
 import xyz.aezdek.hush.protocol.OkResponse
 import xyz.aezdek.hush.protocol.PreloginRequest
@@ -85,6 +90,20 @@ private suspend fun ApplicationCall.poster(s: Services): Session =
     session(s).also { if (it.blocked) forbidden("An admin has paused posting and messaging on this account") }
 
 private fun ApplicationCall.param(name: String): String = parameters[name] ?: badRequest("Missing $name")
+
+/** Every admin endpoint: refused, for everyone, while the web admin is turned off (control.sh on the server turns it on). */
+private fun webAdminGate(s: Services) {
+    if (!s.settings.webAdmin) {
+        throw ApiException(HttpStatusCode.Forbidden, "web_admin_off", "The web admin is turned off. Turn it back on on the server: sudo /opt/hl/hush/control.sh web-admin on")
+    }
+}
+
+private suspend fun ApplicationCall.admin(s: Services): Session {
+    val session = session(s)
+    if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
+    webAdminGate(s)
+    return session
+}
 
 private const val MINUTE = 60_000L
 
@@ -442,43 +461,52 @@ fun Route.api(s: Services) = route("/api/v1") {
     // --------------------------------------------------------------------------------------------------- admin
     get("/admin/status") {
         val session = call.session(s)
+        webAdminGate(s)
         if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
         call.respond(blocking { adminStatus(s) })
     }
     get("/admin/invites") {
         val session = call.session(s)
+        webAdminGate(s)
         call.respond(blocking { s.accounts.invites(session) })
     }
     post("/admin/invites") {
         val session = call.session(s)
+        webAdminGate(s)
         call.respond(blocking { s.accounts.createInvite(session) })
     }
     delete("/admin/invites/{code}") {
         val session = call.session(s)
+        webAdminGate(s)
         blocking { s.accounts.revokeInvite(session, call.param("code")) }
         call.respond(OkResponse())
     }
     get("/admin/users") {
         val session = call.session(s)
+        webAdminGate(s)
         call.respond(blocking { s.accounts.adminUsers(session) })
     }
     post("/admin/users/{id}/sign-out") {
         val session = call.session(s)
+        webAdminGate(s)
         blocking { s.accounts.signOutEverywhere(session, call.param("id")) }
         call.respond(OkResponse())
     }
     get("/admin/users/{id}") {
         val session = call.session(s)
+        webAdminGate(s)
         call.respond(blocking { s.accounts.member(session, call.param("id")) })
     }
     post("/admin/users/{id}/status") {
         val session = call.session(s)
+        webAdminGate(s)
         val req = call.receive<SetStatusRequest>()
         blocking { s.accounts.setStatus(session, call.param("id"), req.status) }
         call.respond(OkResponse())
     }
     delete("/admin/threads/{id}/members/{userId}") {
         val session = call.session(s)
+        webAdminGate(s)
         if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
         val fx = Effects()
         blocking { s.threads.removeMember(session.userId, call.param("id"), call.param("userId"), fx, asAdmin = true) }
@@ -487,6 +515,7 @@ fun Route.api(s: Services) = route("/api/v1") {
     }
     delete("/admin/users/{id}") {
         val session = call.session(s)
+        webAdminGate(s)
         val fx = Effects()
         blocking { s.accounts.removeMember(session, call.param("id"), s.objects, fx) }
         s.realtime.apply(fx)
@@ -496,6 +525,58 @@ fun Route.api(s: Services) = route("/api/v1") {
         call.session(s)
         val file = s.config.apkDir?.let { File(it, "version.json") }?.takeIf { it.isFile } ?: notFound("No Android build in this image")
         call.respond(Wire.json.decodeFromString(AppVersion.serializer(), file.readText()))
+    }
+
+    // ------------------------------------------------------------------------------- admin: the server itself
+    get("/admin/server") {
+        val session = call.admin(s)
+        call.respond(blocking { adminServer(s, session) })
+    }
+    // The server password unlocks the server's controls for this session for a few minutes. Argon2id makes each guess
+    // slow; on top of that, five tries per quarter hour.
+    post("/admin/server/unlock") {
+        val session = call.admin(s)
+        s.limiter.check("unlock:${session.userId}", 5, 15 * MINUTE)
+        val request = call.receive<UnlockRequest>()
+        if (!blocking { s.vault.verify(request.password) }) forbidden("That isn't the server password")
+        call.respond(ServerUnlockResponse(s.elevation.grant(session.id)))
+    }
+    post("/admin/server/lock") {
+        val session = call.admin(s)
+        s.elevation.revoke(session.id)
+        call.respond(OkResponse())
+    }
+    put("/admin/server/settings") {
+        val session = call.admin(s)
+        s.elevation.require(session.id)
+        val request = call.receive<ServerSettingsDto>()
+        val members = blocking { s.db.tx { long("SELECT COUNT(*) FROM users WHERE deleted = 0") ?: 0 } }.toInt()
+        call.respond(s.settings.update(request, members))
+    }
+    post("/admin/server/actions") {
+        val session = call.admin(s)
+        s.elevation.require(session.id)
+        val request = call.receive<ServerActionRequest>()
+        call.respond(s.control.request(request.action, session.userId))
+    }
+    // Turning the web admin off locks this whole panel, for every admin, until it's turned on again on the server.
+    post("/admin/server/web-admin") {
+        val session = call.admin(s)
+        s.elevation.require(session.id)
+        val request = call.receive<WebAdminRequest>()
+        s.settings.setWebAdmin(request.enabled)
+        call.respond(OkResponse())
+    }
+
+    // ------------------------------------------------------------- the server itself (control.sh, over 127.0.0.1)
+    post("/local/web-admin") {
+        call.requireLocal()
+        s.settings.setWebAdmin(call.receive<WebAdminRequest>().enabled)
+        call.respond(OkResponse())
+    }
+    post("/local/invites") {
+        call.requireLocal()
+        call.respond(blocking { s.accounts.createInviteOnServer() })
     }
 }
 
@@ -509,7 +590,7 @@ fun adminStatus(s: Services): AdminStatus {
     val latest = s.releases.latest()
     return AdminStatus(
         users = s.db.tx { long("SELECT COUNT(*) FROM users WHERE deleted = 0") ?: 0 }.toInt(),
-        maxUsers = MAX_MEMBERS,
+        maxUsers = s.settings.maxMembers,
         diskFreeBytes = s.config.dataDir.usableSpace,
         dataBytes = s.blobs.dataBytes(),
         uploadsBlocked = s.blobs.uploadsBlocked(),
@@ -520,10 +601,28 @@ fun adminStatus(s: Services): AdminStatus {
         commit = s.config.commit,
         startedAt = s.startedAt,
         latestVersion = latest?.version,
-        // By commit when both sides know theirs: version numbers restart when the CI workflow is renamed.
-        updateAvailable = latest != null && (
-            if (latest.commit != null && s.config.commit != null) latest.commit != s.config.commit else latest.version != s.config.version
-            ),
+        updateAvailable = updateAvailable(s, latest),
+        inviteDays = s.settings.inviteDays,
+    )
+}
+
+// By commit when both sides know theirs: version numbers restart when the CI workflow is renamed.
+private fun updateAvailable(s: Services, latest: Releases.Latest?) = latest != null && (
+    if (latest.commit != null && s.config.commit != null) latest.commit != s.config.commit else latest.version != s.config.version
+    )
+
+fun adminServer(s: Services, session: Session): AdminServerDto {
+    val latest = s.releases.latest()
+    return AdminServerDto(
+        settings = s.settings.dto(),
+        version = s.config.version,
+        commit = s.config.commit,
+        latestVersion = latest?.version,
+        updateAvailable = updateAvailable(s, latest),
+        agent = s.control.agentInstalled(),
+        control = s.control.status(),
+        log = s.control.log(),
+        unlockedUntil = s.elevation.unlockedUntil(session.id),
     )
 }
 

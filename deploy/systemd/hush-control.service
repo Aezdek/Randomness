@@ -1,0 +1,8 @@
+[Unit]
+Description=Hush: run the job the admin panel asked for (control.sh)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@ROOT@/control.sh run
+TimeoutStartSec=45min

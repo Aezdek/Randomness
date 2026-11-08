@@ -4850,3 +4850,323 @@ button.info-row:hover {
   margin: 0;
   line-height: 1.5;
 }
+
+/* ===================================================================================== admin: tabs and server */
+.admin-tabs {
+  max-width: 420px;
+}
+button.admin-pill {
+  cursor: pointer;
+}
+.admin-attention {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.admin-attention button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+.admin-attention svg {
+  flex: none;
+  color: var(--warning);
+}
+.server-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.server-loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+}
+.server-lock,
+.server-callout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+.server-lock > span:nth-child(2),
+.server-callout > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+}
+.server-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--bg-elev-2);
+  color: var(--text-2);
+}
+.server-lock.open {
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+.server-lock.open .server-lock-icon {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.server-callout > svg {
+  flex: none;
+  color: var(--warning);
+}
+.server-callout code,
+.server-code {
+  display: block;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-elev-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.server-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+.server-card header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.server-card h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.server-card-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--bg-elev-2);
+  color: var(--text-2);
+}
+.server-card .admin-foot {
+  margin: 0;
+}
+.server-version {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.server-version > span:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+}
+.server-version b {
+  font-size: 15px;
+}
+.server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.server-actions.end {
+  justify-content: flex-end;
+}
+.server-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: var(--bg-elev-2);
+}
+.server-job-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--bg-elev-3);
+}
+.server-job.done .server-job-icon {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+.server-job.failed .server-job-icon {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+.server-job-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.server-job-text b {
+  font-size: 14px;
+}
+.server-job .flip {
+  transform: rotate(180deg);
+}
+.server-log {
+  flex-basis: 100%;
+  max-height: 220px;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.server-fields {
+  display: flex;
+  flex-direction: column;
+}
+.server-field {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+}
+.server-field + .server-field {
+  border-top: 1px solid var(--border);
+}
+.server-field > span:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.server-field b {
+  font-size: 15px;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.stepper button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+.stepper button:disabled {
+  opacity: 0.35;
+}
+.stepper input {
+  width: 54px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.stepper input::-webkit-inner-spin-button,
+.stepper input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.stepper em {
+  min-width: 46px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-style: normal;
+}
+.server-unlock {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.server-unlock p {
+  margin: 0;
+  line-height: 1.5;
+}
+.web-admin-off {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 520px;
+  margin: 10vh auto 0;
+  text-align: center;
+}
+.web-admin-off > svg {
+  color: var(--text-2);
+}
+.web-admin-off h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: -0.03em;
+}
+.web-admin-off p {
+  margin: 0;
+  line-height: 1.5;
+}
+.web-admin-off .server-callout {
+  width: 100%;
+  text-align: left;
+}
+.web-admin-off .server-callout code {
+  flex: 1;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .server-version {
+    flex-wrap: wrap;
+  }
+  .server-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

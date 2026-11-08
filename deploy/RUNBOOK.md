@@ -29,6 +29,24 @@ The container listens on `127.0.0.1:<HUSH_HOST_PORT>` only. `cloudflared` publis
 There is no Watchtower: the running image only changes when you approve `update.sh`. The image is pinned in
 `.env` (`HUSH_IMAGE_ID`), and `update.sh` refuses to start an image whose digest doesn't match.
 
+## The admin panel's server controls
+
+The admin panel's **Server** tab (and Settings → Admin in the Android app) can install an update, restart Hush,
+back up now and check for updates, and holds the server's settings: how many members it takes, how long invites
+last and how much disk to keep free (saved in `data/config.json`). Changing anything asks for the **server
+password**, which unlocks the controls for 10 minutes.
+
+Hush can't run anything on this machine itself; it leaves a request in `data/control/`, and `control.sh` (run by
+the `hush-control.path` systemd unit, which `update.sh` installs) does that one job and reports back. Only those four
+jobs exist.
+
+```
+sudo /opt/hl/hush/control.sh web-admin on     # turn the web admin back on after it was turned off in the panel
+sudo /opt/hl/hush/control.sh web-admin off    # or off, from here
+sudo /opt/hl/hush/control.sh invite           # an invite code, e.g. while the web admin is off
+systemctl status hush-control.path            # is the helper listening?
+```
+
 ## The encrypted database
 
 `data/hush.db` (usernames, who follows and messages whom, when, sessions, devices) is encrypted at rest with a
