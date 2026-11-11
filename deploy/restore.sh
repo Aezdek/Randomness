@@ -16,7 +16,8 @@ set -E
 trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 # Into the install this script sits in, when it does; otherwise the usual place.
-if [ -f "$HERE/compose.yml" ] && [ -f "$HERE/update.sh" ] && [ -d "$HERE/data" -o -f "$HERE/.env" ]; then ROOT=${HUSH_ROOT:-$HERE}; else ROOT=${HUSH_ROOT:-/opt/hush}; fi
+ROOT=${HUSH_ROOT:-/opt/hush}
+if [ -z "${HUSH_ROOT:-}" ] && [ -f "$HERE/compose.yml" ] && { [ -d "$HERE/data" ] || [ -f "$HERE/.env" ]; }; then ROOT=$HERE; fi
 REMOTE=${RCLONE_REMOTE:-}
 date=""
 force=false

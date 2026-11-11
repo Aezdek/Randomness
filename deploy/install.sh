@@ -62,7 +62,7 @@ fi
 . "$SRC/lib.sh"
 set -E
 trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
-trap 'status=$?; ui_farewell "$status"; rm -rf "${SRC_TMP:-}"' EXIT
+trap 'ui_farewell "$?"; rm -rf "${SRC_TMP:-}"' EXIT
 
 if $gui; then ui_pick; else export HUSH_UI=${HUSH_UI:-cli}; fi
 
