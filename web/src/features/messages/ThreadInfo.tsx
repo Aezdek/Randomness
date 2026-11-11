@@ -222,7 +222,7 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
                 onClick={() => (setPanel(null), t.id !== theme.id && void change({ theme: t.id }))}
               >
                 {/* A little chat in the theme, as Instagram's picker shows them. */}
-                <span className="theme-preview" style={{ background: themeBackground(t, dark) ?? 'var(--bg)' }}>
+                <span className="theme-preview" style={{ background: themeBackground(t, dark, 0.3) ?? 'var(--bg)' }}>
                   <span className="theme-preview-them" style={{ background: (dark ? t.dark : t.light)?.received ?? 'var(--bubble-them)' }} />
                   <span className="theme-preview-me" style={{ background: themeGradient(t) }} />
                   <span className="theme-preview-them short" style={{ background: (dark ? t.dark : t.light)?.received ?? 'var(--bubble-them)' }} />

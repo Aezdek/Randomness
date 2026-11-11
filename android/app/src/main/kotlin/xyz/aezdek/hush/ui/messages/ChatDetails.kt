@@ -181,7 +181,7 @@ internal fun ThemeSheet(threadId: String, current: String, onDismiss: () -> Unit
                                 .padding(if (on) 3.dp else 0.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(theme.look(Aez.colors.isDark)?.let { look -> Brush.verticalGradient(look.background.map { Color(it) }) } ?: Brush.verticalGradient(listOf(Aez.colors.bg, Aez.colors.bg)))
-                                .chatPattern(theme.pattern, onDark = Aez.colors.isDark)
+                                .chatScene(theme, dark = Aez.colors.isDark, scale = 0.3f)
                                 .border(1.dp, Aez.colors.border, RoundedCornerShape(12.dp)),
                         ) {
                             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

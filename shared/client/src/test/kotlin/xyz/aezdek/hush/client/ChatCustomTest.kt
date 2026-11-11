@@ -98,6 +98,20 @@ class ChatCustomTest {
         ChatThemes.all.drop(1).forEach { assertEquals(it.id, true, it.hasBackground) }
     }
 
+    @Test
+    fun sceneryComesOutTheSameAsOnTheWeb() {
+        // The values chat.test.ts pins for the web app's generator.
+        val (a, b) = ChatScenes.scatter(7, 2)
+        listOf(a.x to 0.238781f, a.y to 0.913493f, a.s to 0.612492f, a.t to 0.926981f, b.x to 0.049341f)
+            .forEach { (got, want) -> assertEquals(want, got, 0.00001f) }
+        assertEquals(0xFF808080, ChatScenes.mix(0xFF000000, 0xFFFFFFFF, 0.5f))
+        val dusk = ChatThemes.byId("dusk")!!
+        // mix(mix('#33193f', '#150a1c', 0), '#ff9a7a', 0.17) and mix('#ffdfe6', '#d9502f', 0.24) on the web.
+        assertEquals(0xFF562F49, ChatScenes.ridgeColor(dusk.dark!!, 0f, dark = true))
+        assertEquals(0xFFF6BDBA, ChatScenes.ridgeColor(dusk.light!!, 1f, dark = false))
+        ChatThemes.all.forEach { theme -> theme.scene?.ridges?.forEach { ridge -> assertEquals(theme.id, true, ridge.heights.all { it in 0f..1f }) } }
+    }
+
     private fun user(id: String, name: String) =
         UserDto(id = id, username = name, signPk = "", boxPk = "", boxPkSig = "", keyVersion = 1, isPrivate = false, createdAt = 0,
             followState = "none", followsMe = "none", blockedByMe = false)

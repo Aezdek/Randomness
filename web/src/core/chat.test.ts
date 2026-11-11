@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatCustom, eventText, themeOf, themeStyle, THEMES } from './chat';
+import { chatCustom, eventText, mix, ridgePath, scatter, themeOf, themeStyle, THEMES } from './chat';
 import { MessageType, type ChatEvent, type MessagePayload } from './payloads';
 import type { Entity } from './store';
 import type { UserDto } from './types';
@@ -65,5 +65,18 @@ describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
     }
     expect(themeOf('love').id).toBe('blossom');
     expect(themeOf('no-such-theme').id).toBe('default');
+  });
+
+  it('draws scenery the Android app can draw the same way', () => {
+    // The same generator on both sides (ChatScenes.scatter in the Android app): these are its first values.
+    const [a, b] = scatter(7, 2);
+    expect([a.x, a.y, a.s, a.t, b.x].map((v) => v.toFixed(6))).toEqual(['0.238781', '0.913493', '0.612492', '0.926981', '0.049341']);
+    expect(ridgePath({ shape: 'peaks', h: [0, 1, 0.5], height: 80, depth: 0 }, 100)).toBe('M0 100L0 100L50 20L100 60L100 100Z');
+    expect(ridgePath({ shape: 'steps', h: [1, 0.5], height: 80, depth: 0 }, 100)).toBe('M0 100L0 20L50 20L50 60L100 60L100 100Z');
+    expect(ridgePath({ shape: 'smooth', h: [0, 1, 0], height: 100, depth: 0 }, 100)).toBe('M0 100L0 100Q0 100 25 50Q50 0 75 50L100 100L100 100Z');
+    expect(mix('#000000', '#ffffff', 0.5)).toBe('#808080');
+    for (const t of THEMES) {
+      for (const r of t.scene?.ridges ?? []) expect(r.h.every((v) => v >= 0 && v <= 1)).toBe(true);
+    }
   });
 });

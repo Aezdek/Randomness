@@ -271,7 +271,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 val glow = accent.copy(alpha = if (base.isDark) 0.18f else 0.12f)
                 drawRect(Brush.radialGradient(listOf(glow, Color.Transparent), center = Offset(size.width / 2f, 0f), radius = size.width * 0.9f))
             }
-            .chatPattern(theme.pattern, onDark = base.isDark)
+            .chatScene(theme, dark = base.isDark)
     } else Modifier.background(base.bg)
     CompositionLocalProvider(LocalAez provides palette) {
     Column(Modifier.fillMaxSize().then(chatBackground)) {
