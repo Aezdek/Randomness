@@ -1,10 +1,12 @@
 name: Hush
 
+# Builds and tests on every push and pull request, and publishes the hush-latest release from main (or aezgram,
+# the branch Hush grew up on, in the repository it shares with other projects).
 on:
   push:
-    branches: [aezgram]
+    branches: [main, aezgram]
   pull_request:
-    branches: [aezgram]
+    branches: [main, aezgram]
   workflow_dispatch:
 
 concurrency:
@@ -206,7 +208,7 @@ jobs:
   screenshots:
     name: Publish Android screenshots
     needs: android
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/aezgram'
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/aezgram')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -232,7 +234,7 @@ jobs:
   image:
     name: Image and release
     needs: [server, web, deploy, android]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/aezgram'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/aezgram')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

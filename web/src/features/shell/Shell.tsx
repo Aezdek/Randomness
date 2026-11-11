@@ -236,7 +236,7 @@ function ConnectionBanner() {
   if (connection !== 'offline') return null;
   return (
     <div className="offline-banner">
-      <WifiOff size={15} /> Offline — showing what’s on this device
+      <WifiOff size={15} /> Offline. Showing what’s on this device.
     </div>
   );
 }

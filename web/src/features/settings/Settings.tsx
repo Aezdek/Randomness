@@ -79,7 +79,7 @@ function AccountSection() {
   return (
     <>
       <Card title="Change password">
-        <p className="faint small">Your keys are re-sealed under the new password and your other devices are signed out. If an old copy of the server’s data leaked, your old password still opens the old copy — after a suspected leak, reset your keys instead.</p>
+        <p className="faint small">Your keys are re-sealed under the new password and your other devices are signed out. If an old copy of the server’s data leaked, your old password still opens the old copy. After a suspected leak, reset your keys instead.</p>
         <input className="input" type="password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
         <input className="input" type="password" placeholder="New password (10+ characters)" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
         <button
@@ -129,7 +129,7 @@ function CloseFriendsSection() {
   const followers = Object.values(users).filter((u) => u.followsMe === 'following' && !u.deleted);
   return (
     <Card>
-      <p className="faint small">Close Friends stories have a green ring. Only people on this list can see them — and they won’t be told they’re on it.</p>
+      <p className="faint small">Close Friends stories have a green ring. Only people on this list can see them, and they won’t be told they’re on it.</p>
       {followers.map((u) => {
         const on = close.includes(u.id);
         return (
@@ -189,7 +189,7 @@ function NotificationsSection() {
   return (
     <>
       <Card title="This browser">
-        <Row title="Push notifications" sub={permission === 'granted' ? 'On — sent by your own server, with no content in them.' : 'Get notified when this tab is closed.'}>
+        <Row title="Push notifications" sub={permission === 'granted' ? 'On. Sent by your own server, with no content in them.' : 'Get notified when this tab is closed.'}>
           {permission === 'granted' ? (
             <span className="chip">On</span>
           ) : (

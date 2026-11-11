@@ -99,7 +99,7 @@ object Fixtures {
             LEO to user(LEO, "leo_outdoors"),
             ZARA to user(ZARA, "zara", online = true, followsMe = false),
         )
-        add(Kind.PROFILE, ME, ProfilePayload("Aez", "Building things. Mostly at night.", "aezdek.xyz", avatar = ref(4, 640, 640)), 300 * HOUR, Audience.MEMBERS)
+        add(Kind.PROFILE, ME, ProfilePayload("Aez", "Building things. Mostly at night.", "example.com", avatar = ref(4, 640, 640)), 300 * HOUR, Audience.MEMBERS)
         add(Kind.PROFILE, MAYA, ProfilePayload("Maya", "Film and light ☀️", avatar = ref(1, 640, 640)), 300 * HOUR, Audience.MEMBERS)
         add(Kind.PROFILE, LEO, ProfilePayload("Leo", "Mountains > everything", avatar = ref(2, 640, 640)), 300 * HOUR, Audience.MEMBERS)
         add(Kind.PROFILE, ZARA, ProfilePayload("Zara", avatar = ref(5, 640, 640)), 300 * HOUR, Audience.MEMBERS)

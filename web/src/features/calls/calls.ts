@@ -251,7 +251,7 @@ class CallManager {
     switch (s.type) {
       case 'invite': {
         if (s.live) {
-          toast(`${getState().users[from]?.username} started a live video — open Live from their story ring`);
+          toast(`${getState().users[from]?.username} started a live video. Open it from their story ring.`);
           this.liveInvites.set(from, s.callId);
           return;
         }
@@ -743,7 +743,7 @@ class CallManager {
 
   testRing() {
     this.ring.start('incoming');
-    toast('🔔 Test ring — notifications reach this device', 'success');
+    toast('🔔 Test ring: notifications reach this device', 'success');
     setTimeout(() => this.ring.stop(), 3500);
   }
 

@@ -20,7 +20,7 @@ import { CountUp, Drift, EASE, Eyebrow, Reveal, RiseText, ScrollGrow, useFitScre
 import { CallPanel, DesktopScreen, Hand, PhoneScreen, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
 /*
- * What someone sees at hush.aezdek.xyz before signing in: what Hush is, why it's private, and the door in
+ * What someone sees at the server's address before signing in: what Hush is, why it's private, and the door in
  * (sign in, or join with the invite someone sent). An invite link opens the join form straight away.
  * The same frame carries the downloads page (/download), which signed-in people can open too.
  */

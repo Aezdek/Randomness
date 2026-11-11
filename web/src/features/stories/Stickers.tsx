@@ -92,7 +92,7 @@ function Question({ story, sticker }: { story: Entity; sticker: Sticker }) {
         try {
           await answer(story, { storyId: story.dto.id, stickerId: sticker.id, text: text.trim() });
           setText('');
-          toast('Sent — only they can see it', 'success');
+          toast('Sent. Only they can see it.', 'success');
         } catch (err) {
           toast(messageOf(err), 'error');
         }

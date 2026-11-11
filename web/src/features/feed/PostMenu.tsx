@@ -44,7 +44,7 @@ export function PostMenu({ entity, open, onClose }: { entity: Entity; open: bool
                   {pinned ? 'Unpin from profile' : 'Pin to your profile'}
                 </button>
               )}
-              <button onClick={run(() => setArchived(entity.dto.id, !entity.dto.archived), entity.dto.archived ? 'Shown on your profile again' : 'Archived — only you can see it')}>
+              <button onClick={run(() => setArchived(entity.dto.id, !entity.dto.archived), entity.dto.archived ? 'Shown on your profile again' : 'Archived: only you can see it')}>
                 {entity.dto.archived ? 'Show on profile' : 'Archive'}
               </button>
               <button onClick={run(() => update({ hideLikes: !payload.hideLikes }))}>{payload.hideLikes ? 'Unhide like count' : 'Hide like count to others'}</button>
@@ -64,7 +64,7 @@ export function PostMenu({ entity, open, onClose }: { entity: Entity; open: bool
             </>
           )}
           <button onClick={() => (onClose(), navigate(`/p/${entity.dto.id}`))}>Go to post</button>
-          <button onClick={run(() => navigator.clipboard.writeText(`${location.origin}/p/${entity.dto.id}`), 'Link copied — only people who can see the post can open it')}>Copy link</button>
+          <button onClick={run(() => navigator.clipboard.writeText(`${location.origin}/p/${entity.dto.id}`), 'Link copied. Only people who can see the post can open it.')}>Copy link</button>
           <button onClick={onClose}>Cancel</button>
         </div>
       </Sheet>

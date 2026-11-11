@@ -309,7 +309,7 @@ ingress_host_for() {
 # ingress_insert IN OUT HOST SERVICE
 # Writes IN to OUT with a rule for HOST placed directly above the catch-all (`- service: http_status:404`),
 # indented exactly like the catch-all itself. This is a text edit, not a YAML round trip, so comments, ordering and
-# the formatting lucifer and print rely on stay exactly as they were. Exit status 3: no catch-all found.
+# the formatting of the rules already there stay exactly as they were. Exit status 3: no catch-all found.
 ingress_insert() {
   local in=$1 out=$2 host=$3 service=$4
   awk -v host="$host" -v service="$service" '

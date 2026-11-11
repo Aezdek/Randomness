@@ -114,7 +114,7 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
       </button>
       <p className="fine">
         {mode === 'join'
-          ? 'Your password encrypts your keys. If you forget it, nobody — not even the server — can recover your messages.'
+          ? 'Your password encrypts your keys. If you forget it, nobody can recover your messages, not even the server.'
           : 'Signing in on a new device restores everything, decrypted right here.'}
       </p>
     </form>

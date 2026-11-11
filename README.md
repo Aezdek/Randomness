@@ -1,104 +1,120 @@
 # Hush
 
-A private Instagram for a handful of people (built for 2, capped at 10), where everything is end-to-end encrypted
-and lives on your own server. There's an Android app and a web app. Video calls are peer to peer.
+Hush is a small private photo-sharing app, in the style of Instagram, that you run on your own server for the
+people you invite. It has a feed, stories, reels, direct messages and video calls. Everything people post or send
+is encrypted on their own device before it leaves it, so the server stores things it cannot read.
 
-- **Feed:** posts with up to 20 photos or videos, crop, filters, captions, @mentions, #hashtags, tags and
-  location. Likes, threaded comments, saves and collections, archive, hidden like counts, comments off, and up
-  to three posts pinned to the top of your profile.
-- **Stories:** photo, video or text stories, with stickers (poll, quiz, question, slider, countdown, mention,
-  hashtag, location, link, emoji). Close Friends, viewers, replies into DMs, highlights and an archive.
-- **Reels:** a full-screen vertical feed, with trim and cover.
-- **Direct:** 1:1 chats and groups. Photos, videos, voice notes, view-once, vanish mode, reactions, replies
-  (swipe a message right), forwarding, polls in groups, edit and unsend, message times (hover, or swipe the chat
-  left on a phone), typing and seen receipts (which you can turn off), themes, nicknames, pinned messages, Notes,
-  inbox filters, and pinned and muted chats.
-- **Calls:** 1:1 and group video calls (mesh, up to 10 people). Live to followers (up to 9 viewers) with comments
-  and hearts.
-- **Everything else:** explore and search, activity, private accounts, follow requests, blocks, activity status,
-  notification settings, app lock, safety numbers with QR verification, sessions, key reset, data export
-  (web), and in-app updates.
+It was built for two people and is meant for a handful: a server takes ten members by default and fifty at most.
+There is a web app, which also installs to a phone's home screen, and an Android app.
 
-The server only ever stores ciphertext. Media is transcoded on the phone or in the browser before it's encrypted
-(H.264/AAC MP4 up to 1080p, JPEG with EXIF and GPS stripped), because the server can't transcode what it can't read.
+## What's in it
 
-## Setting it up
+Posts hold up to twenty photos or videos, with cropping, filters, captions, mentions, hashtags and tags. People can
+like, comment, save, archive and pin posts. Stories can be photos, video or text, with polls, questions and the
+other usual stickers, a close friends list, highlights and replies that land in your messages. Reels play in a
+full-screen vertical feed.
 
-You do four things. Everything else is automatic.
+Messages work one to one and in groups: photos, video, voice notes, view-once and disappearing messages, reactions,
+replies, forwarding, polls, editing and unsending, read receipts you can turn off, nicknames, pinned messages and
+chat themes. Calls are video or audio, one to one or in a group, and go directly between the people in them when
+the network allows it.
 
-1. **On Resolute, install it once:**
+Around that there is search, an activity page, private accounts with follow requests, blocking, an app lock, a way
+to check that you are really talking to who you think you are, and an admin panel for whoever runs the server.
 
-   ```bash
-   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/hush-latest/install.sh
-   ```
+## Run your own
 
-   ```bash
-   sudo bash install.sh
-   ```
+You need a Linux machine with Docker and its compose plugin, and a way for people to reach it: a Cloudflare Tunnel
+on that machine, or a reverse proxy you already run (Caddy, nginx, Traefik). A home server is enough. Hush keeps
+itself to about half a gigabyte of memory.
 
-   It does the following:
-   - lays out `/opt/hl/hush`;
-   - picks a port that `PORTS.md` doesn't use;
-   - starts the newest image CI built;
-   - adds `hush.aezdek.xyz` to the cloudflared config: backup first, insert above the catch-all, validate,
-     check that lucifer and print still answer, and roll back if anything got worse;
-   - installs the nightly backup.
-
-   It asks you to choose the **server password** once (it encrypts the database; keep it in your password manager),
-   then prints the **first invite code**, and whoever uses that code becomes the admin. For calls that work on every
-   mobile network, add Cloudflare TURN:
-
-   ```bash
-   sudo CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash install.sh
-   ```
-
-2. **Backups, once:** if the `gdrive-crypt:` rclone remote doesn't exist yet, run `sudo rclone config` (Google
-   needs a browser to sign in). Then re-run `install.sh`. The steps are in [`deploy/RUNBOOK.md`](deploy/RUNBOOK.md).
-3. **Phones:** open `https://hush.aezdek.xyz/download/hush.apk` on each phone and install it. Then open
-   **Settings → Calls and ringing** and tick every item. On a Samsung that includes "Never sleeping apps". Finish
-   with a test ring while the phone is locked.
-4. **Updates:** when you want a new version, run `sudo /opt/hl/hush/update.sh`. It shows what changed, asks
-   y/N, health-checks the new version, and rolls back if that fails. The apps then pick it up: the web app on its
-   next load, and the Android app by itself. Every few hours, and whenever it's opened, it reads
-   `https://hush.aezdek.xyz/version`. If that build is newer, it downloads the APK and checks its SHA-256, then
-   installs it while Hush is in the background and no call is going. If you're in the app, it asks first.
-   On Android 12+ updates need no tap once Hush has installed one of its own. The first one, after a browser
-   installed the app, shows Android's usual "Update" prompt. **Settings → App updates** shows where it stands and
-   has the on/off switch.
-
-Invite the others from **Settings → Server and invites**.
-
-## How it fits together
-
-```
- Android app (Kotlin/Compose) ─┐ HTTPS + WSS                      ┌─ SQLite  /opt/hl/hush/data/hush.db
- Web app (React PWA) ──────────┼─► hush.aezdek.xyz ─► Ktor server ─┼─ blobs   /opt/hl/hush/data/blobs
-                               │   (cloudflared on Resolute)       └─ Web Push, TURN credentials
- Peer ◄── WebRTC (P2P, or relayed by Cloudflare TURN: ciphertext only) ──► Peer
- Nightly: SQLite snapshot + blobs + signing key ── rclone ──► encrypted Google Drive remote
+```bash
+curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/hush-latest/install.sh
 ```
 
-| Path | What |
+```bash
+sudo bash install.sh
+```
+
+The installer asks for the address people will use, how the server is reached, and where to put things. It shows
+what it is about to do and waits for a yes before changing anything. If you would rather have menus than
+questions, add `--gui`: on a desktop you get windows, and in a terminal (over SSH, say) you get full-screen menus.
+To run it without questions, add `--yes` and give the answers as variables, which `bash install.sh --help` lists.
+
+Near the end it asks you to choose a server password. That password encrypts the server's database, and you will
+need it again if you ever restore a backup or move to another machine, so keep it somewhere safe. Then it prints
+the first invite code. Whoever signs up with that code becomes the admin, and invites everyone else from the admin
+panel.
+
+For the Android app, open `/download` on your server from the phone. The app updates itself from your server
+afterwards.
+
+To update the server, run `sudo ./update.sh` in the folder Hush was installed in, or use the Server tab of the
+admin panel. Nothing updates on its own: the update shows what changed and asks first, and it goes back to the
+previous version by itself if the new one fails to start.
+
+[`deploy/RUNBOOK.md`](deploy/RUNBOOK.md) covers the rest: backups, restoring, the admin panel's server controls
+and what to do when something is wrong.
+
+## How it is put together
+
+```
+ Android app ─┐  HTTPS and WebSocket               ┌─ SQLite database (encrypted)
+ Web app ─────┼─► your address ─► Hush server ──────┼─ media files (encrypted by the sender)
+              │   (tunnel or reverse proxy)         └─ push notifications, call relay credentials
+ Calls go from device to device, or through a relay that only ever sees encrypted traffic.
+```
+
+| Folder | What is in it |
 | --- | --- |
-| `shared/protocol` | API types, envelopes and the media spec, shared by the server and Android |
-| `shared/crypto` | libsodium: vault, object envelopes, chunked media encryption, safety numbers |
-| `shared/client` | The Android app's non-UI layer: API, sync, composer, media and realtime, tested against the server |
-| `server/` | Ktor + SQLite. It stores ciphertext, enforces access by key wraps, and relays call signals |
-| `web/` | The web app (React, Vite, libsodium-wrappers, Mediabunny for transcoding) |
-| `android/` | The Android app (Compose, Media3, WebRTC). A separate Gradle build that includes the root one |
-| `deploy/` | The install, update, backup and restore scripts, the compose file, the container entrypoint, and their tests |
-| `crypto-vectors/` | Test vectors that keep the Kotlin and TypeScript crypto byte-for-byte identical |
+| `server/` | The server (Kotlin, Ktor, SQLite). It stores ciphertext, decides who may fetch what, and passes call signals along |
+| `web/` | The web app (TypeScript, React) |
+| `android/` | The Android app (Kotlin, Compose). It is its own Gradle build, and includes the root one |
+| `shared/` | Code the server and the Android app share: the API types, the cryptography, and the Android app's non-UI layer |
+| `deploy/` | The installer, the update, backup and restore scripts, and their tests |
+| `crypto-vectors/` | Test vectors that keep the Kotlin and TypeScript cryptography producing identical bytes |
 
-## Development
+## Security
 
-The JVM parts need JDK 21. The Android app needs the Android SDK, so CI builds it.
+Posts, comments, stories, messages, reactions, profiles and media are encrypted on the device that makes them.
+Each item has its own key, and that key is sealed separately for each person allowed to see the item. Every item
+is signed by its author. Your private keys are kept on the server only in a form sealed with a key derived from
+your password, which never leaves your device, so signing in on a new phone brings everything back and the server
+still cannot read any of it. Call setup is encrypted the same way, so a relay in the middle only carries
+ciphertext.
+
+The server does see who is a member, who follows and messages whom, when, and how large things are. It needs that
+to deliver anything. The database that holds it is encrypted on disk under the server password, so a stolen disk
+or a copy of a backup is unreadable without that password. The admin panel shows the admin this same information
+about members, and never content.
+
+Some things to know before you rely on it:
+
+- The web app is only as trustworthy as whatever serves it. Your server sends the JavaScript, and a proxy or
+  tunnel in front of it sees the connection. Someone who controlled either could serve a page that steals a
+  password. The Android app does not have this problem: it only accepts updates signed with a key that exists
+  on your server and nowhere else.
+- There is no forward secrecy. Keys are long-lived, because the history is kept on the server and has to open on
+  a new device.
+- Removing a follower or a member stops them fetching anything more. What their device already downloaded stays
+  on their device.
+- Changing your password re-seals the same keys. If you think the server's data was copied while you used the
+  old password, use Reset keys in the security settings, which gives you new ones.
+- Passwords need to be good. Anyone holding a copy of the server's data can try guesses against it for as long
+  as they like.
+- Disappearing and unsent messages are deleted from the server, but can remain in its backups for up to thirty
+  days.
+
+## Building it
+
+The server and the shared code need JDK 21. The Android app needs the Android SDK.
 
 ```bash
 ./gradlew :shared:crypto:test :server:test :shared:client:test
 ```
 
 ```bash
-cd web && npm ci && npm run typecheck && npm test && npm run e2e
+cd web && npm ci && npm run typecheck && npm test
 ```
 
 ```bash
@@ -109,60 +125,10 @@ bash deploy/tests/run.sh
 ./gradlew -p android :app:testDebugUnitTest :app:assembleDebug
 ```
 
-On every push to the `aezgram` branch, CI runs all of the above, plus the photo and video pipeline on an Android emulator. It
-renders the Android screens to screenshots for review, and builds the image (server, web app and unsigned APK) and
-smoke-tests it, including signing the APK and checking it the way a phone would. Then it publishes everything to
-the rolling `hush-latest` release that `install.sh` and `update.sh` read.
+The end-to-end test in `web/e2e` drives three browsers against a real server; `.github/workflows/hush.yml` shows
+how it is started. The same workflow builds the server image and the Android app on every push to `main` and
+publishes them as the `hush-latest` release, which is what `install.sh` and `update.sh` download. It works the same
+in a fork: the installer it publishes points at the repository it was built in.
 
-## Security and trade-offs
-
-**What's encrypted:**
-
-- Posts, comments, stories, reels, messages, reactions, profiles, settings and media are encrypted on the device.
-  Each object gets its own key, wrapped with `crypto_box_seal` for exactly the people who may see it.
-- Every object is signed by its author and carries a key commitment.
-- Your private keys sit on the server only sealed under a key derived from your password with Argon2id. The server
-  stores a hash of a separate derived login key, never the password.
-- Call setup (SDP and ICE) is signed and sealed end to end, so TURN only ever relays SRTP ciphertext.
-
-**What the server sees:** usernames, who follows and messages whom, when, and how big things are. It needs that to
-work, but it keeps none of it readable on disk: the database is encrypted at rest under a key sealed by the
-server password (set once, on the server) and by Resolute's own key, so backups and copies of the disk are noise
-without the password. See [the runbook](deploy/RUNBOOK.md#the-encrypted-database). Root on the running server can
-still read the server's memory; content is end-to-end encrypted, so that stays unreadable even then.
-
-**What the admin can see and do** (Admin in the web sidebar, Settings → Admin on Android): exactly that metadata, per
-member: their devices, which chats they're in and with whom, how many messages each has and when the last came,
-followers and following, and how much they post. Never content: messages, posts and profiles are encrypted for their
-readers only. The admin can block an account (it can read but not post, message, comment, like, follow or call),
-disable it (it can't sign in), sign it out everywhere, take it out of a chat (the chat disappears from its messages),
-or remove it. Signing in *as* someone isn't possible: their password is the only key to their account.
-
-**Trade-offs, chosen on purpose:**
-
-- **The web app trusts the server, Cloudflare and GitHub each time it loads.** Resolute serves the JavaScript and
-  Cloudflare terminates TLS. Whoever controls either could serve code that captures your password.
-  - Mitigations: a strict CSP, no third-party scripts, and the web bundle ships inside the pinned image.
-  - **The Android app is the trusted client:** its code comes in a signed APK, and Android refuses updates signed
-    with any other key. Do sensitive things, such as verifying contacts, on Android.
-- **No Watchtower.** The image is pinned by digest and only changes when you approve `update.sh`. Phones only get
-  APKs from that approved image.
-- **The APK signing key lives only on Resolute.**
-  - It is made on first start in `data/signing/` and kept in the encrypted backup. GitHub never has it, so a
-    GitHub account takeover can't produce an APK your phones would accept as an update.
-  - The cost: if both the server and its backup were lost, every phone would reinstall the app once. Your data is
-    on the server either way.
-- **No forward secrecy.** Keys are long-lived and history lives on the server, so that signing in on a new phone
-  restores everything.
-- **Removing a follower or member** stops further downloads, but their device keeps what it already cached.
-- **Changing your password** re-seals the same keys. If an old copy of the server's data leaked, the old password
-  still opens that copy. After a suspected leak, use **Settings → Security → Reset keys**. That gives you a new
-  identity, re-seals everything you can read to it, and warns your contacts.
-- **Weak passwords** can be guessed offline by anyone holding the server's data, so the app requires at least 10
-  characters.
-- **Late visibility:** new followers and new members see older posts once each author's app has been online to
-  re-seal them.
-- **Vanish mode, view-once and unsend** really delete from the server. They may survive in the encrypted backups
-  for up to 30 days.
-- **Keys are pinned on first use.** If someone's key changes, you get a loud warning. Compare safety numbers or
-  scan QR codes under **Settings → Security** to be sure nobody is in the middle.
+An Android build made with `HUSH_SERVER_URL` set talks to that one server. A build made without it asks for the
+server's address the first time it is opened.

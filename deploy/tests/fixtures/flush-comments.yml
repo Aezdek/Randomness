@@ -1,4 +1,4 @@
-# Resolute tunnel
+# The tunnel on this server
 tunnel: resolute
 credentials-file: /root/.cloudflared/resolute.json
 originRequest:

@@ -97,7 +97,7 @@ export function EditProfile({ open, onClose }: { open: boolean; onClose: () => v
         </label>
         <label className="field">
           <span>Link</span>
-          <input className="input" value={link} onChange={(e) => setLink(e.target.value)} maxLength={120} placeholder="aezdek.xyz" inputMode="url" />
+          <input className="input" value={link} onChange={(e) => setLink(e.target.value)} maxLength={120} placeholder="example.com" inputMode="url" />
         </label>
       </div>
     </Sheet>
