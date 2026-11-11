@@ -38,6 +38,8 @@ private fun ResultSet.toObjectRow() = ObjectRow(
 private const val HOUR = 60L * 60 * 1000
 private const val MAX_PAYLOAD = 256 * 1024
 private const val MAX_DEPTH = 6
+/** One sealed key per member at most, with room to spare over the largest server the settings allow. */
+private const val MAX_WRAPS = xyz.aezdek.hush.protocol.ServerLimits.MAX_MEMBERS_LIMIT + 14
 
 private val TOP_LEVEL = setOf(Kind.PROFILE, Kind.POST, Kind.REEL, Kind.STORY, Kind.HIGHLIGHT, Kind.NOTE, Kind.LIVE)
 private val SELF_KINDS = setOf(Kind.SETTINGS, Kind.COLLECTION)
@@ -59,7 +61,7 @@ private val PUSH_KINDS = setOf(Kind.MESSAGE, Kind.COMMENT, Kind.LIKE, Kind.ACTIV
  * - top-level objects: whoever holds a wrap (a sealed content key);
  * - children (likes, comments, votes): whoever can read the parent;
  * - chat objects: current thread members holding the right epoch's wrap;
- * - objects referenced by something you can read (stories inside a highlight).
+ * - objects their own author references from something you can read (stories inside a highlight).
  */
 class Objects(private val db: Db, private val clock: Clock) {
 
@@ -92,8 +94,11 @@ class Objects(private val db: Db, private val clock: Clock) {
             if (canRead(userId, parent, depth + 1)) return true
         }
         if (depth == 0) {
+            // Only the author's own objects can open one of theirs this way (a highlight holding their stories). Were
+            // anyone's reference enough, a removed follower could keep reading a post by pointing an object of their
+            // own at it.
             val referrers = strings("SELECT object_id FROM object_refs WHERE ref_id = ?", obj.id)
-            if (referrers.any { id -> load(id)?.let { canRead(userId, it, depth + 1) } == true }) return true
+            if (referrers.any { id -> load(id)?.let { it.authorId == obj.authorId && canRead(userId, it, depth + 1) } == true }) return true
         }
         return false
     }
@@ -196,6 +201,14 @@ class Objects(private val db: Db, private val clock: Clock) {
             }
             else -> badRequest("Unknown kind ${up.kind}")
         }
+        // Blocking someone ends the one-to-one chat with them, both ways: nothing new arrives in it. (Groups carry on,
+        // as people expect of a group.)
+        if (up.threadId != null && up.kind in setOf(Kind.MESSAGE, Kind.REACTION, Kind.VOTE)) {
+            val isGroup = one("SELECT is_group FROM threads WHERE id = ?", up.threadId) { it.bool("is_group") } ?: true
+            if (!isGroup && strings("SELECT user_id FROM thread_members WHERE thread_id = ? AND user_id != ?", up.threadId, userId).any { blocked(userId, it) }) {
+                forbidden("You cannot message this account")
+            }
+        }
         if (up.kind in ONE_PER_PARENT && exists(
                 "SELECT 1 FROM objects WHERE author_id = ? AND parent_id = ? AND kind = ? AND deleted = 0", userId, up.parentId, up.kind,
             )
@@ -252,7 +265,7 @@ class Objects(private val db: Db, private val clock: Clock) {
         if (!Ids.isObjectId(up.id)) badRequest("Object ids are 16–32 base64url characters")
         if (up.blobIds.size > 40) badRequest("Too many media files")
         if (up.refIds.size > 200) badRequest("Too many references")
-        if (up.wraps.size > 20) badRequest("Too many recipients")
+        if (up.wraps.size > MAX_WRAPS) badRequest("Too many recipients")
     }
 
     private fun Tx.checkBlobs(userId: String, blobIds: List<String>) {
@@ -431,7 +444,8 @@ class Objects(private val db: Db, private val clock: Clock) {
         val obj = load(id)?.takeIf { canRead(userId, it) } ?: notFound()
         if (obj.authorId == userId) return@tx
         val now = clock.now()
-        exec("INSERT OR IGNORE INTO views (object_id, user_id, at) VALUES (?, ?, ?)", id, userId, now)
+        // Only a first view is news to the author; looking again changes nothing.
+        if (exec("INSERT OR IGNORE INTO views (object_id, user_id, at) VALUES (?, ?, ?)", id, userId, now) == 0) return@tx
         change(obj.authorId, ChangeType.OBJECT, id, fx, now)
         if (obj.audience == Audience.ONCE) deleteOnceIfSeen(obj, fx, now)
     }

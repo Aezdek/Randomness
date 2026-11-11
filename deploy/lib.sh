@@ -18,6 +18,26 @@ stopped() {
   printf '\033[31merror:\033[0m %s stopped at line %s, running: %s\n' "${0##*/}" "$1" "$2" >&2
 }
 
+# The server runs as this user inside its container, and data/ belongs to it.
+CONTAINER_USER=${HUSH_CONTAINER_USER:-10001:10001}
+
+# as_owner COMMAND...: runs one command as the container's user. These scripts run as root, and everything in data/
+# is the server's to write: if the server were ever broken into, it could leave a link there and wait for root to
+# write, chmod or chown through it, reaching any file on this machine. So root never does those things in data/
+# itself; it does them as the data's owner, and the worst a planted link can reach is data/ again.
+as_owner() {
+  if [ "$(id -u)" = 0 ] && [ -z "${HUSH_TEST:-}" ]; then
+    setpriv --reuid="${CONTAINER_USER%%:*}" --regid="${CONTAINER_USER##*:}" --clear-groups -- "$@"
+  else
+    "$@"
+  fi
+}
+
+# owner_write FILE [MODE]: stdin becomes FILE (in data/), written as its owner and swapped in whole.
+owner_write() {
+  as_owner sh -c 'umask 022; cat >"$1.tmp" && chmod "$2" "$1.tmp" && mv -f "$1.tmp" "$1"' sh "$1" "${2:-644}"
+}
+
 # env_get FILE KEY: the value of KEY in a KEY=VALUE file, without sourcing it.
 env_get() {
   [ -f "$1" ] || return 0
@@ -322,7 +342,9 @@ ensure_unlocked() {
     setup)
       deadline=$((SECONDS + 15))
       until [ -s "$root/data/setup-code.txt" ] || ((SECONDS >= deadline)); do sleep 0.5; done
-      code=$(tr -d '[:space:]' <"$root/data/setup-code.txt" 2>/dev/null) || die "no setup code in $root/data/setup-code.txt"
+      # Read as the data's owner and kept to what a setup code can hold, so nothing else could ever be sent as one.
+      code=$(as_owner cat "$root/data/setup-code.txt" 2>/dev/null | head -c 64 | tr -cd 'A-Za-z0-9-')
+      [ -n "$code" ] || die "no setup code in $root/data/setup-code.txt"
       log "Choose Hush's server password"
       note "It encrypts everything Hush keeps on this machine (who's who, who talks to whom, when)."
       note "You type it once. After that Hush unlocks by itself here; you need it again only to restore a"

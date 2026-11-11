@@ -1,7 +1,5 @@
 package xyz.aezdek.hush.ui.stories
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -106,6 +104,7 @@ import xyz.aezdek.hush.ui.components.ConfirmDialog
 import xyz.aezdek.hush.ui.components.MediaImage
 import xyz.aezdek.hush.ui.components.SheetItem
 import xyz.aezdek.hush.ui.components.ago
+import xyz.aezdek.hush.ui.components.openWebLink
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.Brand
 
@@ -353,7 +352,7 @@ private fun StickerView(sticker: Sticker, story: Entity, index: Index, state: Ap
             modifier = chip.clickable { nav.go(Screen.Hashtag(sticker.text.orEmpty().removePrefix("#"))) })
         StickerType.LOCATION -> Text("📍 " + sticker.text.orEmpty(), color = Brand.violet, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = chip)
         StickerType.LINK -> Text("🔗 " + (sticker.text ?: sticker.url.orEmpty().removePrefix("https://")), color = Color(0xFF2D5BE3), fontWeight = FontWeight.Bold,
-            fontSize = 15.sp, modifier = chip.clickable { sticker.url?.let { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } })
+            fontSize = 15.sp, modifier = chip.clickable { openWebLink(context, sticker.url) })
         StickerType.COUNTDOWN -> {
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }

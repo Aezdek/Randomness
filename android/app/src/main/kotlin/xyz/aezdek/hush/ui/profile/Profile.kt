@@ -1,7 +1,5 @@
 package xyz.aezdek.hush.ui.profile
 
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -106,6 +104,7 @@ import xyz.aezdek.hush.ui.components.IconAction
 import xyz.aezdek.hush.ui.components.MediaImage
 import xyz.aezdek.hush.ui.components.RichText
 import xyz.aezdek.hush.ui.components.SheetItem
+import xyz.aezdek.hush.ui.components.openWebLink
 import xyz.aezdek.hush.ui.components.TopBar
 import xyz.aezdek.hush.ui.components.VerifiedBadge
 import xyz.aezdek.hush.ui.components.compact
@@ -239,10 +238,7 @@ fun Profile(userId: String) {
                         val context = LocalContext.current
                         profile?.link?.takeIf { it.isNotBlank() }?.let { link ->
                             Text(link.removePrefix("https://").removePrefix("http://"), color = Aez.colors.link, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                                modifier = Modifier.clickable {
-                                    val url = if (link.startsWith("http")) link else "https://$link"
-                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                                })
+                                modifier = Modifier.clickable { openWebLink(context, link) })
                         }
                         if (!isMe && user?.followsMe == FollowState.FOLLOWING) {
                             Text("Follows you", fontSize = 12.sp, color = Aez.colors.text2, modifier = Modifier.padding(top = 6.dp)

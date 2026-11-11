@@ -5,6 +5,7 @@ import { api } from '../../core/api';
 import { block, openDirect, removeFollower, unblock } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Kind, type PostPayload, type ProfilePayload } from '../../core/payloads';
+import { webLink } from '../../core/safe';
 import { savedPostIds, useIndex, useUserByName } from '../../core/selectors';
 import { toast, useApp } from '../../core/store';
 import type { IdList } from '../../core/types';
@@ -169,9 +170,9 @@ export function Profile() {
                 <RichText text={profile.bio} />
               </p>
             )}
-            {profile?.link && (
-              <a href={/^https?:\/\//.test(profile.link) ? profile.link : `https://${profile.link}`} target="_blank" rel="noreferrer noopener" className="profile-link">
-                {profile.link.replace(/^https?:\/\//, '')}
+            {webLink(profile?.link) && (
+              <a href={webLink(profile?.link)!} target="_blank" rel="noreferrer noopener" className="profile-link">
+                {profile!.link!.replace(/^https?:\/\//, '')}
               </a>
             )}
             {!isMe && user?.followsMe === 'following' && <span className="chip" style={{ marginTop: 8 }}>Follows you</span>}

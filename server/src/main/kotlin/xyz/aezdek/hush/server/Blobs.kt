@@ -24,6 +24,8 @@ class Blobs(private val db: Db, private val clock: Clock, private val config: Se
         /** The largest piece one PUT may carry. Big pieces mean fewer round trips through the tunnel (Cloudflare allows 100 MB). */
         const val CHUNK = 32 * 1024 * 1024
         private const val DAY = 24L * 60 * 60 * 1000
+        /** Unfinished uploads one account may have open (a post is up to 20 files, each with a poster). */
+        private const val MAX_OPEN_UPLOADS = 64
         private val BLOB_ID = Regex("^[0-9a-f]{64}$")
     }
 
@@ -40,7 +42,13 @@ class Blobs(private val db: Db, private val clock: Clock, private val config: Se
             throw ApiException(HttpStatusCode.InsufficientStorage, "disk_full", "The server is low on disk space; uploads are paused")
         }
         val id = Ids.random(16)
-        db.tx { exec("INSERT INTO uploads (id, uploader_id, size, created_at) VALUES (?, ?, ?, ?)", id, userId, size, clock.now()) }
+        db.tx {
+            val open = long("SELECT COUNT(*) FROM uploads WHERE uploader_id = ?", userId) ?: 0
+            if (open >= MAX_OPEN_UPLOADS) {
+                throw ApiException(HttpStatusCode.TooManyRequests, "too_many_uploads", "Too many uploads at once; let some finish first")
+            }
+            exec("INSERT INTO uploads (id, uploader_id, size, created_at) VALUES (?, ?, ?, ?)", id, userId, size, clock.now())
+        }
         partFile(id).createNewFile()
         return UploadState(id, size, 0, CHUNK)
     }
@@ -55,6 +63,10 @@ class Blobs(private val db: Db, private val clock: Clock, private val config: Se
     fun append(userId: String, uploadId: String, offset: Long, body: InputStream): UploadState {
         val state = state(userId, uploadId)
         if (offset != state.received) conflict("Expected offset ${state.received}", "offset")
+        // Checked again for every piece: many uploads started together each passed the check in start() on their own.
+        if (config.dataDir.usableSpace - minOf(CHUNK.toLong(), state.size - offset) < minFreeBytes) {
+            throw ApiException(HttpStatusCode.InsufficientStorage, "disk_full", "The server is low on disk space; uploads are paused")
+        }
         val file = partFile(uploadId)
         var written = 0L
         RandomAccessFile(file, "rw").use { raf ->

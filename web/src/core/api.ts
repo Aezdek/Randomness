@@ -1,5 +1,6 @@
 import type { ApiErrorBody } from './errors';
 import { ApiError } from './errors';
+import { isBlobId } from './safe';
 
 /** Thin fetch wrapper for /api/v1 with the session's bearer token. */
 let token: string | null = null;
@@ -17,7 +18,17 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
+/**
+ * Paths are built from ids, and some ids arrive inside other people's posts. One shaped like `../auth/logout` must
+ * never get to choose the endpoint, so anything that isn't a plain path stops here.
+ */
+function plainPath(path: string): boolean {
+  const [route, query = ''] = path.split('?', 2);
+  return /^(\/[A-Za-z0-9_-]+)+$/.test(route) && /^[A-Za-z0-9_=&.-]*$/.test(query);
+}
+
 async function request<T>(method: string, path: string, body?: unknown, init?: RequestInit): Promise<T> {
+  if (!plainPath(path)) throw new ApiError(400, 'bad_request', 'That link is not valid');
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined && !(body instanceof Blob) && !(body instanceof Uint8Array)) headers['Content-Type'] = 'application/json';
@@ -52,6 +63,7 @@ export const api = {
 };
 
 export async function fetchBlob(blobId: string, range?: [number, number]): Promise<Uint8Array> {
+  if (!isBlobId(blobId)) throw new ApiError(400, 'blob', 'Media not available');
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (range) headers.Range = `bytes=${range[0]}-${range[1] - 1}`;

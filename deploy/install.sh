@@ -261,8 +261,8 @@ if [ -n "$remote" ] && command -v rclone >/dev/null; then
   note "Nightly at 03:30 to $remote/hush (status in data/backup-status.json and the admin screen)"
 else
   systemctl disable --now hush-backup.timer >/dev/null 2>&1 || true
-  printf '{"ok":false,"lastRunAt":%s,"lastSuccessAt":null,"message":"Backups are not set up yet: see RUNBOOK.md"}\n' "$(date +%s)" \
-    >"$ROOT/data/backup-status.json"
+  printf '{"ok":false,"lastRunAt":%s,"lastSuccessAt":null,"message":"Backups are not set up yet: see RUNBOOK.md"}\n' "$(date +%s)" |
+    owner_write "$ROOT/data/backup-status.json"
 fi
 
 # ------------------------------------------------------------------------------------------- server controls

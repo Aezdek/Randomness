@@ -10,13 +10,14 @@ import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-/** Background work: expiry every minute, media GC hourly, and the nightly SQLite snapshot backups pick up. */
+/** Background work: expiry every minute, media GC and idle sign-outs hourly, and the nightly SQLite snapshot backups pick up. */
 class Jobs(
     private val config: ServerConfig,
     private val db: Db,
     private val objects: Objects,
     private val blobs: Blobs,
     private val realtime: Realtime,
+    private val accounts: Accounts? = null,
 ) {
     private val log = LoggerFactory.getLogger(Jobs::class.java)
 
@@ -26,6 +27,10 @@ class Jobs(
             while (isActive) {
                 runCatching { expireNow() }.onFailure { log.error("expiry failed", it) }
                 if (minutes % 60 == 30L) runCatching { blobs.gc() }.onFailure { log.error("media GC failed", it) }
+                if (minutes % 60 == 45L) {
+                    runCatching { accounts?.expireIdleSessions()?.takeIf { it > 0 }?.let { log.info("Signed out {} idle device(s)", it) } }
+                        .onFailure { log.error("session expiry failed", it) }
+                }
                 runCatching { snapshotIfDue() }.onFailure { log.error("snapshot failed", it) }
                 minutes++
                 delay(60_000)

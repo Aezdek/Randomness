@@ -2,6 +2,7 @@ import { encode as encodeBlurhash } from 'blurhash';
 import { chunkCount, cipherLength, DEFAULT_CHUNK, decryptMedia, newFileKey, newHeader, sealChunk } from '../crypto/media';
 import { b64, concat, unb64 } from '../crypto/sodium';
 import { api, fetchBlob, getToken } from './api';
+import { isBlobId, safeMediaType } from './safe';
 import { ApiError } from './errors';
 import { toast } from './store';
 import type { InputAudioTrack } from 'mediabunny';
@@ -378,7 +379,7 @@ export function mediaUrl(ref: MediaRef): Promise<string> {
   if (cached) return cached;
   const promise = (async () => {
     const plain = decryptMedia(await fetchBlob(ref.blobId), unb64(ref.key));
-    return URL.createObjectURL(new Blob([plain as BlobPart], { type: ref.mime }));
+    return URL.createObjectURL(new Blob([plain as BlobPart], { type: safeMediaType(ref.mime) }));
   })();
   urls.set(ref.blobId, promise);
   order.push(ref.blobId);
@@ -397,10 +398,10 @@ export function mediaUrl(ref: MediaRef): Promise<string> {
  */
 export async function videoUrl(ref: MediaRef): Promise<string> {
   const controller = navigator.serviceWorker?.controller;
-  if (controller) {
+  if (controller && isBlobId(ref.blobId)) {
     const ack = new MessageChannel();
     const ready = new Promise<void>((resolve) => (ack.port1.onmessage = () => resolve()));
-    controller.postMessage({ type: 'media-key', blobId: ref.blobId, key: ref.key, mime: ref.mime, token: getToken() }, [ack.port2]);
+    controller.postMessage({ type: 'media-key', blobId: ref.blobId, key: ref.key, mime: safeMediaType(ref.mime), token: getToken() }, [ack.port2]);
     await Promise.race([ready, new Promise((r) => setTimeout(r, 1500))]);
     return `/media/${ref.blobId}`;
   }

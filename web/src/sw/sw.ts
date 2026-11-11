@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import sodium from 'libsodium-wrappers-sumo';
+import { isBlobId, safeMediaType } from '../core/safe';
 
 /**
  * Hush's service worker:
@@ -19,8 +20,13 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 
 self.addEventListener('message', (event) => {
   const data = event.data;
-  if (data?.type === 'media-key') {
-    keys.set(data.blobId, { key: sodium.from_base64(data.key, sodium.base64_variants.URLSAFE_NO_PADDING), mime: data.mime, token: data.token });
+  if (data?.type === 'media-key' && isBlobId(data.blobId) && typeof data.key === 'string') {
+    try {
+      const key = sodium.from_base64(data.key, sodium.base64_variants.URLSAFE_NO_PADDING);
+      keys.set(data.blobId, { key, mime: safeMediaType(data.mime), token: typeof data.token === 'string' ? data.token : null });
+    } catch {
+      /* not a key: nothing is served for it */
+    }
     event.ports[0]?.postMessage('ok');
   }
 });
@@ -102,15 +108,34 @@ async function serveMedia(request: Request, blobId: string): Promise<Response> {
       'Content-Range': `bytes ${start}-${end}/${h.plainLength}`,
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'no-store',
+      ...LOCKED_DOWN,
     },
   });
 }
 
+/**
+ * What the decrypted bytes are is the sender's word: `mime` came out of their (encrypted) post. So these responses
+ * are only ever photos, video or sound (safeMediaType), are never sniffed into something else, and carry a policy
+ * under which nothing in them could run even if a browser did show one as a page.
+ */
+const LOCKED_DOWN = {
+  'X-Content-Type-Options': 'nosniff',
+  'Content-Security-Policy': "default-src 'none'; sandbox",
+  'Cross-Origin-Resource-Policy': 'same-origin',
+};
+
+/** `/media/<id>` feeds <video> and <audio> elements. It is not somewhere to go: opened as a page or in a frame, it's refused. */
+const asPage = (request: Request) => request.mode === 'navigate' || ['document', 'iframe', 'frame', 'embed', 'object'].includes(request.destination);
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  if (url.origin === self.location.origin && url.pathname.startsWith('/media/')) {
-    event.respondWith(serveMedia(event.request, url.pathname.slice('/media/'.length)).catch(() => new Response('error', { status: 502 })));
+  if (url.origin !== self.location.origin || !url.pathname.startsWith('/media/')) return;
+  const blobId = url.pathname.slice('/media/'.length);
+  if (asPage(event.request) || !isBlobId(blobId)) {
+    event.respondWith(new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain', ...LOCKED_DOWN } }));
+    return;
   }
+  event.respondWith(serveMedia(event.request, blobId).catch(() => new Response('error', { status: 502, headers: LOCKED_DOWN })));
 });
 
 // ---------------------------------------------------------------------------------------------------------- push

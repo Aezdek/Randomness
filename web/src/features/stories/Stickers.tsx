@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { answer, vote } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Kind, StickerType, type Sticker, type StoryPayload, type VotePayload } from '../../core/payloads';
+import { webLink } from '../../core/safe';
 import { useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 
@@ -186,7 +187,10 @@ export function Stickers({ story }: { story: Entity<StoryPayload> }) {
           }
           case StickerType.LINK:
             content = (
-              <Pill icon={<Link2 size={16} />} onClick={() => sticker.url && window.open(sticker.url, '_blank', 'noopener,noreferrer')}>
+              <Pill icon={<Link2 size={16} />} onClick={() => {
+                const link = webLink(sticker.url);
+                if (link) window.open(link, '_blank', 'noopener,noreferrer');
+              }}>
                 {(sticker.text || sticker.url || '').replace(/^https?:\/\//, '').slice(0, 32)}
               </Pill>
             );

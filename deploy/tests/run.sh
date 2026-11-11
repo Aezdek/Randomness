@@ -319,6 +319,33 @@ check "anything but the four jobs is refused, and nothing in the request runs" \
 HUSH_ROOT=$croot bash "$croot/control.sh" run
 check "with nothing asked for, it does nothing" test $? -eq 0
 
+# For real, as root: a server that had been broken into leaves links in data/control and waits for root to follow them.
+if [ "$(id -u)" = 0 ] && command -v setpriv >/dev/null; then
+  lroot=$(mktemp -d /tmp/hush-links.XXXXXX)
+  chmod 755 "$lroot"
+  mkdir -p "$lroot/data/control"
+  cp "$DEPLOY/control.sh" "$DEPLOY/lib.sh" "$lroot/"
+  printf '#!/usr/bin/env bash\necho "==> Backed up"\ntouch "%s/ran"\n' "$lroot" >"$lroot/backup.sh"
+  chmod +x "$lroot"/*.sh
+  printf 'precious\n' >"$lroot/victim"
+  chmod 600 "$lroot/victim"
+  ln -s "$lroot/victim" "$lroot/data/control/status.env.tmp"
+  ln -s "$lroot/victim" "$lroot/data/control/last.log"
+  ln -s "$lroot/victim" "$lroot/data/control/last.log.tmp"
+  printf 'id=abc123\naction=backup\n' >"$lroot/data/control/request.env"
+  chown -hR 10001:10001 "$lroot/data"
+  env -u HUSH_TEST HUSH_ROOT="$lroot" bash "$lroot/control.sh" run >/dev/null 2>&1 || true
+  check "links planted in data/control lead root nowhere" \
+    bash -c "[ \"\$(cat '$lroot/victim')\" = precious ] && [ \"\$(stat -c '%a %U' '$lroot/victim')\" = '600 root' ]"
+  check "... and the job still runs to the end" test -e "$lroot/ran"
+  ln -s /etc "$lroot/data/control2" && rm -rf "$lroot/data/control" && mv "$lroot/data/control2" "$lroot/data/control"
+  env -u HUSH_TEST HUSH_ROOT="$lroot" SYSTEMD_DIR="$lroot" bash "$lroot/control.sh" install >/dev/null 2>&1
+  check "a link in place of data/control is refused, not chowned" bash -c "[ \"\$(stat -c %U /etc)\" = root ] && ! [ -e /etc/agent ]"
+  rm -rf "$lroot"
+else
+  echo "  (not root: the planted-link checks are skipped)"
+fi
+
 echo
 echo "$passed passed, $failed failed"
 [ "$failed" -eq 0 ]

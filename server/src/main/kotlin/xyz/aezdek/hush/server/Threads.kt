@@ -101,6 +101,10 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
         if (current.size + added.size > MAX_MEMBERS) badRequest("Chats hold up to $MAX_MEMBERS people")
         for (user in added) {
             if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", user)) badRequest("Unknown member")
+            // Like starting a chat: you can't pull in someone you've blocked, or who has blocked you.
+            if (exists("SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)", me, user, user, me)) {
+                forbidden("You cannot add this account")
+            }
             exec("INSERT INTO thread_members (thread_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", threadId, user, now)
         }
         val members = current + added

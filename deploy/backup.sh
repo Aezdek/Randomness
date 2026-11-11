@@ -43,14 +43,10 @@ previous_success=$(sed -n 's/.*"lastSuccessAt":[[:space:]]*\([0-9]*\).*/\1/p' "$
 
 write_status() {
   local ok=$1 message=$2 success=${3:-$previous_success}
-  local tmp
-  tmp=$(mktemp "$DATA/.backup-status.XXXXXX")
   message=${message//\\/\\\\}
   message=${message//\"/\\\"}
   printf '{"ok":%s,"lastRunAt":%s,"lastSuccessAt":%s,"remote":"%s","message":"%s"}\n' \
-    "$ok" "$started" "${success:-null}" "$DEST" "$message" >"$tmp"
-  chmod 644 "$tmp"
-  mv "$tmp" "$STATUS"
+    "$ok" "$started" "${success:-null}" "$DEST" "$message" | owner_write "$STATUS"
 }
 
 fail() {

@@ -8,9 +8,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.PayloadTooLargeException
+import io.ktor.server.plugins.bodylimit.RequestBodyLimit
 import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.compression.Compression
@@ -65,7 +66,7 @@ class Services(val config: ServerConfig, val clock: Clock, app: Application) {
     val releases = Releases(config.releaseUrl, clock)
     val startedAt = clock.now()
     val realtime = Realtime(db, presence, push, app, clock)
-    val jobs = Jobs(config, db, objects, blobs, realtime)
+    val jobs = Jobs(config, db, objects, blobs, realtime, accounts)
     val limiter = RateLimiter(clock)
 }
 
@@ -132,16 +133,35 @@ internal fun Application.basePlugins() {
     }
     install(StatusPages) {
         exception<ApiException> { call, cause -> call.respond(cause.status, ApiError(cause.code, cause.message)) }
+        exception<PayloadTooLargeException> { call, _ -> call.respond(HttpStatusCode.PayloadTooLarge, ApiError("too_large", "Request too large")) }
         exception<BadRequestException> { call, cause ->
-            call.respond(HttpStatusCode.BadRequest, ApiError("bad_request", cause.cause?.message ?: cause.message ?: "Bad request"))
+            if (generateSequence<Throwable>(cause) { it.cause }.any { it is PayloadTooLargeException }) {
+                call.respond(HttpStatusCode.PayloadTooLarge, ApiError("too_large", "Request too large"))
+            } else {
+                call.respond(HttpStatusCode.BadRequest, ApiError("bad_request", cause.cause?.message ?: cause.message ?: "Bad request"))
+            }
         }
         exception<Throwable> { call, cause ->
             log.error("Unhandled error on ${redactIds(call.request.path())}", cause)
             call.respond(HttpStatusCode.InternalServerError, ApiError("internal", "Something went wrong on the server"))
         }
     }
-    install(BodyLimit)
+    // JSON bodies are small; only media uploads stream large bodies, in pieces. Counted as the body is read, so a body
+    // sent in chunks without a Content-Length is cut off at the same size as one that announces itself.
+    install(RequestBodyLimit) {
+        bodyLimit { call ->
+            val path = call.request.path()
+            when {
+                // A WebSocket has no body to limit: its frames are capped one by one (maxFrameSize).
+                path == "/api/v1/ws" -> Long.MAX_VALUE
+                path.startsWith("/api/v1/uploads/") -> Blobs.CHUNK + 1024L
+                else -> MAX_JSON_BODY
+            }
+        }
+    }
 }
+
+private const val MAX_JSON_BODY = 4L * 1024 * 1024
 
 /** The app download, its version, and the web app: served whether or not the server is set up yet. */
 internal fun Route.publicRoutes(config: ServerConfig) {
@@ -178,14 +198,3 @@ private suspend fun serveWeb(call: ApplicationCall, config: ServerConfig) {
 }
 
 suspend fun <T> blocking(block: () -> T): T = withContext(Dispatchers.IO) { block() }
-
-/** JSON bodies are small; only media uploads stream large bodies, in pieces. */
-private val BodyLimit = createApplicationPlugin("BodyLimit") {
-    onCall { call ->
-        val length = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: 0
-        val isUpload = call.request.path().startsWith("/api/v1/uploads/")
-        if (length > (if (isUpload) Blobs.CHUNK + 1024L else 4L * 1024 * 1024)) {
-            throw ApiException(HttpStatusCode.PayloadTooLarge, "too_large", "Request too large")
-        }
-    }
-}

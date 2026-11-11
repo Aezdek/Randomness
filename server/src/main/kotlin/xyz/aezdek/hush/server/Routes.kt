@@ -62,19 +62,66 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Login and signup throttling, per client IP (Cloudflare's CF-Connecting-IP when behind the tunnel). */
+/**
+ * Sliding-window limits, in memory. Buckets that have gone quiet are dropped every minute, and there is a ceiling on
+ * how many can exist, so the limiter itself can't be used to fill the server's memory.
+ */
 class RateLimiter(private val clock: Clock) {
-    private val hits = ConcurrentHashMap<String, ArrayDeque<Long>>()
+    private class Bucket(val windowMs: Long) {
+        val times = ArrayDeque<Long>()
+    }
 
+    private val hits = ConcurrentHashMap<String, Bucket>()
+
+    @Volatile
+    private var sweptAt = 0L
+
+    /** Counts one attempt against [key]; refuses it once [max] were made within [windowMs]. */
     fun check(key: String, max: Int, windowMs: Long) {
+        if (!allow(key, max, windowMs)) tooMany()
+    }
+
+    /** Like [check], but says no instead of throwing. */
+    fun allow(key: String, max: Int, windowMs: Long): Boolean = attempt(key, max, windowMs, count = true)
+
+    /** Whether [key] has used up its attempts, without counting one (see [record]). */
+    fun exhausted(key: String, max: Int, windowMs: Long): Boolean = !attempt(key, max, windowMs, count = false)
+
+    /** Counts one attempt without checking: for limits on failures only, recorded after the fact. */
+    fun record(key: String, windowMs: Long) {
+        attempt(key, Int.MAX_VALUE, windowMs, count = true)
+    }
+
+    fun tooMany(): Nothing = throw ApiException(HttpStatusCode.TooManyRequests, "rate_limited", "Too many attempts. Try again in a few minutes.")
+
+    private fun attempt(rawKey: String, max: Int, windowMs: Long, count: Boolean): Boolean {
+        val key = rawKey.take(MAX_KEY)
         val now = clock.now()
-        val queue = hits.computeIfAbsent(key) { ArrayDeque() }
-        synchronized(queue) {
-            while (queue.isNotEmpty() && now - queue.first() > windowMs) queue.removeFirst()
-            if (queue.size >= max) {
-                throw ApiException(HttpStatusCode.TooManyRequests, "rate_limited", "Too many attempts. Try again in a few minutes.")
-            }
-            queue.addLast(now)
+        sweep(now)
+        // A full table refuses new keys rather than grow: only a flood of distinct addresses gets here.
+        if (hits.size >= MAX_KEYS && !hits.containsKey(key)) return false
+        var allowed = true
+        hits.compute(key) { _, existing ->
+            val bucket = existing ?: Bucket(windowMs)
+            while (bucket.times.isNotEmpty() && now - bucket.times.first() > windowMs) bucket.times.removeFirst()
+            if (bucket.times.size >= max) allowed = false else if (count) bucket.times.addLast(now)
+            bucket.takeIf { it.times.isNotEmpty() }
         }
+        return allowed
+    }
+
+    private fun sweep(now: Long) {
+        if (now - sweptAt < SWEEP_MS && hits.size < MAX_KEYS) return
+        sweptAt = now
+        for (key in hits.keys) hits.computeIfPresent(key) { _, bucket -> bucket.takeIf { it.times.isNotEmpty() && now - it.times.last() <= it.windowMs } }
+    }
+
+    internal val size get() = hits.size
+
+    private companion object {
+        const val MAX_KEY = 160
+        const val MAX_KEYS = 100_000
+        const val SWEEP_MS = 60_000L
     }
 }
 
@@ -106,6 +153,8 @@ private suspend fun ApplicationCall.admin(s: Services): Session {
 }
 
 private const val MINUTE = 60_000L
+private const val WS_FRAMES = 1200
+private const val WS_WINDOW = 10_000L
 
 fun Route.api(s: Services) = route("/api/v1") {
     // Set up and unlocked (until then Setup.kt answers this instead).
@@ -115,7 +164,7 @@ fun Route.api(s: Services) = route("/api/v1") {
     post("/auth/prelogin") {
         val req = call.receive<PreloginRequest>()
         s.limiter.check("prelogin:${call.clientIp()}", 60, 10 * MINUTE)
-        call.respond(blocking { s.accounts.prelogin(req.username) })
+        call.respond(blocking { s.accounts.prelogin(req.username.trim().lowercase().take(64)) })
     }
     post("/auth/signup") {
         val req = call.receive<SignupRequest>()
@@ -127,8 +176,22 @@ fun Route.api(s: Services) = route("/api/v1") {
     }
     post("/auth/login") {
         val req = call.receive<LoginRequest>()
-        s.limiter.check("login:${call.clientIp()}:${req.username.lowercase()}", 10, 10 * MINUTE)
-        call.respond(blocking { s.accounts.login(req) })
+        val ip = call.clientIp()
+        // Per address whatever name is tried, then per address and name. The name is cleaned up first (the same way the
+        // lookup does it), so spaces or capitals don't make a fresh allowance, and nothing unbounded becomes a key.
+        s.limiter.check("login-ip:$ip", 40, 10 * MINUTE)
+        val username = req.username.trim().lowercase().takeIf { USERNAME.matches(it) } ?: unauthorized("Wrong username or password")
+        s.limiter.check("login:$ip:$username", 10, 10 * MINUTE)
+        // Wrong passwords for one account from everywhere together: guessing from many addresses at once stops here.
+        val failures = "login-failed:$username"
+        if (s.limiter.exhausted(failures, 200, 60 * MINUTE)) s.limiter.tooMany()
+        val response = try {
+            blocking { s.accounts.login(req) }
+        } catch (e: ApiException) {
+            if (e.status == HttpStatusCode.Unauthorized) s.limiter.record(failures, 60 * MINUTE)
+            throw e
+        }
+        call.respond(response)
     }
     post("/auth/logout") {
         val session = call.session(s)
@@ -154,6 +217,8 @@ fun Route.api(s: Services) = route("/api/v1") {
     post("/auth/reset-keys") {
         val session = call.session(s)
         val req = call.receive<ResetKeysRequest>()
+        // The same allowance as changing the password: both check it, and a stolen session mustn't get to guess it here.
+        s.limiter.check("password:${session.userId}", 10, 60 * MINUTE)
         val fx = Effects()
         blocking { s.accounts.resetKeys(session, req, fx) }
         s.realtime.apply(fx)
@@ -176,6 +241,7 @@ fun Route.api(s: Services) = route("/api/v1") {
     post("/me/delete") {
         val session = call.session(s)
         val req = call.receive<DeleteAccountRequest>()
+        s.limiter.check("password:${session.userId}", 10, 60 * MINUTE)
         val fx = Effects()
         blocking { s.accounts.deleteAccount(session, req.authKey, s.objects, fx) }
         s.realtime.apply(fx)
@@ -330,7 +396,7 @@ fun Route.api(s: Services) = route("/api/v1") {
     get("/sync") {
         val session = call.session(s)
         val cursor = call.request.queryParameters["cursor"]?.toLongOrNull() ?: 0
-        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 300
+        val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 300).coerceIn(1, 1000)
         call.respond(blocking { s.sync.sync(session.userId, cursor, limit) })
     }
 
@@ -621,7 +687,8 @@ fun adminServer(s: Services, session: Session): AdminServerDto {
         updateAvailable = updateAvailable(s, latest),
         agent = s.control.agentInstalled(),
         control = s.control.status(),
-        log = s.control.log(),
+        // What the last job printed, only while the controls are unlocked with the server password.
+        log = s.control.log().takeIf { s.elevation.unlockedUntil(session.id) != null },
         unlockedUntil = s.elevation.unlockedUntil(session.id),
     )
 }
@@ -639,12 +706,17 @@ fun Route.realtimeRoutes(s: Services) {
         val me = session.userId
         val connection = Presence.Connection(session.id, me, this)
         val wasOnline = s.presence.isOnline(me)
-        s.presence.register(connection)
+        if (!s.presence.register(connection)) {
+            close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "too many connections"))
+            return@webSocket
+        }
         s.presence.send(me, WsFrame(WsType.SYNC))
         if (!wasOnline) broadcastPresence(s, me, true)
         try {
             for (frame in incoming) {
                 if (frame !is Frame.Text) continue
+                // Call set-up sends bursts (ICE candidates to several people); anything far beyond that is dropped.
+                if (!s.limiter.allow("ws:${session.id}", WS_FRAMES, WS_WINDOW)) continue
                 val message = runCatching { Wire.json.decodeFromString(WsFrame.serializer(), frame.readText()) }.getOrNull() ?: continue
                 handleFrame(s, me, message, connection, blocked = session.blocked)
             }
@@ -682,7 +754,10 @@ private suspend fun handleFrame(s: Services, me: String, frame: WsFrame, connect
             }
             if (!allowed) return
             val delivered = s.presence.send(to, WsFrame(WsType.SIGNAL, from = me, signal = signal, callId = frame.callId, ring = frame.ring))
-            if (!delivered && frame.ring == true) s.realtime.pushTo(to, "call", me, frame.callId, urgent = true)
+            // A ring to someone offline becomes a push notification: a handful a minute per caller is plenty.
+            if (!delivered && frame.ring == true && s.limiter.allow("ring:$me:$to", 6, MINUTE)) {
+                s.realtime.pushTo(to, "call", me, frame.callId, urgent = true)
+            }
         }
     }
 }

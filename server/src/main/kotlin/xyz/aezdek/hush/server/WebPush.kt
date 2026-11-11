@@ -70,8 +70,14 @@ class WebPush(private val db: Db, private val clock: Clock, private val subject:
     }
 
     fun subscribe(session: Session, req: PushSubscriptionRequest) = db.tx {
-        val endpoint = URI(req.endpoint)
-        if (endpoint.scheme != "https") badRequest("Push endpoints must be https")
+        if (!isPushService(req.endpoint)) badRequest("That isn't a push service Hush knows", "unknown_push_service")
+        // One per browser profile; a sane ceiling, oldest out first.
+        val mine = strings("SELECT endpoint FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC", session.userId)
+        mine.filter { it != req.endpoint }.drop(MAX_SUBSCRIPTIONS - 1).forEach { exec("DELETE FROM push_subscriptions WHERE endpoint = ?", it) }
+        // An endpoint belongs to whoever registered it: nobody else can take it over by naming it.
+        if (exists("SELECT 1 FROM push_subscriptions WHERE endpoint = ? AND user_id != ?", req.endpoint, session.userId)) {
+            badRequest("That push endpoint is in use")
+        }
         exec(
             "INSERT OR REPLACE INTO push_subscriptions (endpoint, user_id, session_id, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             req.endpoint, session.userId, session.id, B64u.dec(req.p256dh, "p256dh", size = 65), B64u.dec(req.auth, "auth", size = 16), clock.now(),
@@ -171,6 +177,26 @@ class WebPush(private val db: Db, private val clock: Clock, private val subject:
     }
 
     companion object {
+        private const val MAX_SUBSCRIPTIONS = 12
+
+        /**
+         * The server posts to whatever a subscription names, so it only accepts the browsers' own push services (Chrome
+         * and its relatives, Firefox, Safari, Edge): https, the standard port, no credentials. Anything else could
+         * point the server at a machine on its own network.
+         */
+        private val PUSH_HOSTS = listOf(
+            "fcm.googleapis.com", "android.googleapis.com", "jmt17.google.com",
+            "updates.push.services.mozilla.com", "web.push.apple.com", "notify.windows.com",
+        )
+
+        fun isPushService(endpoint: String): Boolean {
+            if (endpoint.length > 2048) return false
+            val uri = runCatching { URI(endpoint) }.getOrNull() ?: return false
+            val host = uri.host?.lowercase() ?: return false
+            if (uri.scheme != "https" || uri.userInfo != null || (uri.port != -1 && uri.port != 443)) return false
+            return PUSH_HOSTS.any { host == it || host.endsWith(".$it") }
+        }
+
         private val p256: ECParameterSpec by lazy {
             AlgorithmParameters.getInstance("EC").apply { init(ECGenParameterSpec("secp256r1")) }.getParameterSpec(ECParameterSpec::class.java)
         }

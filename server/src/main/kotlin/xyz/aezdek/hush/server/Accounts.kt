@@ -32,6 +32,9 @@ data class Session(val id: String, val userId: String, val blocked: Boolean = fa
 const val DEFAULT_OPS_LIMIT = 3L
 const val DEFAULT_MEM_LIMIT = 64 * 1024 * 1024
 const val INVITE_DAYS = 7L
+private const val MAX_MEM_LIMIT = 1024 * 1024 * 1024
+/** A device that hasn't been used for this long is signed out. */
+const val SESSION_IDLE_DAYS = 90L
 private const val DAY = 24L * 60 * 60 * 1000
 
 /**
@@ -85,7 +88,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         val boxPk = B64u.dec(req.boxPk, "boxPk", size = 32)
         val boxPkSig = B64u.dec(req.boxPkSig, "boxPkSig", size = 64)
         val vault = B64u.dec(req.vault, "vault", max = 1024)
-        if (req.opsLimit < 1 || req.memLimit < 8192) badRequest("KDF parameters too weak")
+        checkKdf(req.opsLimit, req.memLimit)
         checkDevice(req.device)
 
         val now = clock.now()
@@ -135,6 +138,12 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
     }
 
     private class LoginRow(val id: String, val authHash: ByteArray, val vault: ByteArray, val status: String)
+
+    /** Argon2id's cost, as the client chose it: not so low the password is cheap to guess, not so high sign-in can't run. */
+    private fun checkKdf(opsLimit: Long, memLimit: Int) {
+        if (opsLimit < 1 || memLimit < 8192) badRequest("KDF parameters too weak")
+        if (opsLimit > 32 || memLimit > MAX_MEM_LIMIT) badRequest("KDF parameters too costly")
+    }
 
     private fun checkDevice(device: DeviceInfo) {
         if (device.name.length > 80 || device.platform !in setOf("android", "web")) badRequest("Unknown device")
@@ -200,7 +209,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
     fun changePassword(session: Session, req: ChangePasswordRequest) {
         val revoked = db.tx {
             checkAuthKey(session.userId, req.currentAuthKey)
-            if (req.opsLimit < 1 || req.memLimit < 8192) badRequest("KDF parameters too weak")
+            checkKdf(req.opsLimit, req.memLimit)
             exec(
                 "UPDATE users SET salt = ?, ops_limit = ?, mem_limit = ?, auth_hash = ?, vault = ? WHERE id = ?",
                 B64u.dec(req.salt, "salt", size = 16), req.opsLimit, req.memLimit,
@@ -465,30 +474,57 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
      * Replaces the account's keys after a suspected compromise. The client has already re-sealed every content key it
      * could open to the new box key ([rewraps]); old wraps are replaced. Contacts see a key-change warning.
      */
-    fun resetKeys(session: Session, req: ResetKeysRequest, fx: Effects) = db.tx {
-        checkAuthKey(session.userId, req.currentAuthKey)
-        val now = clock.now()
-        exec(
-            """UPDATE users SET salt = ?, ops_limit = ?, mem_limit = ?, auth_hash = ?, vault = ?, sign_pk = ?, box_pk = ?,
-               box_pk_sig = ?, key_version = key_version + 1 WHERE id = ?""",
-            B64u.dec(req.salt, "salt", size = 16), req.opsLimit, req.memLimit, sha256(B64u.dec(req.authKey, "authKey", size = 32)),
-            B64u.dec(req.vault, "vault", max = 1024), B64u.dec(req.signPk, "signPk", size = 32), B64u.dec(req.boxPk, "boxPk", size = 32),
-            B64u.dec(req.boxPkSig, "boxPkSig", size = 64), session.userId,
-        )
-        // Wraps sealed to the old key are useless now; keep only the re-sealed ones.
-        exec("DELETE FROM wraps WHERE recipient_id = ?", session.userId)
-        for (wrap in req.rewraps) {
-            if (!exists("SELECT 1 FROM objects WHERE id = ? AND deleted = 0", wrap.objectId)) continue
+    fun resetKeys(session: Session, req: ResetKeysRequest, fx: Effects) {
+        val revoked = db.tx {
+            checkAuthKey(session.userId, req.currentAuthKey)
+            checkKdf(req.opsLimit, req.memLimit)
+            val now = clock.now()
             exec(
-                "INSERT OR REPLACE INTO wraps (object_id, recipient_id, sealed, created_at) VALUES (?, ?, ?, ?)",
-                wrap.objectId, session.userId, B64u.dec(wrap.sealed, "sealed", max = 256), now,
+                """UPDATE users SET salt = ?, ops_limit = ?, mem_limit = ?, auth_hash = ?, vault = ?, sign_pk = ?, box_pk = ?,
+                   box_pk_sig = ?, key_version = key_version + 1 WHERE id = ?""",
+                B64u.dec(req.salt, "salt", size = 16), req.opsLimit, req.memLimit, sha256(B64u.dec(req.authKey, "authKey", size = 32)),
+                B64u.dec(req.vault, "vault", max = 1024), B64u.dec(req.signPk, "signPk", size = 32), B64u.dec(req.boxPk, "boxPk", size = 32),
+                B64u.dec(req.boxPkSig, "boxPkSig", size = 64), session.userId,
             )
+            // Wraps sealed to the old key are useless now; keep only the re-sealed ones.
+            exec("DELETE FROM wraps WHERE recipient_id = ?", session.userId)
+            for (wrap in req.rewraps) {
+                if (!exists("SELECT 1 FROM objects WHERE id = ? AND deleted = 0", wrap.objectId)) continue
+                exec(
+                    "INSERT OR REPLACE INTO wraps (object_id, recipient_id, sealed, created_at) VALUES (?, ?, ?, ?)",
+                    wrap.objectId, session.userId, B64u.dec(wrap.sealed, "sealed", max = 256), now,
+                )
+            }
+            change(strings("SELECT id FROM users WHERE deleted = 0"), ChangeType.USER, session.userId, fx, now)
+            // Everyone whose content this account could read must re-seal it to the new key.
+            for (author in strings("SELECT id FROM users WHERE deleted = 0 AND id != ?", session.userId)) {
+                addWrapTask(author, session.userId, "rekey", now)
+            }
+            // This is what you do when someone else may be in the account: every other device is signed out.
+            val others = strings("SELECT id FROM sessions WHERE user_id = ? AND id != ?", session.userId, session.id)
+            exec("DELETE FROM sessions WHERE user_id = ? AND id != ?", session.userId, session.id)
+            exec("DELETE FROM push_subscriptions WHERE user_id = ? AND session_id != ?", session.userId, session.id)
+            others
         }
-        change(strings("SELECT id FROM users WHERE deleted = 0"), ChangeType.USER, session.userId, fx, now)
-        // Everyone whose content this account could read must re-seal it to the new key.
-        for (author in strings("SELECT id FROM users WHERE deleted = 0 AND id != ?", session.userId)) {
-            addWrapTask(author, session.userId, "rekey", now)
+        sessionCache.entries.removeIf { it.value.first.userId == session.userId && it.value.first.id != session.id }
+        revoked.forEach(presence::disconnectSession)
+    }
+
+    /** Signs out devices nobody has used for [SESSION_IDLE_DAYS]: a forgotten browser or a lost phone doesn't stay signed in for ever. */
+    fun expireIdleSessions(): Int {
+        val cutoff = clock.now() - SESSION_IDLE_DAYS * DAY
+        // A phone that has held its connection open all along is in use, whatever the last request's date says.
+        val connected = presence.connectedSessions()
+        val ended = db.tx {
+            strings("SELECT id FROM sessions WHERE last_seen_at < ?", cutoff).filter { it !in connected }.onEach { id ->
+                exec("DELETE FROM sessions WHERE id = ?", id)
+                exec("DELETE FROM push_subscriptions WHERE session_id = ?", id)
+            }
         }
+        if (ended.isEmpty()) return 0
+        sessionCache.entries.removeIf { it.value.first.id in ended }
+        ended.forEach(presence::disconnectSession)
+        return ended.size
     }
 }
 

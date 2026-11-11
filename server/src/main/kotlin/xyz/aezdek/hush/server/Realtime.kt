@@ -19,8 +19,12 @@ class Presence {
 
     private val byUser = ConcurrentHashMap<String, CopyOnWriteArraySet<Connection>>()
 
-    fun register(connection: Connection) {
-        byUser.computeIfAbsent(connection.userId) { CopyOnWriteArraySet() }.add(connection)
+    /** False when [Connection.userId] already has [MAX_CONNECTIONS] sockets open (every device and tab is one). */
+    fun register(connection: Connection): Boolean {
+        val connections = byUser.computeIfAbsent(connection.userId) { CopyOnWriteArraySet() }
+        if (connections.size >= MAX_CONNECTIONS) return false
+        connections.add(connection)
+        return true
     }
 
     fun unregister(connection: Connection) {
@@ -31,6 +35,8 @@ class Presence {
 
     fun onlineUsers(): Set<String> = byUser.filterValues { it.isNotEmpty() }.keys
 
+    fun connectedSessions(): Set<String> = byUser.values.flatMapTo(HashSet()) { set -> set.map { it.sessionId } }
+
     /** Sends to every connected device of [userId]; false if none is connected. */
     fun send(userId: String, frame: WsFrame): Boolean {
         val connections = byUser[userId].orEmpty()
@@ -38,6 +44,10 @@ class Presence {
         val text = Wire.json.encodeToString(WsFrame.serializer(), frame)
         connections.forEach { it.socket.outgoing.trySend(Frame.Text(text)) }
         return true
+    }
+
+    private companion object {
+        const val MAX_CONNECTIONS = 16
     }
 
     fun disconnectSession(sessionId: String) {

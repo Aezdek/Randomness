@@ -79,31 +79,34 @@ tar_sha=$(release_value "$work/release.env" HUSH_IMAGE_SHA256 '[0-9a-f]{64}')
 tag=$(release_value "$work/release.env" HUSH_IMAGE_TAG 'hush:[0-9A-Za-z._-]{1,64}')
 built=$(env_get "$work/release.env" HUSH_BUILT_AT)
 
-# This script, compose.yml and the others come with each release too: bring them up to date first, so a change in
-# how Hush is run (like the encrypted database's key) arrives with the image that needs it.
-if [ "$mode" = update ] && [ -z "${HUSH_DEPLOY_REFRESHED:-}" ]; then
+# This script, compose.yml and the others come with each release too: bring them up to date before the image, so a
+# change in how Hush is run (like the encrypted database's key) arrives with the image that needs it. They run as
+# root, so like the image they are only taken from a release you have said yes to (or are already running), and only
+# if they match the checksum in its manifest.
+refresh_deploy() {
+  [ -z "${HUSH_DEPLOY_REFRESHED:-}" ] || return 0
+  local deploy_sha file changed=false
   deploy_sha=$(env_get "$work/release.env" HUSH_DEPLOY_SHA256)
-  if curl -fsSL --retry 3 -o "$work/deploy.tar.gz" "$RELEASE_BASE/hush-deploy.tar.gz"; then
-    if [ -z "$deploy_sha" ] || echo "$deploy_sha  $work/deploy.tar.gz" | sha256sum -c --quiet - 2>/dev/null; then
-      mkdir -p "$work/deploy" && tar -xzf "$work/deploy.tar.gz" -C "$work/deploy"
-      changed=false
-      for file in compose.yml update.sh backup.sh restore.sh control.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
-        [ -f "$work/deploy/$file" ] || continue
-        cmp -s "$work/deploy/$file" "$ROOT/$file" && continue
-        install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"
-        changed=true
-      done
-      if $changed; then
-        log "Updated the deploy scripts from this release; continuing with them"
-        rm -rf "$work"
-        exec 9>&-
-        HUSH_DEPLOY_REFRESHED=1 exec "$ROOT/update.sh" "$@"
-      fi
-    else
-      warn "the deploy files don't match the manifest; keeping the installed ones"
-    fi
+  [[ $deploy_sha =~ ^[0-9a-f]{64}$ ]] || { warn "this release doesn't say what its deploy files should be; keeping the installed ones"; return 0; }
+  curl -fsSL --retry 3 -o "$work/deploy.tar.gz" "$RELEASE_BASE/hush-deploy.tar.gz" || { warn "could not download the deploy files; keeping the installed ones"; return 0; }
+  if ! echo "$deploy_sha  $work/deploy.tar.gz" | sha256sum -c --quiet - 2>/dev/null; then
+    warn "the deploy files don't match the manifest; keeping the installed ones"
+    return 0
   fi
-fi
+  mkdir -p "$work/deploy" && tar -xzf "$work/deploy.tar.gz" -C "$work/deploy" --no-same-owner --no-same-permissions
+  for file in compose.yml update.sh backup.sh restore.sh control.sh setup.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
+    [ -f "$work/deploy/$file" ] && [ ! -L "$work/deploy/$file" ] || continue
+    cmp -s "$work/deploy/$file" "$ROOT/$file" && continue
+    install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"
+    changed=true
+  done
+  $changed || return 0
+  log "Updated the deploy scripts from this release; continuing with them"
+  rm -rf "$work"
+  exec 9>&-
+  # The new script carries on with exactly the build that was approved here, without asking twice.
+  HUSH_DEPLOY_REFRESHED=1 HUSH_APPROVED_COMMIT=$commit exec "$ROOT/update.sh" "$@"
+}
 
 # The admin panel's server controls (control.sh and its systemd units): set up on the first update that has them,
 # and again whenever their units change.
@@ -117,6 +120,7 @@ ensure_controls() {
 
 if [ "$commit" = "$current_commit" ]; then
   log "Already on the newest build: $version (${commit:0:12})."
+  [ "$mode" = update ] && refresh_deploy "$@"
   [ "$mode" = update ] && ensure_controls
   if [ "$mode" = update ] && ! wait_healthy "$PORT" "" 5; then
     log "It isn't answering, so starting it."
@@ -147,13 +151,17 @@ echo
 
 [ "$mode" = check ] && exit 0
 
-if ! $assume_yes; then
+if [ -n "${HUSH_APPROVED_COMMIT:-}" ]; then
+  # Carrying on after the deploy scripts were refreshed: only the build that was approved a moment ago.
+  [ "$HUSH_APPROVED_COMMIT" = "$commit" ] || die "a newer build was published while this one was installing; run update.sh again"
+elif ! $assume_yes; then
   read -rp "Install this version? [y/N] " answer
   [[ $answer =~ ^[Yy]$ ]] || {
     echo "Nothing changed."
     exit 0
   }
 fi
+refresh_deploy "$@"
 
 log "Downloading the image"
 curl -fL --retry 3 --progress-bar -o "$work/image.tar.gz" "$RELEASE_BASE/hush-image.tar.gz" || die "download failed"
@@ -168,8 +176,10 @@ if [ -n "$current_commit" ]; then
   # A copy of the database from just before the new version touches it (migrations only ever add).
   if [ -f "$ROOT/data/hush.db" ]; then
     compose stop >/dev/null 2>&1 || true
-    mkdir -p "$ROOT/data/snapshots"
-    cp "$ROOT/data/hush.db" "$ROOT/data/snapshots/pre-update-${current_commit:0:12}.db"
+    # Copied as the data's owner (see as_owner in lib.sh), like everything written into data/.
+    as_owner mkdir -p "$ROOT/data/snapshots"
+    as_owner cp "$ROOT/data/hush.db" "$ROOT/data/snapshots/pre-update-${current_commit:0:12}.db" ||
+      warn "could not copy the database before updating; the nightly snapshots are still there"
   fi
 fi
 env_set "$ENV_FILE" HUSH_IMAGE "$tag"

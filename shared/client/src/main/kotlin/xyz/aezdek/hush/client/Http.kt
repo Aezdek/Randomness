@@ -59,6 +59,7 @@ class Api(baseUrl: String, val http: OkHttpClient) {
 
     /** A ciphertext blob, or the bytes [from] until [toExclusive] of it. */
     suspend fun blob(blobId: String, from: Long? = null, toExclusive: Long? = null): ByteArray = withContext(Dispatchers.IO) {
+        if (!BLOB_ID.matches(blobId)) throw ApiException(400, "blob", "Media not available")
         val request = Request.Builder().url("$base/blobs/$blobId").apply {
             token?.let { header("Authorization", "Bearer $it") }
             if (from != null) header("Range", "bytes=$from-${toExclusive?.let { it - 1 } ?: ""}")
@@ -70,6 +71,7 @@ class Api(baseUrl: String, val http: OkHttpClient) {
     }
 
     private suspend fun send(method: String, path: String, body: RequestBody?): Response = withContext(Dispatchers.IO) {
+        if (!isPlainPath(path)) throw ApiException(400, "bad_request", "That link is not valid")
         val request = Request.Builder().url(base + path).apply {
             token?.let { header("Authorization", "Bearer $it") }
             method(method, body ?: if (method == "POST" || method == "PUT" || method == "PATCH") "{}".toRequestBody(JSON) else null)
@@ -85,6 +87,19 @@ class Api(baseUrl: String, val http: OkHttpClient) {
     }
 
     companion object {
+        private val BLOB_ID = Regex("^[0-9a-f]{64}$")
+        private val ROUTE = Regex("^(/[A-Za-z0-9_-]+)+$")
+        private val QUERY = Regex("^[A-Za-z0-9_=&.-]*$")
+
+        /**
+         * Paths are built from ids, and some ids arrive inside other people's (encrypted, so unvetted) posts. One shaped
+         * like `../auth/logout` must never get to choose the endpoint: anything that isn't a plain path is refused.
+         */
+        fun isPlainPath(path: String): Boolean {
+            val route = path.substringBefore('?')
+            return ROUTE.matches(route) && QUERY.matches(path.substringAfter('?', ""))
+        }
+
         val JSON = "application/json; charset=utf-8".toMediaType()
         val OCTETS = "application/octet-stream".toMediaType()
     }
