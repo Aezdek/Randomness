@@ -1,7 +1,7 @@
 #!/bin/sh
 # Container entrypoint: signs the bundled Android APK with this server's own key, then starts the server.
 #
-# The key is made here on first start and never leaves Resolute except inside the encrypted backup, so GitHub never
+# The key is made here on first start and never leaves the server except inside the encrypted backup, so GitHub never
 # holds anything that could sign a Hush update. Phones only accept updates signed by the key they installed
 # with, so data/signing/ must survive (backup.sh and restore.sh carry it). Signing runs before the server starts so
 # the two JVMs never share the container's 512 MB.
@@ -21,7 +21,7 @@ sign_apk() {
     rm -rf "$KEYS.new" && mkdir -m 700 "$KEYS.new" || return 1
     (umask 077 && LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 >"$KEYS.new/password") || return 1
     keytool -genkeypair -keystore "$KEYS.new/hush.p12" -storetype PKCS12 -storepass:file "$KEYS.new/password" \
-      -alias hush -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Hush, O=aezdek.xyz" >/dev/null 2>&1 || return 1
+      -alias hush -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Hush" >/dev/null 2>&1 || return 1
     chmod 600 "$KEYS.new/hush.p12" && mv "$KEYS.new" "$KEYS" || return 1
   elif [ ! -s "$KEYS/hush.p12" ] || [ ! -s "$KEYS/password" ]; then
     # Never replace a key silently: phones refuse updates signed by a different one.

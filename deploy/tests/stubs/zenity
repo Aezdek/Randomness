@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Test double for zenity: answers from $STUB_STATE/answers (one per window that asks something), what it showed in
+# $STUB_STATE/windows.log, and the steps its progress window was sent in $STUB_STATE/steps.log.
+state=${STUB_STATE:?}
+kind="" text=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case ${args[i]} in
+    --info | --error | --question | --entry | --list | --progress) kind=${args[i]#--} ;;
+    --text) text=${args[i + 1]} ;;
+  esac
+done
+printf '%s: %s\n' "$kind" "${text//$'\n'/ / }" >>"$state/windows.log"
+case $kind in
+  info | error) exit 0 ;;
+  progress) cat >>"$state/steps.log"; exit 0 ;;
+esac
+answer=$(head -n1 "$state/answers" 2>/dev/null)
+sed -i 1d "$state/answers" 2>/dev/null
+case $kind in
+  question) [ "$answer" = yes ] ;;
+  *)
+    [ "$answer" != CANCEL ] || exit 1
+    printf '%s\n' "$answer"
+    ;;
+esac

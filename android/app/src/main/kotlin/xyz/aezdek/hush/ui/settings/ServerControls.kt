@@ -170,7 +170,7 @@ internal fun ServerControls(status: AdminStatus, onChanged: () -> Unit) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Text("One step on the server first: the buttons need Hush's helper there, which the next update installs.",
                     fontSize = 13.sp, color = Aez.colors.text2, lineHeight = 18.sp)
-                CommandChip(context, "sudo /opt/hl/hush/update.sh")
+                CommandChip(context, "sudo ${s.folder}/update.sh")
             }
         }
     }
@@ -302,7 +302,7 @@ internal fun ServerControls(status: AdminStatus, onChanged: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("This panel closes for every admin, here and in the browser. Hush keeps working. To turn it back on, run this on the server:",
                         color = Aez.colors.text2)
-                    CommandChip(context, "sudo /opt/hl/hush/control.sh web-admin on")
+                    CommandChip(context, "sudo ${s.folder}/control.sh web-admin on")
                 }
             },
             confirmButton = {
@@ -367,16 +367,16 @@ private fun CommandChip(context: Context, command: String) {
     )
 }
 
-/** What admins see while the web admin is off. */
+/** What admins see while the web admin is off. [command] is what the server says turns it back on. */
 @Composable
-internal fun WebAdminOffNote() {
+internal fun WebAdminOffNote(command: String) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("The web admin is off", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Aez.colors.text)
         Text("Hush keeps working. To manage it here again, turn the web admin back on from the server (tap to copy):",
             fontSize = 14.sp, color = Aez.colors.text2, lineHeight = 19.sp)
-        CommandChip(context, "sudo /opt/hl/hush/control.sh web-admin on")
+        CommandChip(context, command)
         Text("Invites while it's off:", fontSize = 13.sp, color = Aez.colors.text2)
-        CommandChip(context, "sudo /opt/hl/hush/control.sh invite")
+        CommandChip(context, command.removeSuffix("web-admin on") + "invite")
     }
 }

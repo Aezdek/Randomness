@@ -1,12 +1,12 @@
 tunnel: resolute
 credentials-file: /root/.cloudflared/resolute.json
 ingress:
-    -   hostname: lucifer.aezdek.xyz
+    -   hostname: photos.example.com
         service: http://127.0.0.1:8080
-    -   hostname: print.aezdek.xyz
+    -   hostname: files.example.com
         path: ^/api/
         service: http_status:404
-    -   hostname: print.aezdek.xyz
+    -   hostname: files.example.com
         service: http://127.0.0.1:8090
     -   service: http_status:404
 warp-routing:

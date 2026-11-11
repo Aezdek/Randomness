@@ -37,17 +37,18 @@ check() { # check NAME COMMAND...
 }
 same() { diff -u "$1" "$2"; }
 
-# A fresh fake Resolute: tunnel config, PORTS.md, a published release, empty /opt/hl/hush.
+# A fresh fake server: a tunnel config, a PORTS.md, a published release, an empty /opt/stacks/hush.
 sandbox() {
   local box=$WORK/$1 config=${2:-two-space.yml}
   rm -rf "$box"
-  mkdir -p "$box/etc/cloudflared" "$box/opt/hl" "$box/systemd" "$box/state" "$box/release"
+  mkdir -p "$box/etc/cloudflared" "$box/opt/stacks" "$box/systemd" "$box/state" "$box/release"
   cp "$FIX/$config" "$box/etc/cloudflared/config.yml"
-  cp "$FIX/PORTS.md" "$box/opt/hl/PORTS.md"
+  cp "$FIX/PORTS.md" "$box/opt/stacks/PORTS.md"
   export STUB_STATE=$box/state
-  export HUSH_ROOT=$box/opt/hl/hush CLOUDFLARED_CONFIG=$box/etc/cloudflared/config.yml
-  export PORTS_MD=$box/opt/hl/PORTS.md SYSTEMD_DIR=$box/systemd HUSH_RELEASE_BASE=file://$box/release
-  export RCLONE_REMOTE=$box/remote STUB_BOUND_PORTS="8471"
+  export HUSH_ROOT=$box/opt/stacks/hush CLOUDFLARED_CONFIG=$box/etc/cloudflared/config.yml
+  export PORTS_MD=$box/opt/stacks/PORTS.md SYSTEMD_DIR=$box/systemd HUSH_RELEASE_BASE=file://$box/release
+  export RCLONE_REMOTE=$box/remote STUB_BOUND_PORTS="8471" HUSH_HOSTNAME=hush.example.com
+  unset HUSH_PUBLISH HUSH_UI
   unset STUB_BREAK_AFTER_RESTART STUB_VALIDATE_FAIL STUB_BROKEN_VERSION STUB_TPM
   publish "$box" 1.0.1 1111111111111111111111111111111111111111
   BOX=$box
@@ -71,22 +72,22 @@ EOF
 
 echo "cloudflared ingress"
 for name in two-space flush-comments four-space; do
-  ingress_insert "$FIX/$name.yml" "$WORK/$name.out" hush.aezdek.xyz http://127.0.0.1:8472
+  ingress_insert "$FIX/$name.yml" "$WORK/$name.out" hush.example.com http://127.0.0.1:8472
   check "$name: rule goes right above the catch-all, nothing else changes" same "$FIX/$name.expected.yml" "$WORK/$name.out"
   if [ -n "${REAL_CLOUDFLARED:-}" ]; then
     check "$name: cloudflared accepts the result" "$REAL_CLOUDFLARED" tunnel --config "$WORK/$name.out" ingress validate
-    check "$name: gram routes to Hush" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://hush.aezdek.xyz | grep -q 127.0.0.1:8472"
-    check "$name: lucifer still routes where it did" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://lucifer.aezdek.xyz | grep -Eq 'localhost:8080|127.0.0.1:8080'"
+    check "$name: the new address routes to Hush" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://hush.example.com | grep -q 127.0.0.1:8472"
+    check "$name: the first hostname still routes where it did" bash -c "'$REAL_CLOUDFLARED' tunnel --config '$WORK/$name.out' ingress rule https://photos.example.com | grep -Eq 'localhost:8080|127.0.0.1:8080'"
   fi
 done
-ingress_insert "$FIX/no-catchall.yml" "$WORK/none.out" hush.aezdek.xyz http://127.0.0.1:8472
+ingress_insert "$FIX/no-catchall.yml" "$WORK/none.out" hush.example.com http://127.0.0.1:8472
 check "a config without a catch-all is refused" test $? -eq 3
-check "hostnames are read with quotes and comments" bash -c "[ \"\$(. '$DEPLOY/lib.sh'; ingress_hosts '$FIX/flush-comments.yml' | tr '\n' ' ')\" = 'lucifer.aezdek.xyz print.aezdek.xyz ' ]"
+check "hostnames are read with quotes and comments" bash -c "[ \"\$(. '$DEPLOY/lib.sh'; ingress_hosts '$FIX/flush-comments.yml' | tr '\n' ' ')\" = 'photos.example.com files.example.com ' ]"
 
 echo "PORTS.md"
 cp "$FIX/PORTS.md" "$WORK/PORTS.md"
 STUB_BOUND_PORTS=8471 check "the first port neither listed nor bound is 8472" test "$(STUB_BOUND_PORTS=8471 pick_port "$WORK/PORTS.md" 8470 8499)" = 8472
-ports_add_row "$WORK/PORTS.md" 8472 "Hush (hush.aezdek.xyz), 127.0.0.1 only, /opt/hl/hush"
+ports_add_row "$WORK/PORTS.md" 8472 "Hush (hush.example.com), 127.0.0.1 only, /opt/stacks/hush" /opt/stacks/hush hush.example.com
 check "the row matches the table's own columns" same "$FIX/PORTS.expected.md" "$WORK/PORTS.md"
 check "a recorded port is found again" test "$(ports_port_of "$WORK/PORTS.md" hush)" = 8472
 rm -f "$WORK/fresh.md"
@@ -104,11 +105,11 @@ out=$(bash "$DEPLOY/install.sh" 2>&1)
 status=$?
 check "a fresh install succeeds" test $status -eq 0
 [ $status -eq 0 ] || echo "$out" | sed 's/^/      /'
-check "gram is routed through the tunnel above the catch-all" \
-  bash -c "grep -B0 -A2 'hostname: hush.aezdek.xyz' '$BOX/etc/cloudflared/config.yml' | grep -q 'service: http://127.0.0.1:8472' && tail -n1 '$BOX/etc/cloudflared/config.yml' | grep -q http_status:404"
+check "Hush is routed through the tunnel above the catch-all" \
+  bash -c "grep -B0 -A2 'hostname: hush.example.com' '$BOX/etc/cloudflared/config.yml' | grep -q 'service: http://127.0.0.1:8472' && tail -n1 '$BOX/etc/cloudflared/config.yml' | grep -q http_status:404"
 check "the original tunnel config was backed up first" bash -c "ls '$BOX'/etc/cloudflared/config.yml.bak-* | head -n1 | xargs sha256sum | cut -d' ' -f1 | grep -q '${original%% *}'"
 check "cloudflared validated the edit before the restart" bash -c "grep -n 'ingress validate' '$STUB_STATE/cloudflared.log' >/dev/null && grep -q 'restart cloudflared' '$STUB_STATE/systemctl.log'"
-check "the port is recorded in PORTS.md" grep -q '^| 8472 | hush |' "$BOX/opt/hl/PORTS.md"
+check "the port is recorded in PORTS.md" grep -q '^| 8472 | hush |' "$BOX/opt/stacks/PORTS.md"
 check ".env pins the image by digest and is private" bash -c "grep -q '^HUSH_IMAGE_ID=sha256:' '$HUSH_ROOT/.env' && [ \$(stat -c %a '$HUSH_ROOT/.env') = 600 ]"
 check "the server runs the published version" test "$(cat "$STUB_STATE/running")" = 1.0.1
 check "the backup timer is installed for this root" bash -c "grep -q 'ExecStart=$HUSH_ROOT/backup.sh' '$BOX/systemd/hush-backup.service' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
@@ -128,9 +129,9 @@ out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "re-running is safe" test $? -eq 0
 check "re-running keeps this machine's key" test "$(sha256sum <"$HUSH_ROOT/secrets/machine.key")" = "$machine_key"
 check "re-running leaves the tunnel config alone" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$edited"
-check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c hush '$BOX/opt/hl/PORTS.md') = 1 ]"
+check "re-running makes no new backup or PORTS.md row" bash -c "[ \$(ls '$BOX'/etc/cloudflared/config.yml.bak-* | wc -l) = $backups ] && [ \$(grep -c hush '$BOX/opt/stacks/PORTS.md') = 1 ]"
 
-# As on Resolute: install.sh downloaded into the install folder and run again from there.
+# install.sh downloaded into the install folder and run again from there.
 cp "$DEPLOY/install.sh" "$HUSH_ROOT/install.sh"
 echo "# from an older release" >>"$HUSH_ROOT/lib.sh"
 out=$(cd "$HUSH_ROOT" && bash ./install.sh 2>&1)
@@ -151,9 +152,9 @@ unset STUB_NO_ORIGIN_CERT
 
 sandbox regress flush-comments.yml
 original=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
-export STUB_BREAK_AFTER_RESTART=lucifer.aezdek.xyz
+export STUB_BREAK_AFTER_RESTART=photos.example.com
 out=$(bash "$DEPLOY/install.sh" 2>&1)
-check "if lucifer stops answering after the restart, install fails" test $? -ne 0
+check "if another hostname stops answering after the restart, install fails" test $? -ne 0
 check "... and the original tunnel config is back, byte for byte" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$original"
 check "... and cloudflared was restarted on it" test "$(cat "$STUB_STATE/restarts")" = 2
 
@@ -170,7 +171,7 @@ out=$(bash "$DEPLOY/install.sh" 2>&1)
 check "a tunnel config without a catch-all is left alone" bash -c "[ $? -ne 0 ] && diff -q '$FIX/no-catchall.yml' '$BOX/etc/cloudflared/config.yml'"
 
 if command -v rclone >/dev/null; then
-  # As on Resolute: rclone installed, no remote named in the environment, and root's own config has no crypt remote.
+  # rclone installed, no remote named in the environment, and root's own config has no crypt remote.
   sandbox noremote
   unset RCLONE_REMOTE
   : >"$BOX/root-rclone.conf"
@@ -178,7 +179,7 @@ if command -v rclone >/dev/null; then
   status=$?
   check "with no backup remote anywhere, install still finishes" test $status -eq 0
   [ $status -eq 0 ] || echo "$out" | tail -n 5 | sed 's/^/      /'
-  check "... and says backups are off until the remote exists" grep -q 'backups are OFF' <<<"$out"
+  check "... and says backups are off until the remote exists" grep -q 'Backups:  *OFF until' <<<"$out"
 
   # The remote found in the config rclone uses, even when it isn't called gdrive.
   sandbox foundremote
@@ -188,6 +189,62 @@ if command -v rclone >/dev/null; then
   check "the only crypt remote is picked up for backups" \
     bash -c "grep -qx 'RCLONE_REMOTE=vault:' '$HUSH_ROOT/.env' && grep -qx 'RCLONE_CONFIG=$BOX/user-rclone.conf' '$HUSH_ROOT/.env' && grep -q 'enable --now hush-backup.timer' '$STUB_STATE/systemctl.log'"
 fi
+
+echo "install.sh: the questions"
+# Typed at a terminal (a real pseudo-terminal, from script): reached through a reverse proxy, at another address.
+if command -v script >/dev/null; then
+  sandbox asked
+  unset HUSH_HOSTNAME
+  before=$(sha256sum <"$BOX/etc/cloudflared/config.yml")
+  out=$(printf '2\nChat.Example.org\n\n' | script -qec "bash '$DEPLOY/install.sh'" /dev/null 2>&1 | tr -d '\r')
+  check "answers typed at the terminal are taken" \
+    bash -c "grep -qx 'HUSH_PUBLISH=proxy' '$HUSH_ROOT/.env' && grep -qx 'HUSH_HOSTNAME=chat.example.org' '$HUSH_ROOT/.env' && grep -qx 'HUSH_CLIENT_IP_HEADER=X-Forwarded-For' '$HUSH_ROOT/.env'"
+  check "... the choices are shown before anything changes" grep -q 'Reached:  through your own reverse proxy' <<<"$out"
+  check "... behind your own proxy the tunnel is left alone" test "$(sha256sum <"$BOX/etc/cloudflared/config.yml")" = "$before"
+  check "... and it says how to point the proxy at Hush" bash -c "grep -q 'reverse_proxy 127.0.0.1:8472' <<<\"\$1\" && grep -q 'proxy_set_header X-Forwarded-For' <<<\"\$1\"" _ "$out"
+  sandbox declined
+  out=$(printf '\n\nn\n' | script -qec "bash '$DEPLOY/install.sh'" /dev/null 2>&1 | tr -d '\r')
+  check "saying no at the end changes nothing" bash -c "grep -q 'Nothing was changed' <<<\"\$1\" && ! [ -e '$HUSH_ROOT' ] && ! [ -e '$STUB_STATE/running' ]" _ "$out"
+else
+  echo "  (no script command: the typed answers are skipped)"
+fi
+
+sandbox quiet
+unset HUSH_HOSTNAME
+out=$(bash "$DEPLOY/install.sh" --yes 2>&1)
+check "with nobody to ask and no address given, it says what it needs" bash -c "[ $? -ne 0 ] && grep -q 'HUSH_HOSTNAME=' <<<\"\$1\"" _ "$out"
+out=$(HUSH_HOSTNAME=hush.lan HUSH_PUBLISH=local bash "$DEPLOY/install.sh" --yes 2>&1)
+check "kept to this machine, nothing is published" \
+  bash -c "[ $? -eq 0 ] && grep -q 'Open:  *http://127.0.0.1:8472' <<<\"\$1\" && grep -qx 'HUSH_CLIENT_IP_HEADER=none' '$HUSH_ROOT/.env' && ! grep -q hush.lan '$BOX/etc/cloudflared/config.yml'" _ "$out"
+out=$(bash "$DEPLOY/install.sh" --yes 2>&1)
+check "a second run finds the first and keeps its choices" \
+  bash -c "[ $? -eq 0 ] && grep -qx 'HUSH_PUBLISH=local' '$HUSH_ROOT/.env' && grep -qx 'HUSH_HOSTNAME=hush.lan' '$HUSH_ROOT/.env'"
+check "the server is told where it is installed" grep -qx "HUSH_HOST_ROOT=$HUSH_ROOT" "$HUSH_ROOT/.env"
+
+# --gui in a terminal: the same questions as full-screen menus (whiptail's double answers them), password included.
+sandbox menus
+unset HUSH_HOSTNAME
+printf 'tunnel\nhush.example.com\nyes\na menu-typed server password\na menu-typed server password\n' >"$STUB_STATE/answers"
+out=$(HUSH_SERVER_PASSWORD='' HUSH_TTY=/dev/null bash "$DEPLOY/install.sh" --gui 2>&1)
+check "--gui in a terminal asks in menus and installs" \
+  bash -c "[ $? -eq 0 ] && grep -q '^menu: How will people reach Hush' '$STUB_STATE/menus.log' && grep -q '^inputbox: The address' '$STUB_STATE/menus.log' && grep -q 'hostname: hush.example.com' '$BOX/etc/cloudflared/config.yml'"
+check "... the server password is asked in a box, twice, with what it is for" \
+  bash -c "[ \$(grep -c '^passwordbox:' '$STUB_STATE/menus.log') = 2 ] && grep -q '^passwordbox: It encrypts everything' '$STUB_STATE/menus.log' && grep -q 'a menu-typed server password' '$HUSH_ROOT/data/keyring.json'"
+check "... and it ends on a box with the address and the first invite" grep -q '^msgbox: Hush is installed. / Open:  *https://hush.example.com / First invite:  *ABCDE-FGHJK' "$STUB_STATE/menus.log"
+sandbox backedout
+printf 'CANCEL\n' >"$STUB_STATE/answers"
+out=$(HUSH_TTY=/dev/null bash "$DEPLOY/install.sh" --gui 2>&1)
+check "backing out of a menu changes nothing" bash -c "[ $? -ne 0 ] && grep -q 'nothing was changed' <<<\"\$1\" && ! [ -e '$HUSH_ROOT/.env' ]" _ "$out"
+
+# --gui on a desktop: windows (zenity's double), with the steps in a progress window.
+sandbox windows
+unset HUSH_HOSTNAME
+printf 'proxy\nhush.example.com\nyes\n' >"$STUB_STATE/answers"
+out=$(DISPLAY=:99 bash "$DEPLOY/install.sh" --gui 2>&1)
+check "--gui on a desktop asks in windows and installs" \
+  bash -c "[ $? -eq 0 ] && grep -q '^list: How will people reach Hush' '$STUB_STATE/windows.log' && grep -q '^entry: The address' '$STUB_STATE/windows.log' && grep -qx 'HUSH_PUBLISH=proxy' '$HUSH_ROOT/.env'"
+check "... its steps show in a progress window, the update's included" bash -c "grep -q '^# Files in' '$STUB_STATE/steps.log' && grep -q '^# Starting 1.0.1' '$STUB_STATE/steps.log'"
+check "... and it ends on a window with the address" grep -q '^info: Hush is installed. / Open:  *https://hush.example.com' "$STUB_STATE/windows.log"
 
 echo "the encrypted database"
 sandbox moved
@@ -318,6 +375,16 @@ check "anything but the four jobs is refused, and nothing in the request runs" \
   bash -c "grep -qx 'state=failed' '$croot/data/control/status.env' && grep -qx 'id=unknown' '$croot/data/control/status.env' && ! [ -e '$croot/pwned' ]"
 HUSH_ROOT=$croot bash "$croot/control.sh" run
 check "with nothing asked for, it does nothing" test $? -eq 0
+
+# What control.sh does on the server itself goes with the key from data/local.key.
+sandbox local
+bash "$DEPLOY/install.sh" --yes >/dev/null 2>&1
+out=$(bash "$HUSH_ROOT/control.sh" invite 2>&1)
+check "an invite made on the server carries the server's key, and its link" bash -c "grep -q 'Invite: LOCAL-INVIT' <<<\"\$1\" && grep -q 'https://hush.example.com/?invite=LOCAL-INVIT' <<<\"\$1\"" _ "$out"
+bash "$HUSH_ROOT/control.sh" web-admin on >/dev/null 2>&1
+check "... and so does turning the web admin back on" grep -q '"enabled":true' "$STUB_STATE/web-admin"
+echo "not the key" >"$HUSH_ROOT/data/local.key"
+check "without the key the server refuses" bash -c "! bash '$HUSH_ROOT/control.sh' invite >/dev/null 2>&1"
 
 # For real, as root: a server that had been broken into leaves links in data/control and waits for root to follow them.
 if [ "$(id -u)" = 0 ] && command -v setpriv >/dev/null; then

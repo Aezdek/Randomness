@@ -100,12 +100,13 @@ internal fun AdminPanel(
     var managing by remember { mutableStateOf<AdminUserDto?>(null) }
     var removing by remember { mutableStateOf<AdminUserDto?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
-    var off by remember { mutableStateOf(false) }
+    // While the web admin is off: the command that turns it back on (null while it's on).
+    var off by remember { mutableStateOf<String?>(null) }
     suspend fun load() {
         status = try {
-            Graph.client.api.get<AdminStatus>("/admin/status").also { off = false }
+            Graph.client.api.get<AdminStatus>("/admin/status").also { off = null }
         } catch (e: xyz.aezdek.hush.client.ApiException) {
-            if (e.code == "web_admin_off") off = true else Graph.toast(Graph.messageOf(e), error = true)
+            if (e.code == "web_admin_off") off = e.command ?: "sudo ./control.sh web-admin on" else Graph.toast(Graph.messageOf(e), error = true)
             status
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -117,8 +118,8 @@ internal fun AdminPanel(
     }
     LaunchedEffect(Unit) { load() }
 
-    if (off) {
-        WebAdminOffNote()
+    off?.let { command ->
+        WebAdminOffNote(command)
         return
     }
     val s = status

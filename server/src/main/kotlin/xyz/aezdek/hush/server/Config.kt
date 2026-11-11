@@ -2,7 +2,7 @@ package xyz.aezdek.hush.server
 
 import java.io.File
 
-/** Everything the server reads from its environment. Defaults suit the Docker image on Resolute. */
+/** Everything the server reads from its environment. Defaults suit the Docker image. */
 data class ServerConfig(
     val dataDir: File,
     val host: String = "127.0.0.1",
@@ -12,7 +12,11 @@ data class ServerConfig(
     /** Holds hush.apk and version.json, signed on this server by the image's entrypoint. */
     val apkDir: File? = null,
     /** Contact for VAPID (`sub` claim). */
-    val vapidSubject: String = "mailto:admin@aezdek.xyz",
+    val vapidSubject: String = "mailto:admin@example.com",
+    /** Where Hush is installed on the machine that runs the container, for the commands the admin panel shows. */
+    val hostRoot: String = "/opt/hush",
+    /** The header that names the visitor's address, set by whatever sits in front (see clientIp in Routes.kt); null for none. */
+    val clientIpHeader: String? = "CF-Connecting-IP",
     val cfTurnKeyId: String? = null,
     val cfTurnApiToken: String? = null,
     /** Refuse uploads below this much free disk, so the shared box never fills up. */
@@ -50,7 +54,10 @@ data class ServerConfig(
                 port = env["HUSH_PORT"]?.toInt() ?: 8080,
                 webDir = (env["HUSH_WEB_DIR"] ?: "/app/web").let(::File).takeIf { it.isDirectory },
                 apkDir = (env["HUSH_APK_DIR"]?.let(::File) ?: File(dataDir, "apk")).takeIf { it.isDirectory },
-                vapidSubject = env["HUSH_VAPID_SUBJECT"] ?: "mailto:admin@aezdek.xyz",
+                vapidSubject = env["HUSH_VAPID_SUBJECT"]?.takeIf { it.isNotBlank() } ?: "mailto:admin@example.com",
+                hostRoot = env["HUSH_HOST_ROOT"]?.takeIf { it.startsWith("/") && it.length <= 200 && it.none { c -> c.isWhitespace() || c in "\"'`$;&|<>" } } ?: "/opt/hush",
+                // Unset means Cloudflare (how Hush was first run); "none" means nothing is in front.
+                clientIpHeader = (env["HUSH_CLIENT_IP_HEADER"]?.trim() ?: "CF-Connecting-IP").takeIf { it.isNotEmpty() && !it.equals("none", ignoreCase = true) },
                 cfTurnKeyId = env["CF_TURN_KEY_ID"]?.takeIf { it.isNotBlank() },
                 cfTurnApiToken = env["CF_TURN_API_TOKEN"]?.takeIf { it.isNotBlank() },
                 minFreeBytes = (env["HUSH_MIN_FREE_GB"]?.toLong() ?: 10L) * 1024 * 1024 * 1024,

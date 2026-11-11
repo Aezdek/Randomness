@@ -61,7 +61,8 @@ export function Admin() {
   const [removing, setRemoving] = useState<AdminUserDto | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
-  const [off, setOff] = useState(false);
+  // The command that turns the web admin back on, while it is off (null while it's on).
+  const [off, setOff] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
   const tab = (['people', 'invites', 'server'].includes(params.get('tab') ?? '') ? params.get('tab') : 'people') as AdminTab;
   const setTab = (next: AdminTab) => setParams(next === 'people' ? {} : { tab: next }, { replace: true });
@@ -69,15 +70,15 @@ export function Admin() {
   const load = useCallback(() => {
     void api
       .get<AdminStatus>('/admin/status')
-      .then((s) => (setStatus(s), setOff(false)))
-      .catch((e) => ((e as { code?: string }).code === 'web_admin_off' ? setOff(true) : toast(messageOf(e), 'error')));
+      .then((s) => (setStatus(s), setOff(null)))
+      .catch((e) => ((e as { code?: string }).code === 'web_admin_off' ? setOff((e as { command?: string | null }).command ?? '') : toast(messageOf(e), 'error')));
     void api.get<AdminUserDto[]>('/admin/users').then(setUsers).catch(() => {});
     void api.get<InviteDto[]>('/admin/invites').then(setInvites).catch(() => {});
   }, []);
   useEffect(load, [load]);
 
   if (me && !me.isAdmin) return <Navigate to="/settings" replace />;
-  if (off) return <WebAdminOff />;
+  if (off !== null) return <WebAdminOff command={off} />;
   if (!status) return <Center style={{ minHeight: '60vh' }}><Spinner /></Center>;
 
   const now = Date.now();

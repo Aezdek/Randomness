@@ -15,8 +15,11 @@ import xyz.aezdek.hush.protocol.ApiError
 import xyz.aezdek.hush.protocol.Wire
 import java.io.IOException
 
-/** A non-2xx answer from the server. [code] is the machine-readable `error` field (e.g. `stale_epoch`). */
-class ApiException(val status: Int, val code: String, message: String) : IOException(message)
+/**
+ * A non-2xx answer from the server. [code] is the machine-readable `error` field (e.g. `stale_epoch`); [command] is set
+ * on the few errors fixed by running something on the server.
+ */
+class ApiException(val status: Int, val code: String, message: String, val command: String? = null) : IOException(message)
 
 /**
  * The `/api/v1` client: JSON in and out with [Wire.json], the session's bearer token, and the same error shape the
@@ -81,7 +84,7 @@ class Api(baseUrl: String, val http: OkHttpClient) {
             val text = response.use { it.body.string() }
             val error = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
             if (response.code == 401 && token != null) onUnauthorized?.invoke()
-            throw ApiException(response.code, error?.error ?: "http_${response.code}", error?.message ?: "Request failed (${response.code})")
+            throw ApiException(response.code, error?.error ?: "http_${response.code}", error?.message ?: "Request failed (${response.code})", error?.command)
         }
         response
     }

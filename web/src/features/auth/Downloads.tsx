@@ -152,7 +152,7 @@ export function Downloads() {
               <ol className="dl-steps">
                 <li><span>Open Hush.apk once it has downloaded.</span></li>
                 <li><span>If Android asks, let your browser install apps.</span></li>
-                <li><span>Open Hush and sign in. New versions arrive by themselves.</span></li>
+                <li><span>Open Hush and sign in. If it asks for your server, it's {location.host}.</span></li>
               </ol>
               {build && (
                 <div className="dl-hash">

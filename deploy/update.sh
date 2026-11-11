@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Updates Hush on Resolute to the newest build CI published, after you approve it. No Watchtower: nothing
-# changes until you say yes here, and the running image is pinned by digest in .env.
+# Updates Hush to the newest published build, after you approve it. Nothing updates by itself: nothing changes
+# until you say yes here, and the running image is pinned by digest in .env.
 #
-#   sudo /opt/hl/hush/update.sh            show what's new, ask, update, health-check, roll back on failure
-#   sudo /opt/hl/hush/update.sh --check    only say whether an update is available
-#   sudo /opt/hl/hush/update.sh --rollback switch back to the previous image
-#   sudo /opt/hl/hush/update.sh --yes      don't ask (install.sh uses this for the first start)
+#   sudo ./update.sh            show what's new, ask, update, health-check, roll back on failure
+#   sudo ./update.sh --check    only say whether an update is available
+#   sudo ./update.sh --rollback switch back to the previous image
+#   sudo ./update.sh --yes      don't ask (install.sh and the admin panel use this)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,8 +16,8 @@ trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
 ROOT=${HUSH_ROOT:-$HERE}
 ENV_FILE=$ROOT/.env
-REPO=$(env_get "$ENV_FILE" HUSH_REPO)
-REPO=${HUSH_REPO:-${REPO:-Aezdek/Randomness}}
+REPO=${HUSH_REPO:-$(env_get "$ENV_FILE" HUSH_REPO)}
+[ -n "$REPO" ] || [ -n "${HUSH_RELEASE_BASE:-}" ] || die "HUSH_REPO is not set in $ENV_FILE (the GitHub repository releases come from, like owner/name)"
 RELEASE_BASE=${HUSH_RELEASE_BASE:-https://github.com/$REPO/releases/download/hush-latest}
 HEALTH_SECONDS=${HEALTH_SECONDS:-120}
 
@@ -55,6 +55,16 @@ start_pinned() {
 
 # The database is encrypted with a key this machine unseals by itself; made once (see lib.sh).
 [ "$mode" = check ] || ensure_machine_key "$ROOT"
+
+# What the server can't know by itself, for the commands and links it shows: where it is installed, and (for
+# installs from before this was recorded) the address the tunnel publishes it at.
+if [ "$mode" != check ]; then
+  [ "$(env_get "$ENV_FILE" HUSH_HOST_ROOT)" = "$ROOT" ] || env_set "$ENV_FILE" HUSH_HOST_ROOT "$ROOT"
+  if [ -z "$(env_get "$ENV_FILE" HUSH_HOSTNAME)" ]; then
+    found=$(ingress_host_for "${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}" "$PORT")
+    [ -z "$found" ] || env_set "$ENV_FILE" HUSH_HOSTNAME "$found"
+  fi
+fi
 
 if [ "$mode" = rollback ]; then
   [ -f "$ROOT/.env.previous" ] || die "there is no previous version to roll back to"
@@ -94,7 +104,7 @@ refresh_deploy() {
     return 0
   fi
   mkdir -p "$work/deploy" && tar -xzf "$work/deploy.tar.gz" -C "$work/deploy" --no-same-owner --no-same-permissions
-  for file in compose.yml update.sh backup.sh restore.sh control.sh setup.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
+  for file in compose.yml update.sh backup.sh restore.sh control.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
     [ -f "$work/deploy/$file" ] && [ ! -L "$work/deploy/$file" ] || continue
     cmp -s "$work/deploy/$file" "$ROOT/$file" && continue
     install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$work/deploy/$file" "$ROOT/$file"

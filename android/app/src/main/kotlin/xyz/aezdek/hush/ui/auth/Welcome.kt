@@ -48,7 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.ui.components.AezButton
 import xyz.aezdek.hush.ui.components.AezField
@@ -60,9 +64,79 @@ import xyz.aezdek.hush.ui.theme.Wordmark
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** What someone typed as their server, as an https address; null if it can't be one. */
+internal fun serverAddress(typed: String): String? {
+    val text = typed.trim().trimEnd('/').removePrefix("https://")
+    if (text.isEmpty() || text.startsWith("http://") || text.any { it.isWhitespace() || it == '/' || it == '@' }) return null
+    return "https://$text".takeIf { it.toHttpUrlOrNull() != null }
+}
+
+/**
+ * A build that wasn't made for one particular server asks which one is yours, once. It checks that a Hush server
+ * answers there before it takes the address.
+ */
+@Composable
+private fun ChooseServer() {
+    var address by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun submit() {
+        val url = serverAddress(address)
+        if (url == null) {
+            error = "Enter your server's address, like hush.example.com"
+            return
+        }
+        busy = true
+        error = null
+        scope.launch {
+            val answers = withContext(Dispatchers.IO) {
+                runCatching {
+                    Graph.http.newCall(Request.Builder().url("$url/healthz").build()).execute().use { it.isSuccessful && it.body.string().contains("\"ok\":true") }
+                }.getOrDefault(false)
+            }
+            busy = false
+            if (answers) Graph.useServer(url) else error = "No Hush server answered there. Check the address and your connection."
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Aez.colors.bg)) {
+        Aurora(Modifier.fillMaxSize())
+        Column(
+            Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.height(72.dp))
+            BrandMark(Modifier.size(64.dp))
+            Spacer(Modifier.height(14.dp))
+            Text("Hush", style = Wordmark.copy(fontSize = 46.sp, color = Aez.colors.text))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Hush runs on a server of your own.\nWhich one is yours?",
+                style = MaterialTheme.typography.bodyMedium, color = Aez.colors.text2, textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(36.dp))
+            Column(
+                Modifier.widthIn(max = 420.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Aez.colors.elev1.copy(alpha = 0.86f)).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AezField(address, { address = it.trim().lowercase() }, "Server address", supporting = "Like hush.example.com. Whoever invited you knows it.")
+                error?.let { Text(it, color = Aez.colors.danger, style = MaterialTheme.typography.bodySmall) }
+                AezButton("Continue", ::submit, Modifier.fillMaxWidth(), style = ButtonStyle.BRAND, busy = busy)
+            }
+            Spacer(Modifier.height(48.dp))
+        }
+    }
+}
+
 /** Sign in or create an account with an invite. The password never leaves the phone; only a derived key does. */
 @Composable
 fun Welcome() {
+    if (Graph.serverUrl.isBlank()) {
+        ChooseServer()
+        return
+    }
     var creating by remember { mutableStateOf(false) }
     var invite by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
@@ -132,6 +206,14 @@ fun Welcome() {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+            }
+            if (Graph.serverIsChosen) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "Server: ${Graph.serverUrl.removePrefix("https://")}  ·  Change",
+                    style = MaterialTheme.typography.bodySmall, color = Aez.colors.text3,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { Graph.useServer("") }.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
             }
             Spacer(Modifier.height(48.dp))
         }

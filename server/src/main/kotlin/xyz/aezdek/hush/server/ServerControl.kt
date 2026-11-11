@@ -79,7 +79,7 @@ class Settings(private val config: ServerConfig) {
  * control.sh (a systemd path unit on the host, installed by update.sh) picks it up, runs that one job, and writes
  * back how it went. Only the four jobs in [ServerAction] exist; nothing in the request is ever run as a command.
  */
-class ServerControl(config: ServerConfig, private val clock: Clock) {
+class ServerControl(private val config: ServerConfig, private val clock: Clock) {
     private val dir = File(config.dataDir, "control")
     private val request = File(dir, "request.env")
     private val status = File(dir, "status.env")
@@ -109,7 +109,10 @@ class ServerControl(config: ServerConfig, private val clock: Clock) {
     fun request(action: String, by: String): ControlStatusDto {
         if (action !in ServerAction.ALL) badRequest("Unknown action")
         if (!agentInstalled()) {
-            throw ApiException(HttpStatusCode.Conflict, "no_agent", "Server controls aren't installed yet: run sudo /opt/hl/hush/update.sh once on the server")
+            throw ApiException(
+                HttpStatusCode.Conflict, "no_agent", "Server controls aren't installed yet: run update.sh once on the server",
+                command = "sudo ${config.hostRoot}/update.sh",
+            )
         }
         val current = status()
         if (current != null && (current.state == "queued" || current.state == "running")) conflict("Wait for the ${current.action} that's running to finish", "busy")

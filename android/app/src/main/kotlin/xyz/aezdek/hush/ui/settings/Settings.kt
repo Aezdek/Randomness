@@ -565,7 +565,7 @@ internal fun Warning(text: String) {
 }
 
 internal fun shareInvite(context: Context, code: String) {
-    val text = "Join me on Hush: ${BuildConfig.SERVER_URL}\nInvite code: $code"
+    val text = "Join me on Hush: ${Graph.serverUrl}\nInvite code: $code"
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Hush invite", text))
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share invite")
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

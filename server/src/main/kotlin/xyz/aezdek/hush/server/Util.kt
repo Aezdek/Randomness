@@ -6,7 +6,7 @@ import java.security.SecureRandom
 import java.util.Base64
 
 /** An error the API reports as `{error, message}` with [status]. */
-class ApiException(val status: HttpStatusCode, val code: String, override val message: String) : RuntimeException(message)
+class ApiException(val status: HttpStatusCode, val code: String, override val message: String, val command: String? = null) : RuntimeException(message)
 
 fun badRequest(message: String, code: String = "bad_request"): Nothing = throw ApiException(HttpStatusCode.BadRequest, code, message)
 fun unauthorized(message: String = "Sign in again"): Nothing = throw ApiException(HttpStatusCode.Unauthorized, "unauthorized", message)

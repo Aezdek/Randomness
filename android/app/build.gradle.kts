@@ -20,7 +20,8 @@ android {
         versionCode = runNumber
         versionName = "1.0.$runNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "SERVER_URL", "\"${System.getenv("HUSH_SERVER_URL") ?: "https://hush.aezdek.xyz"}\"")
+        // The server this build is for (HUSH_SERVER_URL=https://hush.example.com). Without one the app asks on first start.
+        buildConfigField("String", "SERVER_URL", "\"${System.getenv("HUSH_SERVER_URL")?.trim().orEmpty()}\"")
     }
 
     buildTypes {

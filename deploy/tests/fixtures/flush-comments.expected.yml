@@ -5,11 +5,11 @@ originRequest:
   noTLSVerify: false
 
 ingress:
-- hostname: "lucifer.aezdek.xyz"   # the main site
+- hostname: "photos.example.com"   # the main site
   service: http://localhost:8080
-- hostname: 'print.aezdek.xyz'
+- hostname: 'files.example.com'
   service: http://localhost:8090
-- hostname: hush.aezdek.xyz
+- hostname: hush.example.com
   service: http://127.0.0.1:8472
 # Everything else gets a 404.
 # Keep this last.

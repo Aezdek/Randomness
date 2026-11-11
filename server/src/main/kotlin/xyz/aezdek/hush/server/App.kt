@@ -55,6 +55,7 @@ class Services(val config: ServerConfig, val clock: Clock, app: Application) {
     val control = ServerControl(config, clock)
     val elevation = Elevation(clock)
     val vault = Vault(config)
+    val local = LocalAccess(config).also { it.key() }
     val accounts = Accounts(db, clock, presence, settings)
     val objects = Objects(db, clock)
     val social = Social(db, clock, objects)
@@ -132,7 +133,7 @@ internal fun Application.basePlugins() {
         header("Strict-Transport-Security", "max-age=31536000")
     }
     install(StatusPages) {
-        exception<ApiException> { call, cause -> call.respond(cause.status, ApiError(cause.code, cause.message)) }
+        exception<ApiException> { call, cause -> call.respond(cause.status, ApiError(cause.code, cause.message, cause.command)) }
         exception<PayloadTooLargeException> { call, _ -> call.respond(HttpStatusCode.PayloadTooLarge, ApiError("too_large", "Request too large")) }
         exception<BadRequestException> { call, cause ->
             if (generateSequence<Throwable>(cause) { it.cause }.any { it is PayloadTooLargeException }) {

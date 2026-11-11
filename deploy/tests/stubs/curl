@@ -3,14 +3,22 @@
 # version "running"; tunnel hostnames answer 200, or 530 after a cloudflared restart if listed in
 # $STUB_BREAK_AFTER_RESTART.
 state=${STUB_STATE:?}
-url="" want_code=false out="" method=GET
+url="" want_code=false out="" method=GET local_key="" data=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
   case ${args[i]} in
     -w) want_code=true; i=$((i + 1)) ;;
     -o) out=${args[i + 1]}; i=$((i + 1)) ;;
     -X) method=${args[i + 1]}; i=$((i + 1)) ;;
-    -H | --data | --data-binary | --max-time | --retry | -d) i=$((i + 1)) ;;
+    -H)
+      [[ ${args[i + 1]} != "X-Hush-Local: "* ]] || local_key=${args[i + 1]#X-Hush-Local: }
+      i=$((i + 1))
+      ;;
+    --data | -d)
+      data=${args[i + 1]}
+      i=$((i + 1))
+      ;;
+    --data-binary | --max-time | --retry) i=$((i + 1)) ;;
     http://* | https://* | file://*) url=${args[i]} ;;
   esac
 done
@@ -41,8 +49,19 @@ case $url in
       answer 200 "{\"state\":\"$(cat "$state/server-state" 2>/dev/null || echo ready)\"}"
     fi
     ;;
+  http://127.0.0.1:*/api/v1/local/invites)
+    # Like the server: only with the key from data/local.key.
+    [ -n "$local_key" ] && [ "$local_key" = "$(cat "$root/data/local.key" 2>/dev/null)" ] || { answer 403 '{"error":"forbidden"}'; exit 0; }
+    answer 200 '{"code":"LOCAL-INVIT","createdAt":1,"expiresAt":2}'
+    ;;
+  http://127.0.0.1:*/api/v1/local/web-admin)
+    [ -n "$local_key" ] && [ "$local_key" = "$(cat "$root/data/local.key" 2>/dev/null)" ] || { answer 403 '{"error":"forbidden"}'; exit 0; }
+    printf '%s\n' "$data" >"$state/web-admin"
+    answer 200 '{"ok":true}'
+    ;;
   http://127.0.0.1:*/api/v1/setup/unlock)
     body=$(cat)
+    [ -n "$local_key" ] && [ "$local_key" = "$(cat "$root/data/local.key" 2>/dev/null)" ] || { answer 403 '{"error":"forbidden"}'; exit 0; }
     password=$(sed -n 's/.*"password":"\(.*\)"}$/\1/p' <<<"$body")
     if grep -qF "\"stub-password\":\"$password\"" "$root/data/keyring.json"; then
       echo ready >"$state/server-state"

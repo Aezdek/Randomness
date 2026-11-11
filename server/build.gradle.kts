@@ -10,7 +10,7 @@ kotlin {
 
 application {
     mainClass.set("xyz.aezdek.hush.server.MainKt")
-    // Resolute shares 6.7 GB with Immich, Jellyfin, Ollama and openGym: keep the heap small and predictable.
+    // Meant to share a small home server with other things: keep the heap small and predictable.
     applicationDefaultJvmArgs = listOf("-Xmx384m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=128m", "-Xss512k")
 }
 

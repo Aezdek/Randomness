@@ -1,37 +1,56 @@
 #!/usr/bin/env bash
-# Sets Hush up on Resolute, once. Safe to re-run: each step checks before it changes anything.
+# Sets Hush up on a Linux server that has Docker. It can be run again at any time: it keeps what was chosen before
+# and only does what is still missing.
 #
 #   curl -fsSLO https://github.com/Aezdek/Randomness/releases/download/hush-latest/install.sh
-#   sudo bash install.sh
+#   sudo bash install.sh           asks a few questions in the terminal
+#   sudo bash install.sh --gui     asks them in menus: windows on a desktop, full-screen menus in a terminal (over SSH)
+#   sudo bash install.sh --yes     asks nothing: the defaults, an earlier install's choices, and the settings below
 #
-# Optional, for TURN relays (calls on networks that block peer-to-peer):
-#   sudo CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash install.sh
+# Each setting answers one question ahead of time:
 #
-# What it does:
-#   1. checks Docker, cloudflared and the tools it needs; refuses to put data on a USB/removable disk
-#   2. lays out /opt/hl/hush like the other /opt/hl stacks and picks a port PORTS.md doesn't list
-#   3. installs and starts the newest image CI published (pinned by digest, see update.sh)
-#   4. adds hush.aezdek.xyz to /etc/cloudflared/config.yml *carefully*: backup, insert above the catch-all,
-#      `cloudflared tunnel ingress validate`, restart, re-check lucifer/print and every other hostname, and
-#      restore the backup if anything got worse
-#   5. installs the nightly backup timer (to the encrypted Google Drive remote)
+#   HUSH_HOSTNAME=hush.example.com    the address people will use
+#   HUSH_PUBLISH=tunnel|proxy|local   how it is reached: the Cloudflare Tunnel on this machine, your own reverse
+#                                     proxy, or not from outside yet
+#   HUSH_ROOT=/opt/hush               the folder it lives in
+#   HUSH_HOST_PORT=8470               its port on this machine (default: the first free one from 8470)
+#   RCLONE_REMOTE=name:               an encrypted rclone remote for the nightly backup (none: no backups)
+#   CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID   create a TURN key, for calls on networks that block direct ones
+#
+# What it does: checks the machine, lays out the folder, installs and starts the newest published image (pinned by
+# digest, see update.sh), asks for the server password that encrypts the database, publishes the address the way you
+# chose, and sets up the nightly backup and the admin panel's server controls.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT=${HUSH_ROOT:-/opt/hl/hush}
-HOST=${HUSH_HOSTNAME:-hush.aezdek.xyz}
 REPO=${HUSH_REPO:-Aezdek/Randomness}
 RELEASE_BASE=${HUSH_RELEASE_BASE:-https://github.com/$REPO/releases/download/hush-latest}
 CF_CONFIG=${CLOUDFLARED_CONFIG:-/etc/cloudflared/config.yml}
 CF_SERVICE=${CLOUDFLARED_SERVICE:-cloudflared}
-PORTS_MD=${PORTS_MD:-/opt/hl/PORTS.md}
 SYSTEMD_DIR=${SYSTEMD_DIR:-/etc/systemd/system}
 PORT_RANGE=${HUSH_PORT_RANGE:-8470-8499}
 RESTART_SETTLE_SECONDS=${RESTART_SETTLE_SECONDS:-60}
 
-# The deploy files: next to this script in a checkout, otherwise from the same release as the image. Files next to it
-# in the install folder itself are the installed copies (possibly older), so a re-run from there fetches fresh ones.
-if [ -f "$HERE/lib.sh" ] && [ -f "$HERE/compose.yml" ] && ! [ "$HERE" -ef "$ROOT" ]; then
+gui=false
+ask=true
+for arg in "$@"; do
+  case $arg in
+    --gui) gui=true ;;
+    --yes | -y) ask=false ;;
+    --help | -h)
+      sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      echo "error: unknown option $arg (try --help)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# The other deploy files: next to this script in a checkout, otherwise from the same release as the image. Files next
+# to it in the install folder itself are the installed copies (possibly older), so a run from there fetches fresh ones.
+if [ -f "$HERE/lib.sh" ] && [ -f "$HERE/compose.yml" ] && [ ! -f "$HERE/.env" ]; then
   SRC=$HERE
 else
   SRC=$(mktemp -d)
@@ -43,47 +62,183 @@ fi
 . "$SRC/lib.sh"
 set -E
 trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
-trap 'rm -rf "${SRC_TMP:-}"' EXIT
+trap 'status=$?; ui_farewell "$status"; rm -rf "${SRC_TMP:-}"' EXIT
 
-[ "$(id -u)" = 0 ] || [ -n "${HUSH_TEST:-}" ] || die "run with sudo"
+if $gui; then ui_pick; else export HUSH_UI=${HUSH_UI:-cli}; fi
 
-# ------------------------------------------------------------------------------------------- 1. preflight
+if [ "$(id -u)" != 0 ] && [ -z "${HUSH_TEST:-}" ]; then
+  # On a desktop, ask for the administrator's password in a window and carry on as root.
+  if [ "$HUSH_UI" = desktop ] && command -v pkexec >/dev/null; then
+    keep=("HUSH_UI=desktop" "HUSH_UI_USER=$(id -un)")
+    for name in DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS HUSH_HOSTNAME HUSH_PUBLISH HUSH_ROOT \
+      HUSH_HOST_PORT HUSH_REPO HUSH_RELEASE_BASE RCLONE_REMOTE RCLONE_CONFIG CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARED_CONFIG; do
+      [ -z "${!name:-}" ] || keep+=("$name=${!name}")
+    done
+    exec pkexec env "${keep[@]}" bash "$HERE/$(basename "${BASH_SOURCE[0]}")" "$@"
+  fi
+  die "run it with sudo: sudo bash $(basename "${BASH_SOURCE[0]}") $*"
+fi
+# Without a person to ask (no terminal, no windows), take the defaults.
+[ "$HUSH_UI" != cli ] || ui_has_terminal || ask=false
+
+# ------------------------------------------------------------------------------------------- the machine
 log "Checking this machine"
 missing=()
-for tool in docker curl flock ss findmnt lsblk sha256sum awk sed tar; do command -v "$tool" >/dev/null || missing+=("$tool"); done
-[ ${#missing[@]} -eq 0 ] || die "missing: ${missing[*]}"
-docker compose version >/dev/null 2>&1 || die "the Docker compose plugin is missing (apt install docker-compose-plugin)"
-command -v cloudflared >/dev/null || die "cloudflared is not installed; Hush is served through the existing tunnel"
-[ -f "$CF_CONFIG" ] || die "$CF_CONFIG not found (set CLOUDFLARED_CONFIG=... if it lives elsewhere)"
-grep -q '^ingress:' "$CF_CONFIG" || die "$CF_CONFIG has no ingress: section"
+for tool in docker curl flock ss findmnt lsblk sha256sum awk sed tar setpriv systemctl; do command -v "$tool" >/dev/null || missing+=("$tool"); done
+[ ${#missing[@]} -eq 0 ] || die "these are needed and missing: ${missing[*]}"
+docker compose version >/dev/null 2>&1 || die "Docker's compose plugin is missing (on Debian and Ubuntu: apt install docker-compose-plugin)"
+
+# An earlier install, wherever it was put: this script inside it, or the folder its systemd units point at.
+earlier=""
+if [ -f "$HERE/.env" ] && [ -f "$HERE/compose.yml" ]; then
+  earlier=$HERE
+else
+  for unit in "$SYSTEMD_DIR/hush-control.service" "$SYSTEMD_DIR/hush-backup.service"; do
+    [ -f "$unit" ] || continue
+    earlier=$(sed -n 's#^ExecStart=\(/.*\)/\(control\|backup\)\.sh.*#\1#p' "$unit" | head -n1)
+    [ -z "$earlier" ] || break
+  done
+fi
+[ -z "$earlier" ] || [ -f "$earlier/.env" ] || earlier=""
+ROOT=${HUSH_ROOT:-${earlier:-/opt/hush}}
+ENV_FILE=$ROOT/.env
+[ ! -f "$ENV_FILE" ] || note "Found Hush in $ROOT"
+
+have_tunnel=false
+if command -v cloudflared >/dev/null && [ -f "$CF_CONFIG" ] && grep -q '^ingress:' "$CF_CONFIG"; then have_tunnel=true; fi
+
+# ------------------------------------------------------------------------------------------- the questions
+port=${HUSH_HOST_PORT:-$(env_get "$ENV_FILE" HUSH_HOST_PORT)}
+HOST=${HUSH_HOSTNAME:-$(env_get "$ENV_FILE" HUSH_HOSTNAME)}
+PUBLISH=${HUSH_PUBLISH:-$(env_get "$ENV_FILE" HUSH_PUBLISH)}
+if [ -z "$HOST" ] && [ -n "$port" ] && $have_tunnel; then
+  # An install from before the address was recorded: the tunnel knows it.
+  HOST=$(ingress_host_for "$CF_CONFIG" "$port")
+  [ -z "$HOST" ] || PUBLISH=${PUBLISH:-tunnel}
+fi
+if [ -z "$PUBLISH" ]; then
+  if $have_tunnel; then PUBLISH=tunnel; else PUBLISH=proxy; fi
+fi
+
+# The rclone remotes that encrypt (crypt), from root's config or the config of whoever ran sudo.
+rclone_config=${RCLONE_CONFIG:-$(env_get "$ENV_FILE" RCLONE_CONFIG)}
+remote=${RCLONE_REMOTE:-$(env_get "$ENV_FILE" RCLONE_REMOTE)}
+crypts=""
+if command -v rclone >/dev/null; then
+  sudo_home=$(getent passwd "${SUDO_USER:-}" 2>/dev/null | cut -d: -f6 || true)
+  for config in "$rclone_config" "" "${sudo_home:+$sudo_home/.config/rclone/rclone.conf}"; do
+    [ -n "$config" ] && [ ! -f "$config" ] && continue
+    # `|| true`: finding nothing (no config, or no crypt remote in it) is a normal answer, not a failure.
+    crypts=$(RCLONE_CONFIG=${config:-${RCLONE_CONFIG:-}} rclone listremotes --long 2>/dev/null | awk '$2 == "crypt" { print $1 }' || true)
+    if [ -n "$crypts" ]; then
+      rclone_config=$config
+      break
+    fi
+  done
+  # Without being told: the only crypt remote there is, or the one that looks like a cloud drive.
+  if [ -z "$remote" ]; then
+    remote=$(grep -Ei 'drive|cloud|backup' <<<"$crypts" | head -n1 || true)
+    [ -n "$remote" ] || [ "$(grep -c . <<<"$crypts")" != 1 ] || remote=$crypts
+  fi
+fi
+
+valid_host() {
+  if [ "$PUBLISH" = local ]; then [[ $1 =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; else [[ $1 =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]]; fi
+}
+
+if $ask; then
+  [ "$HUSH_UI" = cli ] || ui_say "Hush" "This sets Hush up on this machine: a few questions, then it installs and starts. Nothing changes until you confirm at the end."
+
+  options=()
+  ! $have_tunnel || options+=(tunnel "Through the Cloudflare Tunnel on this machine")
+  options+=(proxy "Through my own reverse proxy (Caddy, nginx, Traefik)" local "Not from outside yet: only on this machine or network")
+  [ "$PUBLISH" != tunnel ] || $have_tunnel || PUBLISH=proxy
+  PUBLISH=$(ui_choose "Hush" "How will people reach Hush?" "$PUBLISH" "${options[@]}") || die "cancelled; nothing was changed"
+
+  while :; do
+    HOST=$(ui_ask "Hush" "The address people will use, like hush.example.com" "$HOST") || die "cancelled; nothing was changed"
+    HOST=${HOST,,}
+    HOST=${HOST#http://}
+    HOST=${HOST#https://}
+    HOST=${HOST%%/*}
+    valid_host "$HOST" && break
+    ui_say "Hush" "That doesn't look like an address. It should be a name like hush.example.com, without https:// in front."
+  done
+
+  if [ ! -f "$ENV_FILE" ] && [ -z "${HUSH_ROOT:-}" ]; then
+    while :; do
+      ROOT=$(ui_ask "Hush" "The folder to install it in" "$ROOT") || die "cancelled; nothing was changed"
+      [[ $ROOT == /* ]] && [[ $ROOT != *[[:space:]]* ]] && break
+      ui_say "Hush" "The folder has to be a full path without spaces, like /opt/hush."
+    done
+    ENV_FILE=$ROOT/.env
+  fi
+
+  if [ -n "$crypts" ]; then
+    options=()
+    while read -r name; do [ -z "$name" ] || options+=("$name" "Back up to $name every night"); done <<<"$crypts"
+    options+=(none "No backups for now")
+    grep -qxF "${remote:-none}" <<<"$crypts" || remote=none
+    remote=$(ui_choose "Hush" "Nightly backups go to an encrypted rclone remote. Which one?" "${remote:-none}" "${options[@]}") || die "cancelled; nothing was changed"
+  fi
+fi
+[ "$remote" != none ] || remote=""
+
+case $PUBLISH in tunnel | proxy | local) ;; *) die "HUSH_PUBLISH is tunnel, proxy or local (not $PUBLISH)" ;; esac
+[ -n "$HOST" ] || die "Hush needs the address people will use: run this in a terminal to be asked, or set HUSH_HOSTNAME=hush.example.com"
+valid_host "$HOST" || die "$HOST doesn't look like an address (it should be like hush.example.com)"
+[ "$PUBLISH" != tunnel ] || $have_tunnel || die "there is no Cloudflare Tunnel here ($CF_CONFIG with an ingress: section); choose HUSH_PUBLISH=proxy or local"
 
 mkdir -p "$ROOT/data/blobs" "$ROOT/data/snapshots"
 problem=$(disk_problem "$ROOT/data")
-if [ -n "$problem" ]; then
-  [ -n "${ALLOW_EXTERNAL_DISK:-}" ] || die "$problem. Hush's data must live on the internal disk (set ALLOW_EXTERNAL_DISK=1 to override)."
-  warn "$problem (allowed by ALLOW_EXTERNAL_DISK)"
+[ -z "$problem" ] || [ -n "${ALLOW_EXTERNAL_DISK:-}" ] || $ask || die "$problem. Put Hush on an internal disk, or set ALLOW_EXTERNAL_DISK=1 if that is what you want."
+
+if $ask; then
+  case $PUBLISH in
+    tunnel) how="through the Cloudflare Tunnel on this machine" ;;
+    proxy) how="through your own reverse proxy" ;;
+    *) how="only on this machine or network for now" ;;
+  esac
+  summary="Hush will be set up like this:
+
+  Address:  $HOST
+  Reached:  $how
+  Folder:   $ROOT
+  Backups:  ${remote:-off for now}"
+  [ -z "$problem" ] || summary="$summary
+
+Careful: $problem. A disk that can be unplugged is a risky home for everything Hush stores."
+  ui_yes "Hush" "$summary
+
+Go ahead?" || {
+    rmdir "$ROOT/data/blobs" "$ROOT/data/snapshots" "$ROOT/data" "$ROOT" 2>/dev/null || true
+    echo "Nothing was changed."
+    exit 0
+  }
 fi
+[ -z "$problem" ] || warn "$problem"
+ui_progress_open "Setting up Hush"
 note "Data: $ROOT/data ($(df -h --output=avail "$ROOT/data" | tail -n1 | tr -d ' ') free)"
 
-# ------------------------------------------------------------------------------------------- 2. layout
+# ------------------------------------------------------------------------------------------- the folder
 log "Files in $ROOT"
 for file in compose.yml update.sh backup.sh restore.sh control.sh lib.sh RUNBOOK.md systemd/hush-control.path systemd/hush-control.service; do
   [ -f "$SRC/$file" ] && ! [ "$SRC/$file" -ef "$ROOT/$file" ] && install -D -m "$([[ $file == *.sh ]] && echo 755 || echo 644)" "$SRC/$file" "$ROOT/$file"
 done
 
-ENV_FILE=$ROOT/.env
-port=$(env_get "$ENV_FILE" HUSH_HOST_PORT)
+# If you keep a PORTS.md beside your stacks (one folder up), Hush's port goes in it and is picked around it.
+PORTS_MD=${PORTS_MD:-$(dirname "$ROOT")/PORTS.md}
 if [ -z "$port" ]; then
   port=$(ports_port_of "$PORTS_MD" hush)
   if [ -z "$port" ]; then
     port=$(pick_port "$PORTS_MD" "${PORT_RANGE%-*}" "${PORT_RANGE#*-}") || die "no free port in $PORT_RANGE"
-    if [ -f "$PORTS_MD" ] || [ -d "$(dirname "$PORTS_MD")" ]; then
-      ports_add_row "$PORTS_MD" "$port" "Hush ($HOST), 127.0.0.1 only, $ROOT"
+    if [ -f "$PORTS_MD" ]; then
+      ports_add_row "$PORTS_MD" "$port" "Hush ($HOST), 127.0.0.1 only, $ROOT" "$ROOT" "$HOST"
       note "Port $port recorded in $PORTS_MD"
     fi
   fi
 elif port_bound "$port" && ! compose ps --status running -q 2>/dev/null | grep -q .; then
-  die "port $port (from .env) is taken by something else"
+  die "port $port is taken by something else"
 fi
 note "Port: 127.0.0.1:$port"
 
@@ -98,6 +253,16 @@ if [ ! -f "$ENV_FILE" ]; then
   } >>"$ENV_FILE"
 fi
 env_set "$ENV_FILE" HUSH_HOST_PORT "$port"
+env_set "$ENV_FILE" HUSH_HOSTNAME "$HOST"
+env_set "$ENV_FILE" HUSH_PUBLISH "$PUBLISH"
+env_set "$ENV_FILE" HUSH_HOST_ROOT "$ROOT"
+# Whose word the server takes for a visitor's address (it limits sign-in attempts per address): Cloudflare's header
+# behind the tunnel, the proxy's behind a proxy, nobody's otherwise.
+case $PUBLISH in
+  tunnel) env_set "$ENV_FILE" HUSH_CLIENT_IP_HEADER CF-Connecting-IP ;;
+  proxy) env_set "$ENV_FILE" HUSH_CLIENT_IP_HEADER X-Forwarded-For ;;
+  *) env_set "$ENV_FILE" HUSH_CLIENT_IP_HEADER none ;;
+esac
 
 # TURN: only with a Cloudflare API token, and only once.
 if [ -z "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
@@ -113,31 +278,16 @@ if [ -z "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] && [ -n "${CLOUDFLARE_API_TOKE
   note "TURN key $key_id saved in .env"
 fi
 
-# The rclone remote for backups: RCLONE_REMOTE, else a crypt remote that looks like Google Drive, else the only
-# crypt remote. root may not have one, but the user who ran sudo might.
-rclone_config=$(env_get "$ENV_FILE" RCLONE_CONFIG)
-remote=$(env_get "$ENV_FILE" RCLONE_REMOTE)
-if [ -z "$remote" ] && command -v rclone >/dev/null; then
-  for config in "${RCLONE_CONFIG:-}" "" "$(getent passwd "${SUDO_USER:-}" 2>/dev/null | cut -d: -f6)/.config/rclone/rclone.conf"; do
-    [ -n "$config" ] && [ ! -f "$config" ] && continue
-    # `|| true`: finding nothing (no config, or no crypt remote in it) is a normal answer, not a failure.
-    crypts=$(RCLONE_CONFIG=${config:-${RCLONE_CONFIG:-}} rclone listremotes --long 2>/dev/null | awk '$2 == "crypt" { print $1 }' || true)
-    remote=${RCLONE_REMOTE:-$(grep -Ei 'g(oogle)?drive' <<<"$crypts" | head -n1 || true)}
-    [ -n "$remote" ] || [ "$(grep -c . <<<"$crypts")" != 1 ] || remote=$crypts
-    if [ -n "$remote" ]; then
-      rclone_config=$config
-      break
-    fi
-  done
+if [ -n "$remote" ]; then
+  env_set "$ENV_FILE" RCLONE_REMOTE "$remote"
+  [ -z "$rclone_config" ] || env_set "$ENV_FILE" RCLONE_CONFIG "$rclone_config"
 fi
-[ -n "$remote" ] && env_set "$ENV_FILE" RCLONE_REMOTE "$remote"
-[ -n "$rclone_config" ] && env_set "$ENV_FILE" RCLONE_CONFIG "$rclone_config"
 
-# ------------------------------------------------------------------------------------------- 3. image
-chown -R 10001:10001 "$ROOT/data" 2>/dev/null || [ -n "${HUSH_TEST:-}" ] || die "could not hand $ROOT/data to the container user"
+# ------------------------------------------------------------------------------------------- the image
+chown -R "$CONTAINER_USER" "$ROOT/data" 2>/dev/null || [ -n "${HUSH_TEST:-}" ] || die "could not hand $ROOT/data to the container user"
 HUSH_ROOT=$ROOT HUSH_RELEASE_BASE=$RELEASE_BASE "$ROOT/update.sh" --yes
 
-# ------------------------------------------------------------------------------------------- 4. tunnel
+# ------------------------------------------------------------------------------------------- the address
 configure_tunnel() {
   local service="http://127.0.0.1:$port" stamp backup candidate rule host
   if ingress_has_host "$CF_CONFIG" "$HOST"; then
@@ -247,9 +397,14 @@ configure_tunnel() {
   done
   note "https://$HOST answers"
 }
-configure_tunnel
 
-# ------------------------------------------------------------------------------------------- 5. backups
+case $PUBLISH in
+  tunnel) configure_tunnel ;;
+  proxy) note "Hush listens on 127.0.0.1:$port; your proxy does the rest (how is below)" ;;
+  *) note "Hush listens on 127.0.0.1:$port, on this machine only" ;;
+esac
+
+# ------------------------------------------------------------------------------------------- backups
 log "Backups"
 sed "s#@ROOT@#$ROOT#g" "$SRC/systemd/hush-backup.service" >"$SYSTEMD_DIR/hush-backup.service"
 install -m 644 "$SRC/systemd/hush-backup.timer" "$SYSTEMD_DIR/hush-backup.timer"
@@ -263,25 +418,52 @@ else
   systemctl disable --now hush-backup.timer >/dev/null 2>&1 || true
   printf '{"ok":false,"lastRunAt":%s,"lastSuccessAt":null,"message":"Backups are not set up yet: see RUNBOOK.md"}\n' "$(date +%s)" |
     owner_write "$ROOT/data/backup-status.json"
+  note "Off: there is no encrypted rclone remote to send them to yet"
 fi
 
 # ------------------------------------------------------------------------------------------- server controls
 log "Server controls"
 "$ROOT/control.sh" install
 
-# ------------------------------------------------------------------------------------------- summary
+# ------------------------------------------------------------------------------------------- done
+ui_progress_close
+invite=$(as_owner cat "$ROOT/data/first-invite.txt" 2>/dev/null | head -c 32 | tr -cd 'A-Z0-9-' || true)
+if [ "$PUBLISH" = local ]; then open="http://127.0.0.1:$port"; else open="https://$HOST"; fi
+lines=("Open:          $open")
+[ -z "$invite" ] || lines+=("First invite:  $invite   (whoever uses it becomes the admin)")
+lines+=("Android app:   $open/download/hush.apk" "Update later:  sudo $ROOT/update.sh")
+$backups_ready || lines+=("Backups:       OFF until there is an encrypted rclone remote. RUNBOOK.md says how; then run this again.")
+[ -n "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] || lines+=("Calls:         direct only. For relayed calls, run this again with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.")
+
 echo
 log "Hush is installed."
-note "Open:           https://$HOST"
-invite=$(cat "$ROOT/data/first-invite.txt" 2>/dev/null || true)
-[ -n "$invite" ] && note "First invite:   $invite   (whoever uses it becomes the admin)"
-[ -f "$ROOT/data/keyring.json" ] && note "Database:       encrypted; this machine unlocks it by itself (the server password is for restores)"
-note "Android app:    https://$HOST/download/hush.apk"
-note "Update later:   sudo $ROOT/update.sh"
-[ -n "$(env_get "$ENV_FILE" CF_TURN_KEY_ID)" ] || note "Calls:          STUN only. For TURN, re-run with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
-if ! $backups_ready; then
+for line in "${lines[@]}"; do note "$line"; done
+if [ "$PUBLISH" = proxy ]; then
   echo
-  warn "backups are OFF until an encrypted rclone remote exists. Once, as root:"
-  note "  rclone config     # n) new remote 'gdrive' (Google Drive), then n) new remote 'gdrive-crypt' (crypt, remote gdrive:hush-crypt)"
-  note "  then: sudo bash install.sh   (re-running is safe; it enables the timer)"
+  log "Point your reverse proxy at it"
+  note "Send https://$HOST to http://127.0.0.1:$port, WebSockets included, with uploads of at least 40 MB allowed."
+  note "It must add X-Forwarded-For (most do): Hush refuses its server-only requests when it sees it, and limits"
+  note "sign-in attempts by it."
+  note ""
+  note "Caddy:   $HOST {"
+  note "             reverse_proxy 127.0.0.1:$port"
+  note "         }"
+  note ""
+  note "nginx:   location / {"
+  note "             proxy_pass http://127.0.0.1:$port;"
+  note "             proxy_http_version 1.1;"
+  note "             proxy_set_header Host \$host;"
+  note "             proxy_set_header Upgrade \$http_upgrade;"
+  note "             proxy_set_header Connection \"upgrade\";"
+  note "             proxy_set_header X-Forwarded-For \$remote_addr;"
+  note "             client_max_body_size 40m;"
+  note "         }"
+fi
+if [ "$HUSH_UI" != cli ]; then
+  text="Hush is installed."
+  for line in "${lines[@]}"; do text="$text"$'\n'"$line"; done
+  [ "$PUBLISH" != proxy ] || text="$text"$'\n\n'"One thing left: point your reverse proxy at http://127.0.0.1:$port. The terminal (and RUNBOOK.md in $ROOT) shows how for Caddy and nginx."
+  # Windows use a proportional font: the padding that lines the terminal's columns up only looks ragged there.
+  [ "$HUSH_UI" != desktop ] || text=$(sed 's/   */ /g' <<<"$text")
+  ui_say "Hush" "$text"
 fi

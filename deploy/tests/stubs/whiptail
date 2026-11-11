@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Test double for whiptail (and dialog): takes its answers, one per box, from $STUB_STATE/answers, and writes what
+# it was asked to $STUB_STATE/menus.log. Like the real one, the answer goes to stderr.
+state=${STUB_STATE:?}
+kind="" text=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case ${args[i]} in
+    --msgbox | --yesno | --inputbox | --passwordbox | --menu) kind=${args[i]#--}; text=${args[i + 1]} ;;
+  esac
+done
+printf '%s: %s\n' "$kind" "${text//$'\n'/ / }" >>"$state/menus.log"
+[ "$kind" != msgbox ] || exit 0
+answer=$(head -n1 "$state/answers" 2>/dev/null)
+sed -i 1d "$state/answers" 2>/dev/null
+case $kind in
+  yesno) [ "$answer" = yes ] ;;
+  *)
+    [ "$answer" != CANCEL ] || exit 1
+    printf '%s' "$answer" >&2
+    ;;
+esac

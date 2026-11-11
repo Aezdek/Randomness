@@ -46,7 +46,7 @@ async function request<T>(method: string, path: string, body?: unknown, init?: R
       /* not JSON */
     }
     if (response.status === 401 && token) onUnauthorized?.();
-    throw new ApiError(response.status, parsed.error, parsed.message);
+    throw new ApiError(response.status, parsed.error, parsed.message, parsed.command ?? null);
   }
   if (response.status === 204) return undefined as T;
   const type = response.headers.get('Content-Type') ?? '';

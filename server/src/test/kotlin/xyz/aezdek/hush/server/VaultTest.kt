@@ -162,20 +162,31 @@ class VaultTest {
             application { setupServer(config, locked) { again = it } }
             val http = createClient { install(ClientNegotiation) { json(Wire.json) } }
             assertEquals(ServerState.LOCKED, http.get("/api/v1/setup").body<SetupStatus>().state)
+            val key = File(data, "local.key").readText().trim()
             val viaTunnel = http.post("/api/v1/setup/unlock") {
                 contentType(ContentType.Application.Json)
                 header("CF-Ray", "8a1b2c3d4e5f-LHR")
+                header(LocalAccess.HEADER, key)
                 setBody(UnlockRequest(password))
             }
             assertEquals(HttpStatusCode.Forbidden, viaTunnel.status)
+            // The right password is not enough without the key only the server's own files hold.
+            val keyless = http.post("/api/v1/setup/unlock") {
+                contentType(ContentType.Application.Json)
+                setBody(UnlockRequest(password))
+            }
+            assertEquals(HttpStatusCode.Forbidden, keyless.status)
+            assertNull(again)
             val wrong = http.post("/api/v1/setup/unlock") {
                 contentType(ContentType.Application.Json)
+                header(LocalAccess.HEADER, key)
                 setBody(UnlockRequest("not it, not even close"))
             }
             assertEquals(HttpStatusCode.Forbidden, wrong.status)
             Thread.sleep(2_100)
             val right = http.post("/api/v1/setup/unlock") {
                 contentType(ContentType.Application.Json)
+                header(LocalAccess.HEADER, key)
                 setBody(UnlockRequest(password))
             }
             assertEquals(HttpStatusCode.OK, right.status)

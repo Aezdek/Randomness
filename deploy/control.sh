@@ -6,10 +6,10 @@
 # exist, chosen from a fixed list: nothing in the request is ever run as a command, and nothing in data/control is
 # read or written as root.
 #
-#   sudo /opt/hl/hush/control.sh                 run the waiting request (systemd does this)
-#   sudo /opt/hl/hush/control.sh web-admin on    turn the web admin back on after it was turned off (or: off)
-#   sudo /opt/hl/hush/control.sh invite          make an invite code here, e.g. while the web admin is off
-#   sudo /opt/hl/hush/control.sh install         set up the systemd units (update.sh and install.sh run this)
+#   sudo ./control.sh                 run the waiting request (systemd does this)
+#   sudo ./control.sh web-admin on    turn the web admin back on after it was turned off (or: off)
+#   sudo ./control.sh invite          make an invite code here, e.g. while the web admin is off
+#   sudo ./control.sh install         set up the systemd units (update.sh and install.sh run this)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -104,13 +104,14 @@ restart_hush() {
   fi
 }
 
-# Hush's own endpoints for this machine only (they refuse anything that came through the tunnel).
+# Hush's own endpoints for this machine only: they want the key in data/local.key, and refuse anything a tunnel or
+# proxy forwarded.
 local_call() { # local_call PATH [JSON]
   local port body='{}'
   [ $# -lt 2 ] || body=$2
   port=$(env_get "$ENV_FILE" HUSH_HOST_PORT)
   [ -n "$port" ] || die "HUSH_HOST_PORT is not set in $ENV_FILE"
-  curl -fsS -X POST -H 'Content-Type: application/json' --data "$body" "http://127.0.0.1:$port/api/v1/local/$1"
+  curl -fsS -X POST -H 'Content-Type: application/json' -H "X-Hush-Local: $(local_key "$ROOT")" --data "$body" "http://127.0.0.1:$port/api/v1/local/$1"
 }
 
 install_units() {
@@ -143,7 +144,7 @@ case ${1:-run} in
     [ -n "$code" ] || die "could not make an invite (is Hush full?)"
     host=$(env_get "$ENV_FILE" HUSH_HOSTNAME)
     log "Invite: $code"
-    note "Link: https://${host:-hush.aezdek.xyz}/?invite=$code"
+    [ -z "$host" ] || note "Link: https://$host/?invite=$code"
     ;;
   install) install_units ;;
   *) die "unknown command $1 (see the top of this script)" ;;

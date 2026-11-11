@@ -13,12 +13,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import xyz.aezdek.hush.crypto.Sodium
+import xyz.aezdek.hush.crypto.toHex
 import xyz.aezdek.hush.protocol.ApiError
 import xyz.aezdek.hush.protocol.Health
 import xyz.aezdek.hush.protocol.ServerState
 import xyz.aezdek.hush.protocol.SetupRequest
 import xyz.aezdek.hush.protocol.SetupStatus
 import xyz.aezdek.hush.protocol.UnlockRequest
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermissions
 
 /**
  * What runs until the database can be opened: a fresh server waiting for its server password, or one that this machine
@@ -26,16 +31,18 @@ import xyz.aezdek.hush.protocol.UnlockRequest
  * being set up), the Android download and `/healthz`; the rest of the API waits.
  *
  * Setting the password and unlocking are only accepted from the server itself (update.sh calls them on 127.0.0.1), never
- * through Cloudflare, so the password never crosses the internet: requests the tunnel forwarded carry its headers.
+ * through a tunnel or proxy, so the password never crosses the internet (see [LocalAccess]).
  */
 fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteArray) -> Unit) {
     val log = LoggerFactory.getLogger("hush.setup")
+    val local = LocalAccess(config)
+    local.key()
     basePlugins()
     if (vault.state() == ServerState.SETUP) {
         vault.setupCode()
-        log.info("Hush is waiting for its server password, set on the server itself: sudo /opt/hl/hush/update.sh (or re-run install.sh)")
+        log.info("Hush is waiting for its server password, set on the server itself: sudo ${config.hostRoot}/update.sh (or run install.sh again)")
     } else {
-        log.info("Hush is locked: this machine can't unseal the database key. Unlock with: sudo /opt/hl/hush/update.sh")
+        log.info("Hush is locked: this machine can't unseal the database key. Unlock with: sudo ${config.hostRoot}/update.sh")
     }
     var lastAttempt = 0L
 
@@ -44,7 +51,7 @@ fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteAr
         route("/api/v1") {
             get("/setup") { call.respond(SetupStatus(vault.state())) }
             post("/setup") {
-                call.requireLocal()
+                local.requireDirect(call)
                 val request = call.receive<SetupRequest>()
                 if (vault.state() != ServerState.SETUP) conflict("This server is already set up", "exists")
                 val expected = vault.setupCode().encodeToByteArray()
@@ -54,7 +61,7 @@ fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteAr
                 onReady(key)
             }
             post("/setup/unlock") {
-                call.requireLocal()
+                local.require(call)
                 val request = call.receive<UnlockRequest>()
                 // Argon2id already makes each guess take a second; one at a time on top of that.
                 synchronized(vault) {
@@ -76,9 +83,54 @@ fun Application.setupServer(config: ServerConfig, vault: Vault, onReady: (ByteAr
     }
 }
 
-/** Cloudflare adds these to everything it forwards; update.sh on the server itself sends none of them. */
-private val FORWARDED = listOf("CF-Connecting-IP", "CF-Ray", "CF-IPCountry", "X-Forwarded-For", "X-Forwarded-Proto", "Forwarded", "CDN-Loop")
+/**
+ * What makes a request "from the server itself" (update.sh and control.sh, over 127.0.0.1). Two things, both needed:
+ *
+ * - it carries the key in data/local.key, which only someone who can read the server's files has. The server writes it
+ *   on first start; the scripts read it and send it as `X-Hush-Local`;
+ * - it did not arrive through a proxy: Cloudflare and ordinary reverse proxies add the headers below to what they forward.
+ *
+ * The headers alone are not enough: a reverse proxy set up without them would make every visitor look local.
+ */
+class LocalAccess(config: ServerConfig) {
+    private val file = File(config.dataDir, "local.key")
 
-internal fun ApplicationCall.requireLocal() {
-    if (FORWARDED.any { request.headers[it] != null }) forbidden("Set the server password on the server itself: sudo /opt/hl/hush/update.sh")
+    @Volatile
+    private var cached: String? = null
+
+    fun key(): String = cached ?: synchronized(this) {
+        cached ?: run {
+            val existing = file.takeIf { it.isFile }?.readText()?.trim()?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }
+            val key = existing ?: Sodium.random(32).toHex().also { fresh ->
+                file.parentFile.mkdirs()
+                val temp = File(file.parentFile, ".local.key.tmp")
+                temp.writeText("$fresh\n")
+                runCatching { Files.setPosixFilePermissions(temp.toPath(), PosixFilePermissions.fromString("rw-------")) }
+                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            }
+            cached = key
+            key
+        }
+    }
+
+    fun require(call: ApplicationCall) {
+        val refusal = "Do this on the server itself: sudo update.sh (or control.sh) in Hush's folder"
+        if (FORWARDED.any { call.request.headers[it] != null }) forbidden(refusal)
+        val sent = call.request.headers[HEADER]?.trim().orEmpty()
+        if (!Sodium.constantTimeEquals(sent.encodeToByteArray(), key().encodeToByteArray())) forbidden(refusal)
+    }
+
+    /** For setting the first password, where the setup code already proves who is asking: only the proxy check. */
+    fun requireDirect(call: ApplicationCall) {
+        if (FORWARDED.any { call.request.headers[it] != null }) forbidden("Set the server password on the server itself: sudo update.sh in Hush's folder")
+    }
+
+    companion object {
+        const val HEADER = "X-Hush-Local"
+
+        /** What Cloudflare and reverse proxies add to everything they forward; the scripts on the server send none of them. */
+        private val FORWARDED = listOf(
+            "CF-Connecting-IP", "CF-Ray", "CF-IPCountry", "X-Forwarded-For", "X-Forwarded-Proto", "X-Forwarded-Host", "X-Real-IP", "Forwarded", "Via", "CDN-Loop",
+        )
+    }
 }

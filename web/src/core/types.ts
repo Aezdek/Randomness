@@ -79,6 +79,8 @@ export interface ControlStatusDto {
 export interface AdminServerDto {
   settings: ServerSettingsDto; version: string; commit?: string | null; latestVersion?: string | null; updateAvailable?: boolean;
   agent: boolean; control?: ControlStatusDto | null; log?: string | null; unlockedUntil?: number | null;
+  /** Where Hush is installed on the server, for the commands the panel shows. */
+  folder?: string;
 }
 /** The bounds the server accepts (ServerLimits in Api.kt). */
 export const SERVER_LIMITS = { members: [2, 50], inviteDays: [1, 30], minFreeGb: [1, 500] } as const;

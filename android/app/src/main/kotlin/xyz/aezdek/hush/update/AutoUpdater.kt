@@ -28,7 +28,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * Keeps the app up to date by itself, from your own server: it reads `https://hush.aezdek.xyz/version`, and when that
+ * Keeps the app up to date by itself, from your own server: it reads `/version` there, and when that
  * build is newer than this one it downloads the APK, checks it against the SHA-256 the server lists, and installs it.
  *
  * It never interrupts: not during a call, and not while you're using the app (it asks, or waits until Hush is in the
@@ -130,7 +130,7 @@ object AutoUpdater {
     }
 
     private suspend fun fetchLatest(): AppVersion? = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(BuildConfig.SERVER_URL.trimEnd('/') + "/version").header("Cache-Control", "no-cache").build()
+        val request = Request.Builder().url(Graph.serverUrl + "/version").header("Cache-Control", "no-cache").build()
         Graph.http.newCall(request).execute().use { response ->
             when {
                 response.code == 404 -> null // this server has no Android build yet
@@ -146,7 +146,7 @@ object AutoUpdater {
         val file = File(dir, "hush-${version.versionCode}.apk")
         _state.value = State.Downloading(version, 0f)
         // The build number in the URL keeps a cache between here and the server from handing back an older APK.
-        val url = BuildConfig.SERVER_URL.trimEnd('/') + version.url + (if ('?' in version.url) "&" else "?") + "v=${version.versionCode}"
+        val url = Graph.serverUrl + version.url + (if ('?' in version.url) "&" else "?") + "v=${version.versionCode}"
         Graph.http.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw UserFacingException("The server couldn't send the update (${response.code}).")
             val digest = MessageDigest.getInstance("SHA-256")

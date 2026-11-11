@@ -125,17 +125,23 @@ class AdminServerTest {
             assertEquals(path, "web_admin_off", response.body<ApiError>().error)
         }
 
-        // Through the tunnel the server-only endpoints refuse; on the server itself they work.
+        // The server-only endpoints need the key from the data folder, and refuse anything a proxy forwarded.
+        val key = File(dataDir, "local.key").readText().trim()
         val viaTunnel = http.post("/api/v1/local/web-admin") {
             contentType(ContentType.Application.Json)
             header("CF-Connecting-IP", "203.0.113.7")
+            header(LocalAccess.HEADER, key)
             setBody(WebAdminRequest(true))
         }
         assertEquals(HttpStatusCode.Forbidden, viaTunnel.status)
-        val invite = http.post("/api/v1/local/invites").body<InviteDto>()
+        // A proxy that adds no headers at all makes visitors look local: without the key they still get nowhere.
+        assertEquals(HttpStatusCode.Forbidden, http.post("/api/v1/local/invites").status)
+        assertEquals(HttpStatusCode.Forbidden, http.post("/api/v1/local/invites") { header(LocalAccess.HEADER, "0".repeat(64)) }.status)
+        val invite = http.post("/api/v1/local/invites") { header(LocalAccess.HEADER, key) }.body<InviteDto>()
         assertNotNull(invite.code)
         val onServer = http.post("/api/v1/local/web-admin") {
             contentType(ContentType.Application.Json)
+            header(LocalAccess.HEADER, key)
             setBody(WebAdminRequest(true))
         }
         assertEquals(HttpStatusCode.OK, onServer.status)

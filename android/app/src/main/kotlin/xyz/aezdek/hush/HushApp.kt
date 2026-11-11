@@ -1,6 +1,7 @@
 package xyz.aezdek.hush
 
 import android.app.Application
+import android.content.Intent
 import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +92,24 @@ object Graph {
         booted.value = true
     }
 
+    /** This app's Hush server: the one chosen on this phone, else the one the build was made for; blank if neither. */
+    val serverUrl: String get() = (prefs.serverUrl ?: BuildConfig.SERVER_URL).trim().trimEnd('/')
+
+    /** Whether the server's address was typed in here (it can then be changed), not built in. */
+    val serverIsChosen: Boolean get() = BuildConfig.SERVER_URL.isBlank()
+
+    /**
+     * Points the app at another server ("" to ask again) and starts it afresh: everything it holds, from the
+     * connection to the local cache, was set up around the old address.
+     */
+    fun useServer(url: String) {
+        prefs.serverUrl = url
+        app.packageManager.getLaunchIntentForPackage(app.packageName)?.let { launch ->
+            app.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        }
+        Runtime.getRuntime().exit(0)
+    }
+
     fun init(app: HushApp) {
         this.app = app
         prefs = Prefs(app)
@@ -101,7 +120,7 @@ object Graph {
             .pingInterval(25, TimeUnit.SECONDS)
             .build()
         client = AezClient(
-            BuildConfig.SERVER_URL,
+            serverUrl,
             http,
             SqliteTables(app),
             KeystoreSecrets(app),

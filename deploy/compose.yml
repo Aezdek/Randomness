@@ -1,5 +1,5 @@
-# Hush on Resolute. The image is pinned in .env (HUSH_IMAGE + HUSH_IMAGE_ID, set by update.sh), never
-# pulled: there is no registry to pull from and no Watchtower, so nothing changes until you run update.sh.
+# Hush. The image is pinned in .env (HUSH_IMAGE + HUSH_IMAGE_ID, set by update.sh), never pulled: there is no
+# registry to pull from and nothing that updates by itself, so nothing changes until you run update.sh.
 name: hush
 
 services:
@@ -14,13 +14,14 @@ services:
       HUSH_PORT: "8080"
       # This machine's database key (see update.sh / lib.sh: ensure_machine_key). Never in data/ or the backups.
       HUSH_MACHINE_KEY_FILE: /run/secrets/hush/machine.key
-    # Only cloudflared on this machine talks to it.
+    # Only this machine reaches it: the tunnel or reverse proxy on it publishes it. (HUSH_BIND in .env changes
+    # that, for a proxy in another container or a test on your own network.)
     ports:
-      - "127.0.0.1:${HUSH_HOST_PORT:?}:8080"
+      - "${HUSH_BIND:-127.0.0.1}:${HUSH_HOST_PORT:?}:8080"
     volumes:
       - ./data:/data
       - ${HUSH_SECRETS_DIR:-./secrets}:/run/secrets/hush:ro
-    # Shares 6.7 GB with Immich, Jellyfin, Ollama and openGym: the JVM heap is capped at 384 MB inside this.
+    # Small enough to share a home server with other things: the JVM heap is capped at 384 MB inside this.
     mem_limit: 512m
     read_only: true
     tmpfs:

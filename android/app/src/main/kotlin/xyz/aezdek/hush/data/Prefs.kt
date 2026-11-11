@@ -40,6 +40,16 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("samsungNeverSleeping", false)
         set(value) = prefs.edit().putBoolean("samsungNeverSleeping", value).apply()
 
+    /**
+     * The Hush server this app talks to, when it was chosen on this phone: builds made for one server come with its
+     * address, others ask for it on first start. Saved at once, because the app restarts right after it changes.
+     */
+    var serverUrl: String?
+        get() = prefs.getString("serverUrl", null)
+        set(value) {
+            prefs.edit().putString("serverUrl", value).commit()
+        }
+
     /** Install updates from the server by themselves (on by default). */
     var autoUpdate: Boolean
         get() = prefs.getBoolean("autoUpdate", true)

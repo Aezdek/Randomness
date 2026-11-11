@@ -202,6 +202,7 @@ export function ServerPanel({ status, onChanged }: { status: AdminStatus; onChan
   const lock = () => void api.post('/admin/server/lock').then(() => setServer((s) => (s ? { ...s, unlockedUntil: null } : s)));
 
   const noAgent = !server.agent;
+  const folder = server.folder ?? '/opt/hush';
 
   return (
     <div className="server-panel">
@@ -230,9 +231,9 @@ export function ServerPanel({ status, onChanged }: { status: AdminStatus; onChan
           <span>
             <b>One step on the server first</b>
             <span className="faint">The buttons below need Hush's helper on the server. The next update installs it; run this once over SSH:</span>
-            <code>sudo /opt/hl/hush/update.sh</code>
+            <code>sudo {folder}/update.sh</code>
           </span>
-          <button className="btn btn-secondary btn-sm" onClick={() => copy('sudo /opt/hl/hush/update.sh')}>
+          <button className="btn btn-secondary btn-sm" onClick={() => copy(`sudo ${folder}/update.sh`)}>
             <Copy size={14} /> Copy
           </button>
         </div>
@@ -362,8 +363,8 @@ export function ServerPanel({ status, onChanged }: { status: AdminStatus; onChan
             The admin panel closes for every admin, here and in the app. Members, invites and the server keep working. To turn it back on, run
             this on the server:
           </p>
-          <code className="server-code">sudo /opt/hl/hush/control.sh web-admin on</code>
-          <p className="faint">While it's off, that script also makes invites: sudo /opt/hl/hush/control.sh invite</p>
+          <code className="server-code">sudo {folder}/control.sh web-admin on</code>
+          <p className="faint">While it's off, that script also makes invites: sudo {folder}/control.sh invite</p>
           <button className="btn btn-danger btn-block" onClick={turnOff}>
             <ShieldOff size={16} /> Turn off the web admin
           </button>
@@ -373,8 +374,9 @@ export function ServerPanel({ status, onChanged }: { status: AdminStatus; onChan
   );
 }
 
-/** What admins see while the web admin is off. */
-export function WebAdminOff() {
+/** What admins see while the web admin is off. [command] is what the server says turns it back on. */
+export function WebAdminOff({ command }: { command?: string | null }) {
+  const on = command || 'sudo ./control.sh web-admin on';
   return (
     <div className="admin page">
       <div className="web-admin-off">
@@ -382,12 +384,12 @@ export function WebAdminOff() {
         <h1>The web admin is off</h1>
         <p className="faint">It was turned off from this panel. Hush itself keeps working; to manage it here again, turn the web admin back on from the server:</p>
         <div className="server-callout">
-          <code>sudo /opt/hl/hush/control.sh web-admin on</code>
-          <button className="btn btn-secondary btn-sm" onClick={() => copy('sudo /opt/hl/hush/control.sh web-admin on')}>
+          <code>{on}</code>
+          <button className="btn btn-secondary btn-sm" onClick={() => copy(on)}>
             <Copy size={14} /> Copy
           </button>
         </div>
-        <p className="faint">Invites, while it's off: sudo /opt/hl/hush/control.sh invite</p>
+        <p className="faint">Invites, while it's off: {on.replace(/web-admin on$/, 'invite')}</p>
       </div>
     </div>
   );

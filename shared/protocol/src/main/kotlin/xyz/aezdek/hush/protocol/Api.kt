@@ -437,6 +437,8 @@ data class AdminServerDto(
     /** The end of the last job's output. */
     val log: String? = null,
     val unlockedUntil: Long? = null,
+    /** Where Hush is installed on the server, for the commands the panel shows (`sudo <folder>/update.sh`). */
+    val folder: String = "/opt/hush",
 )
 
 @Serializable
@@ -516,8 +518,9 @@ data class AdminChatDto(
 @Serializable
 data class AppVersion(val versionCode: Int, val versionName: String, val sha256: String, val size: Long, val url: String)
 
+/** [command]: for the few errors that are fixed by running something on the server, what to run there. */
 @Serializable
-data class ApiError(val error: String, val message: String)
+data class ApiError(val error: String, val message: String, val command: String? = null)
 
 /** [state] is a [ServerState]: whether the server is set up and unlocked (see the server's Vault). */
 @Serializable

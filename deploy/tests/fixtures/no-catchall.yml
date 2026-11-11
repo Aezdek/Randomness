@@ -1,4 +1,4 @@
 tunnel: resolute
 ingress:
-  - hostname: lucifer.aezdek.xyz
+  - hostname: photos.example.com
     service: http://127.0.0.1:8080

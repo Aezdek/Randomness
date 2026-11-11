@@ -1,6 +1,8 @@
 export interface ApiErrorBody {
   error: string;
   message: string;
+  /** For the few errors fixed by running something on the server: what to run there. */
+  command?: string | null;
 }
 
 export class ApiError extends Error {
@@ -8,6 +10,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly command: string | null = null,
   ) {
     super(message);
   }

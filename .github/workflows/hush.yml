@@ -16,6 +16,9 @@ permissions:
 
 env:
   VERSION: 1.0.${{ github.run_number }}
+  # The server the Android app is built for. Set the repository variable HUSH_SERVER_URL to your own address; a
+  # build with none asks for the server on first start, so one APK serves any server.
+  HUSH_SERVER_URL: ${{ vars.HUSH_SERVER_URL || 'https://hush.aezdek.xyz' }}
 
 jobs:
   server:
@@ -145,7 +148,7 @@ jobs:
           name: android-screenshots
           path: android/app/build/screenshots/
           if-no-files-found: ignore
-      # The APK leaves CI unsigned. Resolute signs it with a key that never leaves the server (deploy/entrypoint.sh),
+      # The APK leaves CI unsigned. Each server signs it with a key that never leaves it (deploy/entrypoint.sh),
       # using the apksigner from this SDK, so no signing secret exists on GitHub to steal.
       - name: Bundle the unsigned APK with apksigner
         run: |
@@ -298,7 +301,8 @@ jobs:
           mkdir -p out
           docker save "$TAG" | gzip -n > out/hush-image.tar.gz
           tar -czf out/hush-deploy.tar.gz -C deploy lib.sh compose.yml update.sh backup.sh restore.sh control.sh RUNBOOK.md systemd
-          cp deploy/install.sh out/install.sh
+          # install.sh fetches the rest from the repository that published it.
+          sed "s#Aezdek/Randomness#$GITHUB_REPOSITORY#g" deploy/install.sh > out/install.sh
           SHA=$(sha256sum out/hush-image.tar.gz | cut -c1-64)
           cat > out/hush-release.env <<EOF
           HUSH_COMMIT=$GITHUB_SHA
@@ -314,8 +318,8 @@ jobs:
             echo "### Hush $VERSION"
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Image: \`$TAG\`, archive sha256 \`$SHA\` ($(du -h out/hush-image.tar.gz | cut -f1))"
-            echo "- APK: $([ -f deploy/apk/hush-unsigned.apk ] && echo 'included, signed on Resolute at start' || echo 'not in this build')"
-            echo "- On Resolute: \`sudo /opt/hl/hush/update.sh\`"
+            echo "- APK: $([ -f deploy/apk/hush-unsigned.apk ] && echo 'included, signed on the server when it starts' || echo 'not in this build')"
+            echo "- On the server: \`sudo ./update.sh\` in Hush's folder"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to the hush-latest release
         env:
@@ -332,7 +336,7 @@ jobs:
           }
           git tag -f hush-latest "$GITHUB_SHA"
           retry git push -f origin refs/tags/hush-latest
-          NOTES="Hush $VERSION, built from ${GITHUB_SHA::12}. Install: see deploy/RUNBOOK.md. Update on Resolute: sudo /opt/hl/hush/update.sh"
+          NOTES="Hush $VERSION, built from ${GITHUB_SHA::12}. Install: download install.sh below and run it with sudo (deploy/RUNBOOK.md has the details). Update: sudo ./update.sh in Hush's folder on the server."
           if gh release view hush-latest >/dev/null 2>&1; then
             retry gh release edit hush-latest --title "Hush $VERSION" --notes "$NOTES"
           else

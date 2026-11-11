@@ -125,7 +125,16 @@ class RateLimiter(private val clock: Clock) {
     }
 }
 
-private fun ApplicationCall.clientIp() = request.headers["CF-Connecting-IP"] ?: request.origin.remoteAddress
+/**
+ * Who is asking, for the rate limits. Behind Cloudflare that is its `CF-Connecting-IP`; behind another reverse proxy,
+ * the last address in `X-Forwarded-For` (the one the proxy itself saw: anything before it is the visitor's own claim).
+ * Which one to believe is the installer's choice (HUSH_CLIENT_IP_HEADER); a header nobody was told to trust is ignored.
+ */
+private fun ApplicationCall.clientIp(s: Services): String {
+    val header = s.config.clientIpHeader
+    val value = header?.let { request.headers[it] }?.split(',')?.lastOrNull()?.trim()?.takeIf { it.isNotEmpty() && it.length <= 64 }
+    return value ?: request.origin.remoteAddress
+}
 
 private fun ApplicationCall.bearer(): String? =
     request.headers[HttpHeaders.Authorization]?.takeIf { it.startsWith("Bearer ") }?.removePrefix("Bearer ")?.trim()
@@ -141,7 +150,10 @@ private fun ApplicationCall.param(name: String): String = parameters[name] ?: ba
 /** Every admin endpoint: refused, for everyone, while the web admin is turned off (control.sh on the server turns it on). */
 private fun webAdminGate(s: Services) {
     if (!s.settings.webAdmin) {
-        throw ApiException(HttpStatusCode.Forbidden, "web_admin_off", "The web admin is turned off. Turn it back on on the server: sudo /opt/hl/hush/control.sh web-admin on")
+        throw ApiException(
+            HttpStatusCode.Forbidden, "web_admin_off", "The web admin is turned off. It is turned back on from the server itself.",
+            command = "sudo ${s.config.hostRoot}/control.sh web-admin on",
+        )
     }
 }
 
@@ -163,12 +175,12 @@ fun Route.api(s: Services) = route("/api/v1") {
     // ---------------------------------------------------------------------------------------------------- auth
     post("/auth/prelogin") {
         val req = call.receive<PreloginRequest>()
-        s.limiter.check("prelogin:${call.clientIp()}", 60, 10 * MINUTE)
+        s.limiter.check("prelogin:${call.clientIp(s)}", 60, 10 * MINUTE)
         call.respond(blocking { s.accounts.prelogin(req.username.trim().lowercase().take(64)) })
     }
     post("/auth/signup") {
         val req = call.receive<SignupRequest>()
-        s.limiter.check("signup:${call.clientIp()}", 10, 60 * MINUTE)
+        s.limiter.check("signup:${call.clientIp(s)}", 10, 60 * MINUTE)
         val fx = Effects()
         val response = blocking { s.accounts.signup(req, fx) }
         s.realtime.apply(fx)
@@ -176,7 +188,7 @@ fun Route.api(s: Services) = route("/api/v1") {
     }
     post("/auth/login") {
         val req = call.receive<LoginRequest>()
-        val ip = call.clientIp()
+        val ip = call.clientIp(s)
         // Per address whatever name is tried, then per address and name. The name is cleaned up first (the same way the
         // lookup does it), so spaces or capitals don't make a fresh allowance, and nothing unbounded becomes a key.
         s.limiter.check("login-ip:$ip", 40, 10 * MINUTE)
@@ -636,12 +648,12 @@ fun Route.api(s: Services) = route("/api/v1") {
 
     // ------------------------------------------------------------- the server itself (control.sh, over 127.0.0.1)
     post("/local/web-admin") {
-        call.requireLocal()
+        s.local.require(call)
         s.settings.setWebAdmin(call.receive<WebAdminRequest>().enabled)
         call.respond(OkResponse())
     }
     post("/local/invites") {
-        call.requireLocal()
+        s.local.require(call)
         call.respond(blocking { s.accounts.createInviteOnServer() })
     }
 }
@@ -690,6 +702,7 @@ fun adminServer(s: Services, session: Session): AdminServerDto {
         // What the last job printed, only while the controls are unlocked with the server password.
         log = s.control.log().takeIf { s.elevation.unlockedUntil(session.id) != null },
         unlockedUntil = s.elevation.unlockedUntil(session.id),
+        folder = s.config.hostRoot,
     )
 }
 

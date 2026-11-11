@@ -30,6 +30,8 @@ case "${1:-}" in
         secrets=$(env_of "$env_file" HUSH_SECRETS_DIR)
         cat "$secrets/machine.key" 2>/dev/null >"$state/machine-key-now" || : >"$state/machine-key-now"
         mkdir -p "$root/data"
+        # The key that marks a request as coming from this machine.
+        [ -s "$root/data/local.key" ] || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$root/data/local.key"
         if [ ! -f "$root/data/keyring.json" ]; then
           echo setup >"$state/server-state"
           echo "SETUP-CODE1-23456" >"$root/data/setup-code.txt"

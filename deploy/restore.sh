@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Rebuilds Hush's data from the off-site backup, for a new disk or a new machine.
 #
-#   sudo ./restore.sh                         newest snapshot into /opt/hl/hush
+#   sudo ./restore.sh                         newest snapshot, into this folder (or /opt/hush)
 #   sudo ./restore.sh --date 2026-10-28       that night's snapshot
-#   sudo ./restore.sh --to /opt/hl/hush --remote gdrive-crypt: [--force]
+#   sudo ./restore.sh --to /opt/hush --remote gdrive-crypt: [--force]
 #
 # Afterwards run update.sh --yes (or install.sh on a fresh machine) to start the server on the restored data. The
 # database is encrypted: on a new machine, update.sh asks for the server password once to unlock it there.
@@ -15,7 +15,8 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 set -E
 trap 'stopped "$LINENO" "$BASH_COMMAND"' ERR
 
-ROOT=${HUSH_ROOT:-/opt/hl/hush}
+# Into the install this script sits in, when it does; otherwise the usual place.
+if [ -f "$HERE/compose.yml" ] && [ -f "$HERE/update.sh" ] && [ -d "$HERE/data" -o -f "$HERE/.env" ]; then ROOT=${HUSH_ROOT:-$HERE}; else ROOT=${HUSH_ROOT:-/opt/hush}; fi
 REMOTE=${RCLONE_REMOTE:-}
 date=""
 force=false

@@ -111,7 +111,7 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   const alice = await person(browser, 'alice');
   await alice.page.goto('/');
   await expect(alice.page.getByRole('heading', { name: 'Hush is being set up' })).toBeVisible();
-  expect(readdirSync(DATA_DIR).filter((f) => !['setup-code.txt', 'apk'].includes(f))).toEqual([]);
+  expect(readdirSync(DATA_DIR).filter((f) => !['setup-code.txt', 'local.key', 'apk'].includes(f))).toEqual([]);
   await shot(alice.page, 'server-setup-desktop');
   const code = readFileSync(join(DATA_DIR, 'setup-code.txt'), 'utf8').trim();
   // Through the tunnel it's refused; from the server itself (like update.sh) it works.
@@ -497,9 +497,12 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await alice.page.getByRole('switch', { name: 'Web admin' }).click();
   await alice.page.getByRole('button', { name: 'Turn off the web admin' }).click();
   await expect(alice.page.getByRole('heading', { name: 'The web admin is off' })).toBeVisible({ timeout: 15_000 });
-  const throughTunnel = await request.post('/api/v1/local/web-admin', { data: { enabled: true }, headers: { 'CF-Connecting-IP': '203.0.113.7' } });
+  // Turning it back on is for the server itself: it takes the key in the data folder, and nothing a proxy forwarded.
+  const localKey = readFileSync(join(DATA_DIR, 'local.key'), 'utf8').trim();
+  const throughTunnel = await request.post('/api/v1/local/web-admin', { data: { enabled: true }, headers: { 'CF-Connecting-IP': '203.0.113.7', 'X-Hush-Local': localKey } });
   expect(throughTunnel.status()).toBe(403);
-  expect((await request.post('/api/v1/local/web-admin', { data: { enabled: true } })).ok()).toBe(true);
+  expect((await request.post('/api/v1/local/web-admin', { data: { enabled: true } })).status()).toBe(403);
+  expect((await request.post('/api/v1/local/web-admin', { data: { enabled: true }, headers: { 'X-Hush-Local': localKey } })).ok()).toBe(true);
   await alice.page.goto('/admin');
   await expect(alice.page.locator('.admin-row.member').filter({ hasText: '@cara' })).toBeVisible({ timeout: 15_000 });
   await alice.page.goto(`/verify/${await bob.page.evaluate(() => '')}`).catch(() => undefined);
