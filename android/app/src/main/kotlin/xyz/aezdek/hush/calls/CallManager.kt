@@ -94,7 +94,7 @@ data class CallUi(
  * is restarted by the offering side and given up if it stays down, so a call never sits frozen.
  */
 class CallManager(private val context: Context, private val client: AezClient) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1) + xyz.aezdek.hush.CrashLog.handler)
     private val _state = MutableStateFlow(CallUi())
     val state: StateFlow<CallUi> = _state
 

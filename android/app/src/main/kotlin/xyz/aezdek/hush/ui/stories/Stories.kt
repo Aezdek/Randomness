@@ -195,8 +195,9 @@ private fun StoryRun(stories: List<Entity>, active: Boolean, onFinished: () -> U
 
     LaunchedEffect(story.id, active) {
         if (!active) return@LaunchedEffect
-        Graph.client.engine.markStorySeen(story.id)
-        if (!mine) Graph.client.composer.recordView(story.id)
+        runCatching { Graph.client.engine.markStorySeen(story.id) }
+        // Telling the server it was seen can fail (offline, the story just expired); the story still plays.
+        if (!mine) runCatching { Graph.client.composer.recordView(story.id) }
     }
     LaunchedEffect(story.id, active, paused || typing || menu || viewers) {
         if (!active || paused || typing || menu || viewers) {

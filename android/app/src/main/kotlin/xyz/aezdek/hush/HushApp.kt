@@ -46,7 +46,7 @@ object Graph {
         private set
     lateinit var notifier: Notifier
         private set
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CrashLog.handler)
 
     /** True once the stored session (if any) has been restored, so the UI never flashes the sign-in screen. */
     val booted = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -134,10 +134,13 @@ object Graph {
         // Call signals and test rings, whether or not the background service is running.
         scope.launch {
             client.realtime.frames.collect { frame ->
-                when (frame.t) {
-                    WsType.SIGNAL -> calls.onSignal(frame)
-                    WsType.RING_TEST -> calls.testRing()
-                }
+                // One bad frame must not stop the calls that come after it.
+                runCatching {
+                    when (frame.t) {
+                        WsType.SIGNAL -> calls.onSignal(frame)
+                        WsType.RING_TEST -> calls.testRing()
+                    }
+                }.onFailure { android.util.Log.w("Hush", "Call signal failed", it) }
             }
         }
     }
@@ -146,6 +149,7 @@ object Graph {
 class HushApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         Graph.init(this)
         Graph.notifier.createChannels()
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->

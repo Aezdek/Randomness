@@ -1,6 +1,8 @@
 package xyz.aezdek.hush
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -19,6 +21,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
@@ -44,6 +55,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.flow.MutableStateFlow
 import xyz.aezdek.hush.service.ConnectionService
+import xyz.aezdek.hush.ui.CreateKind
 import xyz.aezdek.hush.ui.LocalNav
 import xyz.aezdek.hush.ui.Navigator
 import xyz.aezdek.hush.ui.Screen
@@ -83,16 +95,31 @@ class MainActivity : FragmentActivity() {
         handle(intent)
     }
 
-    /** Notification taps carry where to go. */
+    /** Notification taps carry where to go (CI's smoke test opens every screen this way too). Only ever navigates. */
     private fun handle(intent: Intent?) {
         val target = intent?.getStringExtra(EXTRA_OPEN) ?: return
         val (kind, id) = target.split(':', limit = 2).let { it[0] to it.getOrNull(1) }
+        val me = Graph.client.state.value.me?.id
         when (kind) {
+            "home" -> navigator.go(Screen.Home)
             "chat" -> id?.let { navigator.go(Screen.Chat(it)) }
+            "chat-info" -> id?.let { navigator.go(Screen.ThreadInfo(it)) }
             "activity" -> navigator.go(Screen.Activity)
             "post" -> id?.let { navigator.go(Screen.Post(it)) }
             "inbox" -> navigator.go(Screen.Inbox)
+            "new-chat" -> navigator.go(Screen.NewChat)
+            "explore" -> navigator.go(Screen.Explore())
+            "search" -> navigator.go(Screen.Explore(search = true))
+            "reels" -> navigator.go(Screen.Reels())
+            "profile" -> (id ?: me)?.let { navigator.go(Screen.Profile(it)) }
+            "edit-profile" -> navigator.go(Screen.EditProfile)
+            "followers" -> (id ?: me)?.let { navigator.go(Screen.FollowList(it, followers = true)) }
+            "stories" -> id?.let { navigator.go(Screen.Stories(listOf(it))) }
+            "hashtag" -> id?.let { navigator.go(Screen.Hashtag(it)) }
+            "verify" -> id?.let { navigator.go(Screen.Verify(it)) }
+            "settings" -> navigator.go(Screen.Settings(id))
             "readiness" -> navigator.go(Screen.Readiness)
+            "create" -> CreateKind.entries.firstOrNull { it.name.equals(id, ignoreCase = true) }?.let { navigator.go(Screen.Create(it)) }
         }
     }
 
@@ -115,7 +142,48 @@ class MainActivity : FragmentActivity() {
                 }
             }
             ToastHost(Modifier.align(Alignment.BottomCenter))
+            if (booted) LastCrash()
         }
+    }
+
+    /** After Hush closed unexpectedly: what happened, ready to copy and pass on to whoever can fix it. */
+    @Composable
+    private fun LastCrash() {
+        var report by remember { mutableStateOf(CrashLog.pending()?.takeIf { it.startsWith("Crash") }) }
+        val text = report ?: return
+        val context = LocalContext.current
+        fun dismiss() {
+            CrashLog.clear()
+            report = null
+        }
+        AlertDialog(
+            onDismissRequest = ::dismiss,
+            containerColor = Aez.colors.elev1,
+            title = { Text("Hush closed unexpectedly") },
+            text = {
+                Column {
+                    Text(
+                        "Sorry about that. The details below say where it went wrong, and nothing about your messages or account. " +
+                            "Copy them and send them to whoever runs your server, or include them in a bug report.",
+                        style = MaterialTheme.typography.bodyMedium, color = Aez.colors.text2,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text.lineSequence().take(14).joinToString("\n"),
+                        fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp, color = Aez.colors.text3,
+                        modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton({
+                    (context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Hush crash report", text))
+                    Graph.toast("Copied")
+                    dismiss()
+                }) { Text("Copy details", fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = { TextButton(::dismiss) { Text("Close") } },
+        )
     }
 
     @Composable

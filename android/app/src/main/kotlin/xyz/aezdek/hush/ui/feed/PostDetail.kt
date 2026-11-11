@@ -83,7 +83,7 @@ fun PostDetail(id: String) {
     LaunchedEffect(id, entity == null) {
         if (entity == null) {
             val dto = runCatching { Graph.client.api.get<ObjectDto>("/objects/$id") }.getOrNull()
-            if (dto == null) missing = true else Graph.client.engine.ingest(listOf(dto))
+            if (dto == null || runCatching { Graph.client.engine.ingest(listOf(dto)) }.isFailure) missing = true
             kotlinx.coroutines.delay(1500)
             if (Graph.client.state.value.entities[id] == null) missing = true
         }

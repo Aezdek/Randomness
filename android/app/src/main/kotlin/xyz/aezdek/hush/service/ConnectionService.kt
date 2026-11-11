@@ -51,7 +51,7 @@ class ConnectionService : Service() {
             stopSelf()
             return
         }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + xyz.aezdek.hush.CrashLog.handler)
         this.scope = scope
         val client = Graph.client
         client.realtime.connect()
@@ -81,39 +81,46 @@ class ConnectionService : Service() {
         super.onDestroy()
     }
 
+    private var lastRequests: Set<String> = emptySet()
+
     private suspend fun watchForNotifications() {
         val client = Graph.client
-        var lastRequests = client.state.value.followRequests.toSet()
+        lastRequests = client.state.value.followRequests.toSet()
         client.index
             .map { it to client.state.value }
             .distinctUntilChanged { a, b -> a.first === b.first && a.second.followRequests == b.second.followRequests }
             .collect { (index, state) ->
-                val me = state.me?.id ?: return@collect
-                if (!state.initialSyncDone) return@collect
-                val prefs = Graph.prefs
-                val newest = state.entities.values.maxOfOrNull { it.dto.receivedAt } ?: 0L
-                if (prefs.notifiedUpTo == 0L) {
-                    // First run on this device: don't replay history as notifications.
-                    prefs.notifiedUpTo = newest
-                    lastRequests = state.followRequests.toSet()
-                    return@collect
-                }
-                val since = prefs.notifiedUpTo
-                val fresh = state.entities.values.filter { it.dto.receivedAt > since && it.dto.authorId != me }
-                if (fresh.isNotEmpty()) {
-                    notifyMessages(fresh, index, state, me)
-                    notifyActivity(fresh, index, state, me)
-                }
-                prefs.notifiedUpTo = maxOf(since, newest)
-                val requests = state.followRequests.toSet()
-                if (index.settings.notifyFollows) {
-                    for (id in requests - lastRequests) {
-                        val name = state.users[id]?.username ?: continue
-                        Graph.notifier.activity("req:$id".hashCode(), "Follow request", "@$name wants to follow you", "activity")
-                    }
-                }
-                lastRequests = requests
+                // A notification that can't be made is skipped; the ones after it still come.
+                runCatching { notifyAbout(index, state) }.onFailure { android.util.Log.w("Hush", "Notification failed", it) }
             }
+    }
+
+    private fun notifyAbout(index: Index, state: AppState) {
+        val me = state.me?.id ?: return
+        if (!state.initialSyncDone) return
+        val prefs = Graph.prefs
+        val newest = state.entities.values.maxOfOrNull { it.dto.receivedAt } ?: 0L
+        if (prefs.notifiedUpTo == 0L) {
+            // First run on this device: don't replay history as notifications.
+            prefs.notifiedUpTo = newest
+            lastRequests = state.followRequests.toSet()
+            return
+        }
+        val since = prefs.notifiedUpTo
+        val fresh = state.entities.values.filter { it.dto.receivedAt > since && it.dto.authorId != me }
+        prefs.notifiedUpTo = maxOf(since, newest)
+        if (fresh.isNotEmpty()) {
+            notifyMessages(fresh, index, state, me)
+            notifyActivity(fresh, index, state, me)
+        }
+        val requests = state.followRequests.toSet()
+        if (index.settings.notifyFollows) {
+            for (id in requests - lastRequests) {
+                val name = state.users[id]?.username ?: continue
+                Graph.notifier.activity("req:$id".hashCode(), "Follow request", "@$name wants to follow you", "activity")
+            }
+        }
+        lastRequests = requests
     }
 
     private fun foregroundOn(threadId: String?): Boolean =
