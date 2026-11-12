@@ -76,11 +76,17 @@ def check(step: str) -> None:
     adb("logcat", "-b", "crash", "-b", "system", "-c")
 
 
+last_dump_error = ""
+
+
 def nodes() -> list[dict]:
+    global last_dump_error
     for _ in range(4):
         shell("rm -f /sdcard/ui.xml")
-        shell("uiautomator dump /sdcard/ui.xml", timeout=45)
+        said = shell("uiautomator dump /sdcard/ui.xml", timeout=45).strip()
         xml = adb("exec-out", "cat", "/sdcard/ui.xml")
+        if not xml.lstrip().startswith("<?xml"):
+            last_dump_error = said or "no output"
         if xml.lstrip().startswith("<?xml"):
             try:
                 root = ET.fromstring(xml)
@@ -102,6 +108,19 @@ def nodes() -> list[dict]:
                 return found
         time.sleep(1.5)
     return []
+
+
+def on_screen() -> str:
+    """What the screen shows, for the log when something can't be found."""
+    seen = [n["text"] or n["desc"] for n in nodes() if (n["text"] or n["desc"]) and n["pkg"] == PKG]
+    if not seen:
+        return f"nothing readable (uiautomator: {last_dump_error})"
+    return " | ".join(seen[:40])
+
+
+def tap_at(node: dict) -> None:
+    shell(f"input tap {node['x']} {node['y']}")
+    time.sleep(1.2)
 
 
 def find(matches, timeout: float = 20) -> list[dict]:
@@ -175,7 +194,7 @@ def step(name: str, action) -> None:
         action()
     except Missing as e:
         misses.append(f"{name}: couldn't find \"{e}\"")
-        log(f"  couldn't find \"{e}\"")
+        log(f"  couldn't find \"{e}\". On screen: {on_screen()}")
     except Exception as e:  # noqa: BLE001 - a broken step shouldn't stop the rest
         misses.append(f"{name}: {e}")
         log(f"  {e}")
@@ -212,11 +231,13 @@ def main() -> int:
     step("first start asks for the server", launch)
 
     def choose_server():
-        boxes = fields()
-        if not boxes:
-            raise Missing("Server address field")
+        boxes = fields(timeout=30)
+        button = find(labelled("Continue"), timeout=5)
+        if not boxes or not button:
+            raise Missing("Server address field and Continue")
         type_into(boxes[0], SERVER)
-        tap("Continue")
+        log(f"  typed the address; on screen: {on_screen()}")
+        tap_at(button[0])
         # The app restarts on the new server.
         if not visible("Create account", timeout=60):
             raise Missing("Create account")
@@ -224,20 +245,22 @@ def main() -> int:
 
     def sign_up():
         tap("Create account", which=0)
-        time.sleep(1)
-        # Invite code, username, password, confirm password. Looked up afresh each time, in case the form moved.
-        for i, text in enumerate([INVITE, "ava", PASSWORD, PASSWORD]):
-            boxes = fields()
-            if len(boxes) <= i:
-                raise Missing(f"sign-up field {i + 1} (found {len(boxes)})")
-            type_into(boxes[i], text)
-        tap("Create account", which=-1)
+        time.sleep(1.5)
+        # Invite code, username, password, confirm password, and the button under them, all found before typing.
+        boxes = fields()
+        buttons = find(labelled("Create account"), timeout=5)
+        if len(boxes) < 4 or len(buttons) < 2:
+            raise Missing(f"the sign-up form (fields: {len(boxes)}, buttons: {len(buttons)})")
+        for box, text in zip(boxes, [INVITE, "ava", PASSWORD, PASSWORD]):
+            type_into(box, text)
+        tap_at(buttons[-1])
         if not visible("Home", timeout=180):
             raise Missing("Home (signed in)")
     step("sign up", sign_up)
     if not visible("Home", timeout=5):
         log("Signing up didn't work, so nothing else can be tried.")
-        return report()
+        report()
+        return 1
 
     step("home feed", lambda: time.sleep(4))
     seed = seeded()
@@ -266,8 +289,13 @@ def main() -> int:
         boxes = fields()
         if not boxes:
             raise Missing("message field")
+        # Send takes the place of the heart at the end of the row once there's text.
+        heart = find(labelled("Send a heart"), timeout=5)
         type_into(boxes[-1], "Hello from the smoke test")
-        tap("Send")
+        send = find(labelled("Send"), timeout=8) or heart
+        if not send:
+            raise Missing("Send")
+        tap_at(send[0])
         time.sleep(4)
     step("send a message", send_message)
     step("message menu", lambda: long_press("Hey! Is this the new app?"))

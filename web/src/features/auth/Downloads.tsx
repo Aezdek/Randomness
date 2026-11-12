@@ -13,7 +13,7 @@ import { EASE, Eyebrow, Reveal, useFitScreen } from './LandingBits';
 
 type Platform = 'android' | 'ios' | 'desktop';
 
-function detectPlatform(): Platform {
+export function detectPlatform(): Platform {
   const ua = navigator.userAgent;
   if (/Android/i.test(ua)) return 'android';
   if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
@@ -97,6 +97,47 @@ function DeviceFrame({ kind }: { kind: 'tablet' | 'phone' }) {
       </div>
     </div>
   );
+}
+
+/**
+ * On a phone, the landing page's way to the app: on Android the APK itself, straight from this server; on an
+ * iPhone or iPad, the steps for adding Hush to the Home Screen. Nothing on a computer, which has the whole page.
+ */
+export function GetTheApp({ hint = true }: { hint?: boolean }) {
+  const [platform] = useState(detectPlatform);
+  const build = useAndroidBuild();
+  if (platform === 'android') {
+    return (
+      <div className="lp-get-app">
+        {build ? (
+          <a className="btn btn-glass btn-lg" href="/download/hush.apk" download>
+            <Download size={18} /> Download for Android
+          </a>
+        ) : (
+          <Link className="btn btn-glass btn-lg" to="/download">
+            <Download size={18} /> Get the Android app
+          </Link>
+        )}
+        {build && hint && (
+          <small>
+            {megabytes(build.size)} · <Link to="/download#dl-android">How to install</Link>
+          </small>
+        )}
+      </div>
+    );
+  }
+  if (platform === 'ios') {
+    const tablet = /iPad/.test(navigator.userAgent) || /Macintosh/.test(navigator.userAgent);
+    return (
+      <div className="lp-get-app">
+        <Link className="btn btn-glass btn-lg" to="/download#dl-ios">
+          <Smartphone size={18} /> Get Hush on your {tablet ? 'iPad' : 'iPhone'}
+        </Link>
+        {hint && <small>Add it to your Home Screen and it opens like an app</small>}
+      </div>
+    );
+  }
+  return null;
 }
 
 function Card({ id, here, icon, title, children }: { id: Platform; here: boolean; icon: ReactNode; title: string; children: ReactNode }) {

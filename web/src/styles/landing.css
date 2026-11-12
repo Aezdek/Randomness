@@ -138,6 +138,27 @@ html:has(.landing) {
   justify-content: center;
   gap: 12px;
 }
+/* The app for the phone you're on (Downloads.tsx, GetTheApp): its own row under the other buttons. */
+.lp-get-app {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.lp-get-app .btn {
+  width: min(100%, 360px);
+}
+.lp-get-app small {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.lp-get-app small a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* Soft glows: solid shapes, blurred (the same trick as the page this is modelled on). */
 .lp-glow {
@@ -894,10 +915,23 @@ html:has(.landing) {
   font-size: 10px;
   letter-spacing: 0.02em;
 }
+/* The photo takes whatever height the rest of the post leaves, so the likes and the caption always fit on the
+   screen above the tab bar, however tall the phone drawn around it is. */
 .la-screen .la-post {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.la-screen .la-post > * {
+  flex: none;
+}
+.la-screen .la-post > .la-photo {
+  flex: 1 1 0;
+  min-height: 72px;
+  max-height: 100cqw;
+  aspect-ratio: auto;
 }
 .la-screen .la-tabbar {
   flex: none;
@@ -962,9 +996,15 @@ html:has(.landing) {
 .la-share-head > div > b {
   font-size: 15px;
 }
+/* On a narrow phone the counts wrap onto a second line rather than run off the card. */
+.la-share-head > div {
+  min-width: 0;
+}
 .la-counts {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 1px;
   white-space: nowrap;
   margin-top: 3px;
   color: var(--text-2);
@@ -1965,10 +2005,10 @@ html:has(.landing) {
   .lp-hero-copy .lp-ctas {
     width: 100%;
     gap: 10px;
-    flex-wrap: nowrap;
   }
-  .lp-hero-copy .lp-ctas .btn {
-    flex: 1;
+  /* Sign in and Join share the first row; the app for this phone, if any, gets the next one. */
+  .lp-hero-copy .lp-ctas > .btn {
+    flex: 1 1 0;
     min-width: 0;
     padding-inline: 10px;
     font-size: 15px;
@@ -2081,4 +2121,7 @@ html:has(.landing) {
   .lp-rays {
     animation: none;
   }
+}
+.lp-hero-copy .lp-get-app .btn {
+  width: 100%;
 }

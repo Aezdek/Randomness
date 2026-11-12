@@ -15,7 +15,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BrandMark, Wordmark } from '../../ui/Brand';
 import { AuthForm, type AuthMode } from './AuthForm';
-import { Downloads } from './Downloads';
+import { Downloads, GetTheApp, detectPlatform } from './Downloads';
 import { CountUp, Drift, EASE, Eyebrow, Reveal, RiseText, ScrollGrow, useFitScreen } from './LandingBits';
 import { CallPanel, DesktopScreen, Hand, PhoneScreen, SharePanel, Starfield, TalkPanel } from './LandingArt';
 
@@ -251,6 +251,7 @@ function Hero({ onStart }: { onStart: (m: AuthMode) => void }) {
               <button className="btn btn-glass btn-lg" onClick={() => onStart('join')}>
                 Join with an invite
               </button>
+              <GetTheApp hint={false} />
             </div>
           </motion.div>
         </motion.div>
@@ -545,9 +546,13 @@ function FinalCta({ onStart }: { onStart: (m: AuthMode) => void }) {
           <button className="btn btn-bold btn-lg" onClick={() => onStart('signin')}>
             Sign in <ArrowRight size={18} />
           </button>
-          <Link className="btn btn-glass btn-lg" to="/download">
-            <Download size={18} /> Download Hush
-          </Link>
+          {detectPlatform() === 'desktop' ? (
+            <Link className="btn btn-glass btn-lg" to="/download">
+              <Download size={18} /> Download Hush
+            </Link>
+          ) : (
+            <GetTheApp />
+          )}
         </div>
       </ScrollGrow>
     </section>

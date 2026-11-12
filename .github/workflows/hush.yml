@@ -211,6 +211,8 @@ jobs:
     needs: server
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -276,6 +278,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: adb install -r "$RUNNER_TEMP/hush.apk" && python3 android/smoke/drive.py
@@ -290,6 +293,19 @@ jobs:
           name: android-smoke
           path: ${{ runner.temp }}/smoke/
           if-no-files-found: ignore
+      # Also as a release asset, which can be fetched where artifact storage can't.
+      - name: Publish the screenshots
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$(ls "$RUNNER_TEMP/smoke" 2>/dev/null)" ] || exit 0
+          (cd "$RUNNER_TEMP/smoke" && zip -qr "$RUNNER_TEMP/android-smoke.zip" .)
+          if ! gh release view hush-screenshots --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create hush-screenshots --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Hush screenshots" --notes "Android UI screenshots from CI, for review. Not a release."
+          fi
+          gh release upload hush-screenshots "$RUNNER_TEMP/android-smoke.zip" --clobber --repo "$GITHUB_REPOSITORY"
 
   # Artifacts live on blob storage that review tooling can't always reach; a release asset can be fetched anywhere.
   screenshots:
