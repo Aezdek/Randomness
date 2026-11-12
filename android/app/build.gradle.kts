@@ -87,6 +87,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.biometric)
+    // Without it, every photo picker, camera and permission request closed the app (see ActivityResultTest).
+    implementation(libs.androidx.fragment)
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(platform(libs.compose.bom))

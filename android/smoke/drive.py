@@ -126,6 +126,12 @@ def tap_at(node: dict) -> None:
 def dismiss_dialogs(found: list[dict]) -> bool:
     """A system "isn't responding" dialog over the app: a slow emulator's launcher, usually. Waits it out
     (and counts it if it is Hush's own). True if there was one."""
+    if any(n["pkg"] == PKG and n["text"] == "Hush closed unexpectedly" for n in found):
+        # Hush's own report of the last crash, already counted by check(): close it and carry on.
+        close = [n for n in found if n["pkg"] == PKG and n["text"] == "Close"]
+        if close:
+            tap_at(close[0])
+            return True
     stuck = [n for n in found if n["pkg"] == "android" and "isn't responding" in n["text"]]
     if not stuck:
         return False
@@ -304,7 +310,14 @@ def main() -> int:
     step("activity", lambda: open_screen("activity"))
     step("accept maya's follow request", lambda: tap("Confirm", timeout=30))
     step("maya's profile", lambda: open_screen(f"profile:{maya}"))
-    step("follow maya", lambda: tap("Follow", timeout=10))
+    def follow():
+        hits = find(lambda n: n["text"] in ("Follow", "Follow back"), timeout=10)
+        if not hits:
+            raise Missing("Follow")
+        tap_at(hits[0])
+        # The other person accepts, and their app shares their posts with this account on its next sync.
+        time.sleep(10)
+    step("follow maya", follow)
     step("maya's story", lambda: (open_screen(f"stories:{maya}"), time.sleep(4)))
     back()
     step("maya's post", lambda: open_screen(f"post:{post}"))
