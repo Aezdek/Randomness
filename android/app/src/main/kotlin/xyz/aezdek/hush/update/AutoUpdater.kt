@@ -79,6 +79,8 @@ object AutoUpdater {
     }
 
     suspend fun check(context: Context, force: Boolean = false) {
+        // Nothing to ask until this phone knows which server is its own.
+        if (Graph.serverUrl.isBlank()) return
         if (!force && !Graph.prefs.autoUpdate) return
         mutex.withLock {
             val now = System.currentTimeMillis()
