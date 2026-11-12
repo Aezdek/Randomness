@@ -279,6 +279,7 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          enable-hw-keyboard: true
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: adb install -r "$RUNNER_TEMP/hush.apk" && python3 android/smoke/drive.py

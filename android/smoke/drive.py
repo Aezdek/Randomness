@@ -123,10 +123,32 @@ def tap_at(node: dict) -> None:
     time.sleep(1.2)
 
 
+def dismiss_dialogs(found: list[dict]) -> bool:
+    """A system "isn't responding" dialog over the app: a slow emulator's launcher, usually. Waits it out
+    (and counts it if it is Hush's own). True if there was one."""
+    stuck = [n for n in found if n["pkg"] == "android" and "isn't responding" in n["text"]]
+    if not stuck:
+        return False
+    if "Hush" in stuck[0]["text"]:
+        crashes.append(f"not responding: {stuck[0]['text']}")
+        log(f"  ANR: {stuck[0]['text']}")
+    else:
+        log(f"  dismissed a system dialog: {stuck[0]['text']}")
+    wait = [n for n in found if n["pkg"] == "android" and n["text"] == "Wait"]
+    if wait:
+        tap_at(wait[0])
+    else:
+        back()
+    return True
+
+
 def find(matches, timeout: float = 20) -> list[dict]:
     end = time.time() + timeout
     while True:
-        hits = sorted((n for n in nodes() if matches(n)), key=lambda n: (n["y"], n["x"]))
+        found = nodes()
+        if dismiss_dialogs(found):
+            continue
+        hits = sorted((n for n in found if matches(n)), key=lambda n: (n["y"], n["x"]))
         if hits or time.time() > end:
             return hits
         time.sleep(1)
@@ -229,6 +251,9 @@ def seeded() -> dict:
 def main() -> int:
     os.makedirs(OUT, exist_ok=True)
     adb("wait-for-device", timeout=300)
+    # A freshly booted emulator is slow for a while; let it settle before Hush is timed against anything.
+    time.sleep(25)
+    dismiss_dialogs(nodes())
     for permission in ("POST_NOTIFICATIONS", "CAMERA", "RECORD_AUDIO"):
         shell(f"pm grant {PKG} android.permission.{permission}")
     adb("logcat", "-b", "all", "-c")
