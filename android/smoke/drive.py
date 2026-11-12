@@ -161,12 +161,21 @@ def fields(timeout: float = 20) -> list[dict]:
     return find(lambda n: n["cls"] == "android.widget.EditText" and n["pkg"] == PKG, timeout)
 
 
+def keyboard_shown() -> bool:
+    if re.search(r"(mInputShown|mIsInputViewShown|isInputViewShown|inputShown)=true", shell("dumpsys input_method")):
+        return True
+    return bool(re.search(r"mViewVisibility=0x0\b", shell("dumpsys window InputMethod")))
+
+
 def type_into(field: dict, text: str) -> None:
+    """Types into a field, then puts the keyboard away so it covers nothing the next step looks for."""
     shell(f"input tap {field['x']} {field['y']}")
-    time.sleep(0.6)
+    time.sleep(0.8)
     escaped = text.replace(" ", "%s").replace("'", "")
     shell(f"input text '{escaped}'")
-    time.sleep(0.6)
+    time.sleep(0.8)
+    if keyboard_shown():
+        back()
 
 
 def visible(label: str, timeout: float = 20, exact: bool = True) -> bool:
@@ -220,9 +229,6 @@ def seeded() -> dict:
 def main() -> int:
     os.makedirs(OUT, exist_ok=True)
     adb("wait-for-device", timeout=300)
-    # No on-screen keyboard: typed text arrives as key presses, and nothing covers the fields.
-    for ime in shell("ime list -s").split():
-        shell(f"ime disable {ime}")
     for permission in ("POST_NOTIFICATIONS", "CAMERA", "RECORD_AUDIO"):
         shell(f"pm grant {PKG} android.permission.{permission}")
     adb("logcat", "-b", "all", "-c")
@@ -232,12 +238,10 @@ def main() -> int:
 
     def choose_server():
         boxes = fields(timeout=30)
-        button = find(labelled("Continue"), timeout=5)
-        if not boxes or not button:
-            raise Missing("Server address field and Continue")
+        if not boxes:
+            raise Missing("Server address field")
         type_into(boxes[0], SERVER)
-        log(f"  typed the address; on screen: {on_screen()}")
-        tap_at(button[0])
+        tap("Continue")
         # The app restarts on the new server.
         if not visible("Create account", timeout=60):
             raise Missing("Create account")
@@ -246,14 +250,13 @@ def main() -> int:
     def sign_up():
         tap("Create account", which=0)
         time.sleep(1.5)
-        # Invite code, username, password, confirm password, and the button under them, all found before typing.
-        boxes = fields()
-        buttons = find(labelled("Create account"), timeout=5)
-        if len(boxes) < 4 or len(buttons) < 2:
-            raise Missing(f"the sign-up form (fields: {len(boxes)}, buttons: {len(buttons)})")
-        for box, text in zip(boxes, [INVITE, "ava", PASSWORD, PASSWORD]):
-            type_into(box, text)
-        tap_at(buttons[-1])
+        # Invite code, username, password, confirm password: each looked up again once the keyboard is away.
+        for i, text in enumerate([INVITE, "ava", PASSWORD, PASSWORD]):
+            boxes = fields()
+            if len(boxes) <= i:
+                raise Missing(f"sign-up field {i + 1} (found {len(boxes)})")
+            type_into(boxes[i], text)
+        tap("Create account", which=-1)
         if not visible("Home", timeout=180):
             raise Missing("Home (signed in)")
     step("sign up", sign_up)
@@ -289,13 +292,8 @@ def main() -> int:
         boxes = fields()
         if not boxes:
             raise Missing("message field")
-        # Send takes the place of the heart at the end of the row once there's text.
-        heart = find(labelled("Send a heart"), timeout=5)
         type_into(boxes[-1], "Hello from the smoke test")
-        send = find(labelled("Send"), timeout=8) or heart
-        if not send:
-            raise Missing("Send")
-        tap_at(send[0])
+        tap("Send")
         time.sleep(4)
     step("send a message", send_message)
     step("message menu", lambda: long_press("Hey! Is this the new app?"))
