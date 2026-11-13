@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -204,10 +205,12 @@ fun AezButton(
         ButtonStyle.DANGER -> c.danger to Color.White
         ButtonStyle.GHOST -> Color.Transparent to c.text
     }
-    val alpha by animateFloatAsState(if (enabled) 1f else 0.45f, label = "enabled")
+    // A button that can't be pressed yet fades as a whole, so a red or bright one never looks ready when it isn't.
+    val faded by animateFloatAsState(if (enabled) 1f else 0.4f, label = "enabled")
     val shape = RoundedCornerShape(if (small) 10.dp else 12.dp)
     Box(
         modifier
+            .alpha(faded)
             .heightIn(min = if (small) 34.dp else 46.dp)
             .clip(shape)
             .then(if (style == ButtonStyle.BRAND) Modifier.background(Brand.gradient, shape) else Modifier.background(bg, shape))
@@ -216,11 +219,11 @@ fun AezButton(
         contentAlignment = Alignment.Center,
     ) {
         if (busy) {
-            CircularProgressIndicator(Modifier.size(18.dp), color = fg.copy(alpha = alpha), strokeWidth = 2.dp)
+            CircularProgressIndicator(Modifier.size(18.dp), color = fg, strokeWidth = 2.dp)
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (icon != null) Icon(icon, null, tint = fg.copy(alpha = alpha), modifier = Modifier.size(18.dp))
-                Text(text, color = fg.copy(alpha = alpha), fontWeight = FontWeight.SemiBold, fontSize = if (small) 13.sp else 15.sp, maxLines = 1)
+                if (icon != null) Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
+                Text(text, color = fg, fontWeight = FontWeight.SemiBold, fontSize = if (small) 13.sp else 15.sp, maxLines = 1)
             }
         }
     }
