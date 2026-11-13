@@ -200,7 +200,26 @@ data class ChatEvent(
     /** A message pinned to, or taken off, the top of the chat. */
     val pin: String? = null,
     val unpin: String? = null,
+    /**
+     * Disappearing messages: new messages are deleted, from the server and every phone, this many milliseconds after
+     * they are sent. 0 turns it off. One of [Disappearing.CHOICES].
+     */
+    val disappearAfter: Long? = null,
 )
+
+/** How long messages last in a chat with disappearing messages on (see [ChatEvent.disappearAfter]). */
+object Disappearing {
+    const val DAY = 24 * 60 * 60 * 1000L
+    val CHOICES = listOf(0L, DAY, 7 * DAY, 90 * DAY)
+
+    /** "24 hours", "7 days", "90 days"; "Off" for 0. */
+    fun label(after: Long): String = when {
+        after <= 0 -> "Off"
+        after == DAY -> "24 hours"
+        after % DAY == 0L -> "${after / DAY} days"
+        else -> "${after / (60 * 60 * 1000L)} hours"
+    }
+}
 
 object MessageType {
     const val TEXT = "text"

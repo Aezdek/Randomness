@@ -6,6 +6,7 @@ import { LocalDb } from './db';
 import { deriveInWorker } from './kdf';
 import { clearSession, loadSession, saveSession, updateStoredMe } from './keystore';
 import { getState, resetApp, toast, useApp } from './store';
+import { setWeakPassword } from './ui';
 import { engine } from './sync';
 import type { AuthResponse, DeviceInfo, Me, PreloginResponse } from './types';
 import { realtime } from './ws';
@@ -85,6 +86,7 @@ export async function signOut(tellServer = true) {
   setToken(null);
   await clearSession();
   if (me) await LocalDb.destroy(me.id).catch(() => undefined);
+  setWeakPassword(false);
   resetApp('signedOut');
 }
 
@@ -104,6 +106,7 @@ export async function changePassword(current: string, next: string) {
     authKey: b64(fresh.authKey),
     vault: b64(sealVault(keys, fresh.vaultKey)),
   });
+  setWeakPassword(false);
 }
 
 export async function deleteAccount(password: string) {
@@ -155,9 +158,10 @@ export async function enablePush(): Promise<boolean> {
 
 /**
  * Suspected compromise: a brand-new identity. Every content key we can open is re-sealed to the new box key, the old
- * wraps are replaced, and contacts see a key-change warning. Content that leaked before stays leaked.
+ * wraps are replaced, and contacts see a key-change warning. Content that leaked before stays leaked. [next] also
+ * changes the password in the same step (keys and password at once); without it the password stays as it is.
  */
-export async function resetKeys(password: string, onProgress?: (text: string) => void) {
+export async function resetKeys(password: string, onProgress?: (text: string) => void, next: string = password) {
   const { me, keys, entities } = getState();
   if (!me || !keys) return;
   onProgress?.('Checking your password…');
@@ -167,7 +171,7 @@ export async function resetKeys(password: string, onProgress?: (text: string) =>
   const fresh = generateAccountKeys();
   const pub = publicKeysOf(fresh);
   const salt = newSalt();
-  const derived = await deriveInWorker(password, salt, DEFAULT_KDF);
+  const derived = await deriveInWorker(next, salt, DEFAULT_KDF);
   onProgress?.('Re-sealing your content…');
   const { wrapKey } = await import('../crypto/object');
   const rewraps = Object.values(entities)
@@ -189,4 +193,5 @@ export async function resetKeys(password: string, onProgress?: (text: string) =>
   const freshMe = await api.get<Me>('/me');
   await saveSession(token, freshMe, fresh);
   useApp.setState({ keys: fresh, me: freshMe });
+  if (next !== password) setWeakPassword(false);
 }

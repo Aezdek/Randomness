@@ -90,6 +90,19 @@ export interface Poll { question: string; options: string[] }
 export interface ChatEvent {
   theme?: string | null; nicknameFor?: string | null; nickname?: string | null; quickReaction?: string | null;
   pin?: string | null; unpin?: string | null;
+  /** Disappearing messages: new messages last this many milliseconds; 0 turns it off. One of DISAPPEARING. */
+  disappearAfter?: number | null;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+/** How long messages can last in a chat with disappearing messages on (Disappearing in Payloads.kt). */
+export const DISAPPEARING = [0, DAY, 7 * DAY, 90 * DAY] as const;
+
+export function disappearingLabel(after: number): string {
+  if (after <= 0) return 'Off';
+  if (after === DAY) return '24 hours';
+  if (after % DAY === 0) return `${after / DAY} days`;
+  return `${after / (60 * 60 * 1000)} hours`;
 }
 
 export interface ReactionPayload { emoji: string }

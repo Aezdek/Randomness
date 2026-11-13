@@ -1,4 +1,4 @@
-import { Camera, ChevronLeft, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, Moon, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, Sun, WifiOff } from 'lucide-react';
+import { Camera, ChevronLeft, KeyRound, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, Moon, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, Sun, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { usePushPrefsMirror } from '../../core/notifyPrefs';
@@ -231,6 +231,19 @@ function BottomBar() {
   );
 }
 
+/** Signed in with a password today's rules would refuse: asks for a better one until it changes. */
+function WeakPasswordBanner() {
+  const weak = useUi((s) => s.weakPassword);
+  const { pathname } = useLocation();
+  if (!weak || pathname === '/settings/account') return null;
+  return (
+    <div className="weak-banner" role="status">
+      <KeyRound size={16} /> Your password is easy to guess.
+      <Link to="/settings/account">Change it</Link>
+    </div>
+  );
+}
+
 function ConnectionBanner() {
   const connection = useApp((s) => s.connection);
   if (connection !== 'offline') return null;
@@ -283,6 +296,7 @@ export function Shell() {
       <CreateHost />
       <CallHost />
       <ConnectionBanner />
+      <WeakPasswordBanner />
     </div>
   );
 }

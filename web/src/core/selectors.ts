@@ -90,7 +90,8 @@ export function buildIndex(state: Pick<AppState, 'entities' | 'me'>): Index {
         }
         break;
       case Kind.MESSAGE:
-        if (dto.threadId) (out.messages[dto.threadId] ??= []).push(entity as Entity<MessagePayload>);
+        // A disappearing message whose time is up is gone here at once, before the server deletes it.
+        if (dto.threadId && (dto.expiresAt == null || dto.expiresAt > now)) (out.messages[dto.threadId] ??= []).push(entity as Entity<MessagePayload>);
         break;
       case Kind.THREAD:
         if (dto.threadId) out.threadMeta[dto.threadId] = entity as Entity<ThreadPayload>;

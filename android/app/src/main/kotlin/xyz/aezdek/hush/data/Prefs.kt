@@ -26,6 +26,15 @@ class Prefs(context: Context) {
         _appLock.value = enabled
     }
 
+    /** Signed in with a password today's rules would refuse: the app asks for a better one until it changes. */
+    private val _weakPassword = MutableStateFlow(prefs.getBoolean("weakPassword", false))
+    val weakPassword: StateFlow<Boolean> = _weakPassword
+
+    fun setWeakPassword(weak: Boolean) {
+        prefs.edit().putBoolean("weakPassword", weak).apply()
+        _weakPassword.value = weak
+    }
+
     var lastActivitySeen: Long
         get() = prefs.getLong("activitySeen", 0)
         set(value) = prefs.edit().putLong("activitySeen", value).apply()

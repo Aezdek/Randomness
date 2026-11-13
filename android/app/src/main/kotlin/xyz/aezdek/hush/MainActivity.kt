@@ -15,6 +15,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,6 +137,7 @@ class MainActivity : FragmentActivity() {
         val state by Graph.client.state.collectAsState()
         val appLock by Graph.prefs.appLock.collectAsState()
         val isUnlocked by unlocked.collectAsState()
+        val weakPassword by Graph.prefs.weakPassword.collectAsState()
         Box(Modifier.fillMaxSize().background(Aez.colors.bg)) {
             when {
                 !booted -> Unit
@@ -139,10 +148,33 @@ class MainActivity : FragmentActivity() {
                     BackHandler(enabled = navigator.stack.size > 1 || navigator.current != Screen.Home) { navigator.back() }
                     Shell()
                     xyz.aezdek.hush.ui.settings.UpdatePrompt()
+                    if (weakPassword && navigator.current != Screen.Settings("account")) {
+                        WeakPasswordBanner(Modifier.align(Alignment.BottomCenter)) { navigator.go(Screen.Settings("account")) }
+                    }
                 }
             }
             ToastHost(Modifier.align(Alignment.BottomCenter))
             if (booted) LastCrash()
+        }
+    }
+
+    /** Signed in with a password today's rules would refuse: asks for a better one until it changes. */
+    @Composable
+    private fun WeakPasswordBanner(modifier: Modifier, onChange: () -> Unit) {
+        Row(
+            modifier.navigationBarsPadding().padding(bottom = 70.dp, start = 12.dp, end = 12.dp)
+                .clip(RoundedCornerShape(50)).background(Aez.colors.elev3).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Key, null, tint = Aez.colors.text, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Your password is easy to guess.", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Aez.colors.text)
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Change it", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Aez.colors.onPrimary,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(Aez.colors.primary).clickable(onClick = onChange)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
         }
     }
 

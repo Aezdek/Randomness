@@ -128,9 +128,13 @@ object Graph {
             scope,
         )
         media = MediaCache(client)
+        client.engine.onMediaGone = { media.forget(it) }
         notifier = Notifier(app)
         calls = CallManager(app, client)
-        client.onSignedOut = { ConnectionService.stop(app) }
+        client.onSignedOut = {
+            ConnectionService.stop(app)
+            prefs.setWeakPassword(false)
+        }
         // Call signals and test rings, whether or not the background service is running.
         scope.launch {
             client.realtime.frames.collect { frame ->
@@ -162,6 +166,7 @@ class HushApp : Application() {
                 else -> Unit
             }
         })
+        Graph.scope.launch { xyz.aezdek.hush.client.PasswordRules.preload() }
         Graph.scope.launch {
             val signedIn = runCatching { Graph.client.restore() }.getOrDefault(false)
             Graph.booted.value = true

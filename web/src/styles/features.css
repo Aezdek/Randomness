@@ -53,6 +53,36 @@
   color: #ff8b96;
   font-size: 14px;
 }
+/* Under a new password: what's wrong with it, in amber, or a quiet "strong enough". */
+.password-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #f5a524;
+}
+.password-hint.good {
+  color: #2fbf71;
+}
+.auth-card .password-hint {
+  margin-top: -6px;
+}
+/* Darker on light backgrounds, so the advice stays readable. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .password-hint {
+    color: #b45309;
+  }
+  :root:not([data-theme='dark']) .password-hint.good {
+    color: #15803d;
+  }
+}
+:root[data-theme='light'] .password-hint {
+  color: #b45309;
+}
+:root[data-theme='light'] .password-hint.good {
+  color: #15803d;
+}
 .fine {
   margin: 0;
   font-size: 12.5px;
@@ -500,7 +530,7 @@
 }
 .comment-like {
   align-self: flex-start;
-  margin-top: 6px;
+  margin-top: -6px;
   color: var(--text-3);
   padding: 4px;
 }
@@ -2932,6 +2962,12 @@ input[type='range'] {
 }
 .reply-bar .truncate {
   flex: 1;
+}
+.vanish-banner.disappearing {
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 12.5px;
+  padding-block: 6px;
 }
 .composer-bar {
   position: relative;

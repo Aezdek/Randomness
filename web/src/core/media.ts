@@ -392,6 +392,20 @@ export function mediaUrl(ref: MediaRef): Promise<string> {
   return promise;
 }
 
+/** Drops the decrypted copies of these files: blob URLs in this page, and the service worker's keys for streaming. */
+export function forgetMedia(blobIds: string[]) {
+  for (const id of blobIds) {
+    urls
+      .get(id)
+      ?.then((u) => URL.revokeObjectURL(u))
+      .catch(() => undefined);
+    urls.delete(id);
+    const at = order.indexOf(id);
+    if (at >= 0) order.splice(at, 1);
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: 'media-forget', blobIds: blobIds.filter(isBlobId) });
+}
+
 /**
  * Video: if our service worker controls the page, it decrypts on the fly with Range support, so playback starts
  * immediately and seeking works. Otherwise, download and decrypt the whole file.

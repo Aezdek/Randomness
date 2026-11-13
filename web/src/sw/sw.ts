@@ -29,6 +29,10 @@ self.addEventListener('message', (event) => {
     }
     event.ports[0]?.postMessage('ok');
   }
+  // Something was removed (unsent, expired, or no longer shared with us): stop serving its files.
+  if (data?.type === 'media-forget' && Array.isArray(data.blobIds)) {
+    for (const id of data.blobIds) if (isBlobId(id)) keys.delete(id);
+  }
 });
 
 const u64 = (n: number) => {

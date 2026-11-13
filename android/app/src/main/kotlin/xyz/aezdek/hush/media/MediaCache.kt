@@ -29,6 +29,16 @@ class MediaCache(private val client: AezClient) {
 
     fun cached(ref: MediaRef, maxEdge: Int): Bitmap? = bitmaps.get(key(ref, maxEdge))
 
+    /** Drops every decrypted copy of these files (something was unsent, expired, or is no longer shared with us). */
+    fun forget(blobIds: Collection<String>) {
+        val gone = blobIds.toSet()
+        bitmaps.snapshot().keys.filter { it.substringBefore('@') in gone }.forEach { bitmaps.remove(it) }
+        gone.forEach {
+            ranged.remove(it)
+            refs.remove(it)
+        }
+    }
+
     private fun key(ref: MediaRef, maxEdge: Int) = "${ref.blobId}@$maxEdge"
 
     suspend fun bitmap(ref: MediaRef, maxEdge: Int = 1440): Bitmap = withContext(Dispatchers.IO) {

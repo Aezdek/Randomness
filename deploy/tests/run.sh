@@ -83,6 +83,8 @@ done
 ingress_insert "$FIX/no-catchall.yml" "$WORK/none.out" hush.example.com http://127.0.0.1:8472
 check "a config without a catch-all is refused" test $? -eq 3
 check "hostnames are read with quotes and comments" bash -c "[ \"\$(. '$DEPLOY/lib.sh'; ingress_hosts '$FIX/flush-comments.yml' | tr '\n' ' ')\" = 'photos.example.com files.example.com ' ]"
+check "a weak new server password is refused" bash -c ". '$DEPLOY/lib.sh'; [ -n \"\$(password_problem 'Password2024!!')\" ] && [ -n \"\$(password_problem '123456789012')\" ] && [ -n \"\$(password_problem 'short')\" ]"
+check "a good one is taken" bash -c ". '$DEPLOY/lib.sh'; [ -z \"\$(password_problem 'zebra violin cloud')\" ]"
 
 echo "PORTS.md"
 cp "$FIX/PORTS.md" "$WORK/PORTS.md"

@@ -81,6 +81,9 @@ class Index(
             event.quickReaction != null -> "$who set the quick reaction to ${event.quickReaction}"
             event.pin != null -> "$who pinned a message"
             event.unpin != null -> "$who unpinned a message"
+            event.disappearAfter != null && event.disappearAfter!! > 0 ->
+                "$who turned on disappearing messages. New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(event.disappearAfter!!)}."
+            event.disappearAfter != null -> "$who turned off disappearing messages"
             else -> "$who changed the chat"
         }
     }
@@ -125,7 +128,8 @@ class Index(
                         val current = notes[dto.authorId]
                         if (current == null || current.dto.createdAt < dto.createdAt) notes[dto.authorId] = entity
                     }
-                    Kind.MESSAGE -> dto.threadId?.let { messages.getOrPut(it) { ArrayList() } += entity }
+                    // A disappearing message whose time is up is gone here at once, before the server deletes it.
+                    Kind.MESSAGE -> if ((dto.expiresAt ?: Long.MAX_VALUE) > now) dto.threadId?.let { messages.getOrPut(it) { ArrayList() } += entity }
                     Kind.THREAD -> dto.threadId?.let { threadMeta[it] = entity }
                     Kind.EPOCH -> dto.threadId?.let { epochs.getOrPut(it) { ArrayList() } += entity }
                     Kind.SETTINGS -> if (dto.authorId == me && (settings == null || settings.dto.receivedAt < dto.receivedAt)) settings = entity

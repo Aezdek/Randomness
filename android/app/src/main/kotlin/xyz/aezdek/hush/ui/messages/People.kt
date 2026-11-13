@@ -170,7 +170,8 @@ fun ThreadInfo(threadId: String) {
                     onSearch = { sheet = "search" }, onMute = { toggleMute() },
                 )
             }
-            item { CustomRows(custom, onTheme = { sheet = "theme" }, onNicknames = { sheet = "nicknames" }, onReaction = { sheet = "reaction" }) }
+            item { CustomRows(custom, onTheme = { sheet = "theme" }, onNicknames = { sheet = "nicknames" }, onReaction = { sheet = "reaction" },
+                onDisappearing = { sheet = "disappearing" }) }
             if (thread.isGroup) {
                 item {
                     var name by remember(meta?.id) { mutableStateOf(meta?.payloadAs<ThreadPayload>()?.name.orEmpty()) }
@@ -230,6 +231,7 @@ fun ThreadInfo(threadId: String) {
     when (sheet) {
         "theme" -> ThemeSheet(threadId, custom.theme) { sheet = null }
         "reaction" -> ReactionSheet(threadId, custom.quickReaction) { sheet = null }
+        "disappearing" -> DisappearingSheet(threadId, custom.disappearAfter) { sheet = null }
         "nicknames" -> NicknamesSheet(thread, custom, index, state) { sheet = null }
         "search" -> SearchSheet(thread, index.messages[threadId].orEmpty(), index, state, ::jump) { sheet = null }
         "media" -> AllMediaSheet(media, ::jump) { sheet = null }

@@ -1,4 +1,4 @@
-import { MessageType, type ChatEvent, type MessagePayload } from './payloads';
+import { DISAPPEARING, disappearingLabel, MessageType, type ChatEvent, type MessagePayload } from './payloads';
 import type { Entity } from './store';
 import type { UserDto } from './types';
 
@@ -12,6 +12,8 @@ export interface ChatCustom {
   quickReaction: string;
   /** Oldest pin first. */
   pinned: string[];
+  /** Disappearing messages: how long new messages last, in milliseconds; 0 if they stay. */
+  disappearAfter: number;
 }
 
 export const DEFAULT_REACTION = '❤️';
@@ -356,7 +358,7 @@ export function themeStyle(t: ChatTheme): Record<string, string> {
   return vars;
 }
 
-const EMPTY: ChatCustom = { theme: 'default', nicknames: {}, quickReaction: DEFAULT_REACTION, pinned: [] };
+const EMPTY: ChatCustom = { theme: 'default', nicknames: {}, quickReaction: DEFAULT_REACTION, pinned: [], disappearAfter: 0 };
 
 export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
   let next = c;
@@ -371,6 +373,9 @@ export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
   if (e.quickReaction?.trim()) next = { ...next, quickReaction: e.quickReaction.slice(0, 16) };
   if (e.pin != null) next = { ...next, pinned: [...next.pinned.filter((id) => id !== e.pin), e.pin] };
   if (e.unpin != null) next = { ...next, pinned: next.pinned.filter((id) => id !== e.unpin) };
+  if (e.disappearAfter != null) {
+    next = { ...next, disappearAfter: (DISAPPEARING as readonly number[]).includes(e.disappearAfter) ? e.disappearAfter : 0 };
+  }
   return next;
 }
 
@@ -407,5 +412,10 @@ export function eventText(e: ChatEvent, authorId: string, me: string, users: Rec
   if (e.quickReaction != null) return `${who} set the quick reaction to ${e.quickReaction}`;
   if (e.pin != null) return `${who} pinned a message`;
   if (e.unpin != null) return `${who} unpinned a message`;
+  if (e.disappearAfter != null) {
+    return e.disappearAfter > 0
+      ? `${who} turned on disappearing messages. New messages disappear after ${disappearingLabel(e.disappearAfter)}.`
+      : `${who} turned off disappearing messages`;
+  }
   return `${who} changed the chat`;
 }

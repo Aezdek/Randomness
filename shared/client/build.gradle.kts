@@ -29,6 +29,7 @@ dependencies {
 }
 
 tasks.withType<Test>().configureEach {
+    systemProperty("hush.vectorsDir", rootProject.file("crypto-vectors").absolutePath)
     testLogging {
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

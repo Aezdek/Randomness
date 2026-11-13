@@ -1,8 +1,10 @@
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { messageOf } from '../../core/errors';
+import { checkPassword, loadPasswordRules, passwordAdvice } from '../../core/passwordRules';
 import { signIn, signUp } from '../../core/session';
+import { setWeakPassword } from '../../core/ui';
 import { Segmented, Spinner } from '../../ui/bits';
 
 export type AuthMode = 'signin' | 'join';
@@ -16,19 +18,30 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The list of common passwords arrives a moment after the form; show the hint again once it has.
+  const [, setRulesReady] = useState(false);
+  useEffect(() => void loadPasswordRules().then(() => setRulesReady(true)), []);
+  const advice = mode === 'join' && password ? passwordAdvice(password, username) : null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (mode === 'join') {
       if (!/^[a-z0-9._]{2,30}$/.test(username.trim().toLowerCase())) return setError('Usernames are 2–30 characters: letters, numbers, dots and underscores.');
-      if (password.length < 10) return setError('Use at least 10 characters. Your password also protects your encryption keys.');
+      await loadPasswordRules();
+      const weak = passwordAdvice(password, username);
+      if (weak) return setError(weak);
       if (password !== confirm) return setError('The passwords don’t match.');
     }
     setBusy(true);
     try {
       if (mode === 'join') await signUp(invite, username, password);
-      else await signIn(username, password);
+      else {
+        await signIn(username, password);
+        // An older password the rules would refuse now: ask for a better one, once signed in.
+        await loadPasswordRules();
+        setWeakPassword(checkPassword(password, username) !== null);
+      }
       history.replaceState(null, '', '/');
     } catch (err) {
       setError(messageOf(err));
@@ -88,6 +101,7 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
           </button>
         </div>
       </label>
+      {mode === 'join' && password && <PasswordHint advice={advice} />}
       <AnimatePresence initial={false}>
         {mode === 'join' && (
           <motion.label className="field" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
@@ -119,4 +133,9 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
       </p>
     </form>
   );
+}
+
+/** Under a new password: what's wrong with it, or that it will do. */
+export function PasswordHint({ advice }: { advice: string | null }) {
+  return <span className={`password-hint ${advice ? '' : 'good'}`}>{advice ?? 'Strong enough.'}</span>;
 }

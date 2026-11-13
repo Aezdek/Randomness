@@ -1,6 +1,7 @@
 package xyz.aezdek.hush.client
 
 import xyz.aezdek.hush.protocol.ChatEvent
+import xyz.aezdek.hush.protocol.Disappearing
 import xyz.aezdek.hush.protocol.MessagePayload
 import xyz.aezdek.hush.protocol.MessageType
 
@@ -12,6 +13,8 @@ data class ChatCustom(
     val quickReaction: String = DEFAULT_REACTION,
     /** Pinned message ids, oldest pin first. */
     val pinned: List<String> = emptyList(),
+    /** Disappearing messages: how long new messages last, in milliseconds; 0 if they stay. */
+    val disappearAfter: Long = 0,
 ) {
     fun apply(event: ChatEvent): ChatCustom {
         var next = this
@@ -23,6 +26,7 @@ data class ChatCustom(
         event.quickReaction?.takeIf { it.isNotBlank() }?.let { next = next.copy(quickReaction = it.take(16)) }
         event.pin?.let { id -> next = next.copy(pinned = next.pinned.filter { it != id } + id) }
         event.unpin?.let { id -> next = next.copy(pinned = next.pinned - id) }
+        event.disappearAfter?.let { after -> next = next.copy(disappearAfter = after.takeIf { it in Disappearing.CHOICES } ?: 0) }
         return next
     }
 

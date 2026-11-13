@@ -23,7 +23,7 @@ OUT = os.environ["SMOKE_OUT"]
 SERVER = os.environ["SMOKE_SERVER"].removeprefix("https://").rstrip("/")
 INVITE = os.environ["SMOKE_INVITE"].strip()
 SEED = os.environ["SMOKE_SEED"]
-PASSWORD = "ava-smoke-password-1"
+PASSWORD = "tangerine kettle orbit"
 
 crashes: list[str] = []
 misses: list[str] = []

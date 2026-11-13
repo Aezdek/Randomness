@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.BuildConfig
 import xyz.aezdek.hush.Graph
+import xyz.aezdek.hush.client.PasswordRules
 import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.crypto.SafetyNumber
 import xyz.aezdek.hush.data.ThemeMode
@@ -415,7 +416,8 @@ private fun SecuritySection() {
             }
         }
     }
-    Card("Reset encryption keys", "Only if you think your keys or password leaked. You get a new identity; everything you can read is re-sealed to it, and your contacts are told your code changed.") {
+    Card("Reset encryption keys", "Only if you think your keys leaked. You get a new identity and keep your password; everything you can read is " +
+        "re-sealed to it, and your contacts are told your code changed. To change your password at the same time, use Change password.") {
         AezField(password, { password = it }, "Password", password = true)
         AezButton(resetStatus ?: "Reset keys", { confirmReset = true }, Modifier.fillMaxWidth(), style = ButtonStyle.DANGER,
             enabled = password.isNotEmpty() && resetStatus == null, busy = resetStatus != null)
@@ -452,26 +454,62 @@ internal fun DigitGrid(digits: String, columns: Int, fontSize: Int = 20) {
 @Composable
 private fun AccountSection() {
     val scope = rememberCoroutineScope()
+    val state by Graph.client.state.collectAsState()
+    val weak by Graph.prefs.weakPassword.collectAsState()
     var current by remember { mutableStateOf("") }
     var next by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    var withKeys by remember { mutableStateOf(false) }
+    var confirmKeys by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
     var deletePassword by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
-    Card("Change password", "Your keys are re-sealed under the new password and your other devices are signed out. " +
-        "If an old copy of the server's data leaked, the old password still opens that copy: after a suspected leak, reset your keys instead.") {
-        AezField(current, { current = it }, "Current password", password = true)
-        AezField(next, { next = it }, "New password", password = true, supporting = "At least 10 characters. It also protects your encryption keys.")
-        AezButton("Change password", {
-            scope.launch {
-                busy = true
-                if (Graph.attempt { Graph.client.changePassword(current, next) } != null) {
-                    Graph.toast("Password changed")
-                    current = ""
-                    next = ""
-                }
-                busy = false
+    val advice = if (next.isEmpty()) null else PasswordRules.check(next, state.me?.username.orEmpty())?.message
+
+    fun change() {
+        scope.launch {
+            val done = if (withKeys) {
+                status = "Starting…"
+                Graph.attempt { Graph.client.resetKeys(current, { status = it }, next) }
+            } else {
+                status = "Changing…"
+                Graph.attempt { Graph.client.changePassword(current, next) }
             }
-        }, Modifier.fillMaxWidth(), enabled = current.isNotEmpty() && next.length >= 10 && !busy, busy = busy)
+            if (done != null) {
+                Graph.prefs.setWeakPassword(false)
+                Graph.toast(if (withKeys) "New password and new keys in place" else "Password changed")
+                current = ""
+                next = ""
+            }
+            status = null
+        }
+    }
+
+    Card("Change password") {
+        if (weak) Text("Your current password is easy to guess. Please choose a stronger one.", color = Brand.orange, fontSize = 13.sp)
+        Choice(withKeys, "Just the password", "Password and keys") { withKeys = it }
+        Text(
+            if (withKeys) {
+                "You also get brand-new keys, and everything you can read is sealed to them, so nothing taken earlier opens with your " +
+                    "old password or old keys. Your other devices are signed out, and your contacts are told your security code changed."
+            } else {
+                "Your keys stay the same and are sealed under the new password. Your other devices are signed out. A copy of the " +
+                    "server's data taken earlier still opens with your old password."
+            },
+            fontSize = 13.sp, color = Aez.colors.text2,
+        )
+        AezField(current, { current = it }, "Current password", password = true)
+        AezField(next, { next = it }, "New password", password = true,
+            supporting = if (next.isEmpty()) "At least ${PasswordRules.MIN_LENGTH} characters. A few unrelated words make a good one." else advice ?: "Strong enough.")
+        AezButton(
+            status ?: if (withKeys) "Change password and keys" else "Change password",
+            { if (withKeys) confirmKeys = true else change() },
+            Modifier.fillMaxWidth(), style = if (withKeys) ButtonStyle.DANGER else ButtonStyle.PRIMARY,
+            enabled = current.isNotEmpty() && next.isNotEmpty() && advice == null && status == null, busy = status != null,
+        )
+    }
+    if (confirmKeys) {
+        ConfirmDialog("New password and new keys?", "Contacts will see your security code change and should verify you again.", "Change both",
+            onConfirm = { confirmKeys = false; change() }, onDismiss = { confirmKeys = false })
     }
     Card("Delete account", "Deletes your account and everything you posted, for everyone. It may survive in encrypted backups for up to 30 days.") {
         AezField(deletePassword, { deletePassword = it }, "Password", password = true)
@@ -569,4 +607,21 @@ internal fun shareInvite(context: Context, code: String) {
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Hush invite", text))
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share invite")
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/** Two options side by side, the chosen one raised (like the sign-in screen's switch). */
+@Composable
+private fun Choice(second: Boolean, firstLabel: String, secondLabel: String, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.elev2).padding(4.dp)) {
+        for ((value, label) in listOf(false to firstLabel, true to secondLabel)) {
+            val selected = value == second
+            Box(
+                Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(if (selected) Aez.colors.bg else Color.Transparent)
+                    .clickable { onChange(value) }.padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (selected) Aez.colors.text else Aez.colors.text2)
+            }
+        }
+    }
 }

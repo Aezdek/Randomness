@@ -270,6 +270,9 @@ class SyncEngine {
       void this.db?.deleteObject(doomedId);
       this.pending.delete(doomedId);
     }
+    // Decrypted copies of its photos and videos go too, from this page and from the service worker.
+    const blobs = [...doomed].flatMap((doomedId) => entities[doomedId]?.dto.blobIds ?? []);
+    if (blobs.length) void import('./media').then((m) => m.forgetMedia(blobs));
     useApp.setState((s) => {
       const next = { ...s.entities };
       for (const doomedId of doomed) delete next[doomedId];

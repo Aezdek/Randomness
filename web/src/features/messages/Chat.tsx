@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Send, Smile, Square, Video, X } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Send, Smile, Square, Timer, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { chatCustom, DEFAULT_REACTION, eventText, themeOf, themeStyle, type Chat
 import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage, votePoll } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { prepare, prepareVoice, upload } from '../../core/media';
-import { Audience, Kind, MessageType, type MessagePayload, type Poll, type ReactionPayload, type StoryPayload, type VotePayload } from '../../core/payloads';
+import { Audience, disappearingLabel, Kind, MessageType, type MessagePayload, type Poll, type ReactionPayload, type StoryPayload, type VotePayload } from '../../core/payloads';
 import { nameIn, threadTitle, useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import { realtime } from '../../core/ws';
@@ -945,6 +945,11 @@ export function Chat() {
           </AnimatePresence>
         </div>
 
+        {custom.disappearAfter > 0 && !vanish && (
+          <div className="vanish-banner disappearing">
+            <Timer size={15} /> New messages disappear after {disappearingLabel(custom.disappearAfter)}
+          </div>
+        )}
         {vanish && (
           <div className="vanish-banner">
             <Ghost size={15} /> Vanish mode · seen messages disappear from the server

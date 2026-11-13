@@ -88,22 +88,41 @@ to deliver anything. The database that holds it is encrypted on disk under the s
 or a copy of a backup is unreadable without that password. The admin panel shows the admin this same information
 about members, and never content.
 
+What Hush does about the usual weak spots:
+
+- **Passwords.** New passwords need at least 12 characters, and the ones attackers try first are refused: the 10,000
+  most common, look-alikes such as `P@ssw0rd!2024`, two common words run together, runs like `abcd1234` or `qwerty`,
+  and your own username. Someone who signs in with an older, weaker password is asked to change it.
+- **Changing your password.** You choose: just the password, which keeps your keys and seals them under the new one,
+  or the password and your keys together. The second gives you a new identity, and anything copied from the server
+  before stops opening with your old password or old keys. Reset keys does the same while keeping your password.
+- **Disappearing messages.** Any chat can be set so new messages disappear after 24 hours, 7 days or 90 days. They are
+  deleted from the server and from every device in the chat, so nobody can read them afterwards, even with someone's
+  password. The setting is shown to everyone in the chat.
+- **Taking access away.** When you remove a follower, block someone, take someone out of a group or remove a member,
+  their app deletes what it had of yours (posts, stories, chats and the decrypted photos and videos it kept), and the
+  server stops sending them anything more. A removed member is signed out everywhere and their device is wiped.
+
 Some things to know before you rely on it:
 
-- The web app is only as trustworthy as whatever serves it. Your server sends the JavaScript, and a proxy or
-  tunnel in front of it sees the connection. Someone who controlled either could serve a page that steals a
-  password. The Android app does not have this problem: it only accepts updates signed with a key that exists
-  on your server and nowhere else.
-- There is no forward secrecy. Keys are long-lived, because the history is kept on the server and has to open on
-  a new device.
-- Removing a follower or a member stops them fetching anything more. What their device already downloaded stays
-  on their device.
-- Changing your password re-seals the same keys. If you think the server's data was copied while you used the
-  old password, use Reset keys in the security settings, which gives you new ones.
-- Passwords need to be good. Anyone holding a copy of the server's data can try guesses against it for as long
-  as they like.
-- Disappearing and unsent messages are deleted from the server, but can remain in its backups for up to thirty
-  days.
+- **The web app trusts whatever serves it.** In a browser, the code that encrypts is downloaded from your server
+  each time, through your tunnel or proxy. Someone who controlled either could send a changed page that copies your
+  password as you type it. No website can prevent this; every end-to-end encrypted web app has the same limit. The
+  Android app is installed once and only accepts updates signed with its key, so anyone between you and your server
+  cannot change it. That key lives on your server, though, so someone who took over the server itself could sign a
+  bad update. For anything sensitive, use the Android app and keep the server up to date.
+- **Forward secrecy is per chat.** Your history is kept on the server so that it opens on a new device with your
+  password, which means anyone who later gets your password and a copy of the server's data could read it too. Turn
+  on disappearing messages for chats that shouldn't outlive the moment. The connection itself already uses forward
+  secrecy (TLS 1.3), so recording the traffic gains nothing later.
+- **What someone already saw.** Removing access deletes things from their app, but nothing can unsee a screenshot or
+  stop a modified app from keeping a copy. A device that never comes back online keeps what it had until it does.
+- **The server sees who, not what.** It knows who is a member, who follows and messages whom, when, and how large
+  things are. It needs that to deliver anything.
+- **Deleted things linger in backups.** Disappearing, deleted and unsent messages can remain in the server's
+  encrypted backups for up to thirty days.
+- **The admin panel's server controls ask for the server password**, which is checked on the server, so it travels
+  (over HTTPS) to the server when you unlock them.
 
 ## Building it
 

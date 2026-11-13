@@ -10,6 +10,26 @@ interface UiState {
   theme: 'system' | 'dark' | 'light';
   /** The desktop sidebar folded to icons (it opens over the page on hover), unless kept open. Remembered here. */
   navCollapsed: boolean;
+  /** Signed in with a password the rules would refuse today: a banner asks for a better one until it changes. */
+  weakPassword: boolean;
+}
+
+function initialWeak(): boolean {
+  try {
+    return localStorage.getItem('hush.weakPassword') === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setWeakPassword(weak: boolean) {
+  try {
+    if (weak) localStorage.setItem('hush.weakPassword', '1');
+    else localStorage.removeItem('hush.weakPassword');
+  } catch {
+    /* private mode */
+  }
+  useUi.setState({ weakPassword: weak });
 }
 
 function initialNav(): boolean {
@@ -37,7 +57,13 @@ function initialTheme(): UiState['theme'] {
   }
 }
 
-export const useUi = create<UiState>()(() => ({ create: null, createMenu: false, theme: initialTheme(), navCollapsed: initialNav() }));
+export const useUi = create<UiState>()(() => ({
+  create: null,
+  createMenu: false,
+  theme: initialTheme(),
+  navCollapsed: initialNav(),
+  weakPassword: initialWeak(),
+}));
 
 export function applyTheme(theme: UiState['theme']) {
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');

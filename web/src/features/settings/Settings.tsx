@@ -19,6 +19,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../core/api';
 import { saveSettings, unblock } from '../../core/compose';
 import { messageOf } from '../../core/errors';
+import { loadPasswordRules, passwordAdvice } from '../../core/passwordRules';
 import { displayName, useIndex } from '../../core/selectors';
 import { changePassword, deleteAccount, enablePush, pushSupported, resetKeys, signOut, updateMe } from '../../core/session';
 import { toast, useApp } from '../../core/store';
@@ -27,6 +28,7 @@ import type { IdList, SessionDto } from '../../core/types';
 import { Avatar } from '../../ui/Avatar';
 import { Ago, Center, Segmented, Spinner, Switch, Verified } from '../../ui/bits';
 import { Confirm } from '../../ui/Sheet';
+import { PasswordHint } from '../auth/AuthForm';
 import { PostGrid } from '../profile/PostGrid';
 import { StoryThumb } from '../stories/StoryThumb';
 import { MyQr } from './Verify';
@@ -71,27 +73,72 @@ function Card({ title, children }: { title?: string; children: ReactNode }) {
 const run = (p: Promise<unknown>, done?: string) => p.then(() => done && toast(done, 'success')).catch((e) => toast(messageOf(e), 'error'));
 
 function AccountSection() {
+  const username = useApp((s) => s.me!.username);
+  const weak = useUi((s) => s.weakPassword);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [what, setWhat] = useState<'password' | 'keys'>('password');
+  const [confirming, setConfirming] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deletePw, setDeletePw] = useState('');
+  const [, setRulesReady] = useState(false);
+  useEffect(() => void loadPasswordRules().then(() => setRulesReady(true)), []);
+  const advice = next ? passwordAdvice(next, username) : null;
+  const busy = status !== null;
+  const done = () => (setStatus(null), setCurrent(''), setNext(''));
+  const change = () => {
+    if (what === 'keys') {
+      setStatus('Starting…');
+      void run(resetKeys(current, setStatus, next), 'New password and new keys in place').finally(done);
+    } else {
+      setStatus('Changing…');
+      void run(changePassword(current, next), 'Password changed').finally(done);
+    }
+  };
   return (
     <>
       <Card title="Change password">
-        <p className="faint small">Your keys are re-sealed under the new password and your other devices are signed out. If an old copy of the server’s data leaked, your old password still opens the old copy. After a suspected leak, reset your keys instead.</p>
+        {weak && <p className="password-hint">Your current password is easy to guess. Please choose a stronger one.</p>}
+        <Segmented
+          id="change-what"
+          value={what}
+          onChange={setWhat}
+          options={[
+            { id: 'password', label: 'Just the password' },
+            { id: 'keys', label: 'Password and keys' },
+          ]}
+        />
+        <p className="faint small">
+          {what === 'password'
+            ? 'Your keys stay the same and are sealed under the new password. Your other devices are signed out. A copy of the server’s data taken earlier still opens with your old password.'
+            : 'You also get brand-new keys, and everything you can read is sealed to them, so nothing taken earlier opens with your old password or old keys. Your other devices are signed out, and your contacts are told your security code changed.'}
+        </p>
         <input className="input" type="password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
-        <input className="input" type="password" placeholder="New password (10+ characters)" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
-        <button
-          className="btn btn-primary"
-          disabled={busy || next.length < 10 || !current}
-          onClick={() => {
-            setBusy(true);
-            void run(changePassword(current, next), 'Password changed').finally(() => (setBusy(false), setCurrent(''), setNext('')));
-          }}
-        >
-          {busy ? <Spinner size={16} /> : 'Change password'}
+        <div>
+          <input className="input" type="password" placeholder={`New password (${12}+ characters)`} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+          {next && <PasswordHint advice={advice} />}
+        </div>
+        <button className={`btn ${what === 'keys' ? 'btn-danger' : 'btn-primary'}`} disabled={busy || !!advice || !next || !current} onClick={() => (what === 'keys' ? setConfirming(true) : change())}>
+          {busy ? (
+            <>
+              <Spinner size={16} /> {status}
+            </>
+          ) : what === 'keys' ? (
+            'Change password and keys'
+          ) : (
+            'Change password'
+          )}
         </button>
+        <Confirm
+          open={confirming}
+          title="New password and new keys?"
+          message="Contacts will see your security code change and should verify you again."
+          confirm="Change both"
+          danger
+          onConfirm={change}
+          onClose={() => setConfirming(false)}
+        />
       </Card>
       <Card title="Delete account">
         <p className="faint small">Deletes your account and everything you posted, for everyone. It may survive in encrypted backups for up to 30 days.</p>
@@ -276,7 +323,7 @@ function SecuritySection() {
         )}
       </Card>
       <Card title="Reset encryption keys">
-        <p className="faint small">Only if you think your keys or password leaked. You get a new identity; everything you can read is re-sealed to it, and your contacts are told your code changed.</p>
+        <p className="faint small">Only if you think your keys leaked. You get a new identity and keep your password; everything you can read is re-sealed to it, and your contacts are told your code changed. To change your password at the same time, use Change password.</p>
         <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
         <button className="btn btn-danger" disabled={!password || !!status} onClick={() => setResetting(true)}>
           {status ?? 'Reset keys'}

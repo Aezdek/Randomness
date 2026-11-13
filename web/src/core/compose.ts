@@ -24,6 +24,7 @@ import {
   type ThreadPayload,
   type VotePayload,
 } from './payloads';
+import { chatCustom } from './chat';
 import { buildIndex } from './selectors';
 import { getState, useApp, type Entity } from './store';
 import { engine } from './sync';
@@ -433,6 +434,9 @@ async function epochForSending(threadId: string): Promise<Entity<EpochPayload>> 
 }
 
 export async function sendMessage(threadId: string, payload: MessagePayload, opts: { audience?: string; blobIds?: string[]; expiresAt?: number } = {}) {
+  // Disappearing messages: everything but the chat's own settings lasts as long as the chat says.
+  const lasts = payload.type === MessageType.SYSTEM ? 0 : chatCustom(index().messages[threadId]).disappearAfter;
+  const expiresAt = opts.expiresAt ?? (lasts > 0 ? Date.now() + lasts : undefined);
   for (let attempt = 0; attempt < 2; attempt++) {
     const epoch = await epochForSending(threadId);
     try {
@@ -443,7 +447,7 @@ export async function sendMessage(threadId: string, payload: MessagePayload, opt
         threadId,
         parentId: epoch.dto.id,
         blobIds: opts.blobIds ?? mediaBlobIds(payload.media ?? []),
-        expiresAt: opts.expiresAt,
+        expiresAt,
       });
     } catch (error) {
       if ((error as { code?: string }).code !== 'stale_epoch' || attempt > 0) throw error;

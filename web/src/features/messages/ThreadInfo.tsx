@@ -1,4 +1,4 @@
-import { Bell, BellOff, Check, ChevronRight, Ghost, LogOut, Palette, Pin, Search, ShieldCheck, Smile, Tag, User, UserPlus } from 'lucide-react';
+import { Bell, BellOff, Check, ChevronRight, Ghost, LogOut, Palette, Pin, Search, ShieldCheck, Smile, Tag, Timer, User, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { chatCustom, MAX_NICKNAME, themeBackground, themeGradient, themeOf, THEMES } from '../../core/chat';
@@ -6,7 +6,7 @@ import { useDarkMode } from '../../core/ui';
 import { EmojiPicker } from '../../ui/EmojiPicker';
 import { addMembers, edit, leaveThread, saveSettings, sendChatEvent } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { Audience, MessageType, type ChatEvent, type MessagePayload, type ThreadPayload } from '../../core/payloads';
+import { Audience, DISAPPEARING, disappearingLabel, MessageType, type ChatEvent, type MessagePayload, type ThreadPayload } from '../../core/payloads';
 import { displayName, nameIn, threadTitle, useIndex } from '../../core/selectors';
 import { toast, useApp, type Entity } from '../../core/store';
 import type { ThreadDto } from '../../core/types';
@@ -17,7 +17,7 @@ import { Confirm, Sheet } from '../../ui/Sheet';
 
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '🎉', '🙏', '💯', '😍', '👏', '🥹', '✨', '💀', '🫶'];
 
-type Panel = null | 'theme' | 'nicknames' | 'reaction' | 'search' | 'media';
+type Panel = null | 'theme' | 'nicknames' | 'reaction' | 'search' | 'media' | 'disappearing';
 
 interface Props {
   thread: ThreadDto;
@@ -129,6 +129,12 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
             <Smile size={20} />
             <span className="info-row-label">Quick reaction</span>
             <span className="info-row-value emoji">{custom.quickReaction}</span>
+            <ChevronRight size={18} className="faint" />
+          </button>
+          <button className="info-row" onClick={() => setPanel('disappearing')}>
+            <Timer size={20} />
+            <span className="info-row-label">Disappearing messages</span>
+            <span className="info-row-value">{disappearingLabel(custom.disappearAfter)}</span>
             <ChevronRight size={18} className="faint" />
           </button>
         </div>
@@ -263,6 +269,29 @@ export function ThreadInfo({ thread, onClose, vanish, setVanish, onJump }: Props
           </div>
           <div className="reaction-picker">
             <EmojiPicker autoFocus={false} onPick={(e) => (setPanel(null), e !== custom.quickReaction && void change({ quickReaction: e }))} />
+          </div>
+        </Sheet>
+      )}
+
+      {panel === 'disappearing' && (
+        <Sheet open onClose={() => setPanel(null)} title="Disappearing messages">
+          <p className="faint" style={{ fontSize: 13, marginTop: 0 }}>
+            New messages are deleted from the server and from everyone’s devices this long after they’re sent, so nobody can
+            read them later, even with someone’s password. Messages already sent stay as they are. Everyone in the chat sees
+            the change.
+          </p>
+          <div className="info-list">
+            {DISAPPEARING.map((after) => (
+              <button
+                key={after}
+                className="info-row"
+                aria-pressed={after === custom.disappearAfter}
+                onClick={() => (setPanel(null), after !== custom.disappearAfter && void change({ disappearAfter: after }))}
+              >
+                <span className="info-row-label">{disappearingLabel(after)}</span>
+                {after === custom.disappearAfter && <Check size={18} />}
+              </button>
+            ))}
           </div>
         </Sheet>
       )}

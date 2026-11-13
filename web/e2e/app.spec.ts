@@ -45,12 +45,15 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: join(SHOTS, `${name}.png`) });
 }
 
+/** Everyone's password: strong enough for the rules (12+ characters, not common, no username in it). */
+const PASSWORD = 'tangerine kettle orbit';
+
 async function signUp(p: Person, invite: string) {
   await p.page.goto(`/?invite=${invite}`);
   await p.page.getByLabel('Invite code').fill(invite);
   await p.page.getByLabel('Username').fill(p.name);
-  await p.page.getByLabel('Password', { exact: true }).fill(`${p.name} has a long password`);
-  await p.page.getByLabel('Confirm password').fill(`${p.name} has a long password`);
+  await p.page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await p.page.getByLabel('Confirm password').fill(PASSWORD);
   await p.page.getByRole('button', { name: 'Create account' }).click();
   await expect(p.page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible({ timeout: 30_000 });
 }
@@ -363,7 +366,7 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await bobLaptop.page.goto('/');
   await bobLaptop.page.getByRole('button', { name: 'Sign in' }).first().click();
   await bobLaptop.page.getByLabel('Username').fill('bob');
-  await bobLaptop.page.getByLabel('Password', { exact: true }).fill('bob has a long password');
+  await bobLaptop.page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await bobLaptop.page.getByRole('button', { name: 'Sign in' }).last().click();
   await expect(bobLaptop.page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible({ timeout: 60_000 });
   await alice.page.getByRole('button', { name: 'Video call' }).click();

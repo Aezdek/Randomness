@@ -193,7 +193,8 @@ class Objects(private val db: Db, private val clock: Clock) {
                 ) { it.str("id") }
                 if (latest != epoch.id) conflict("The chat's key changed; refresh and resend", "stale_epoch")
                 if (up.audience !in setOf(Audience.THREAD, Audience.VANISH, Audience.ONCE)) badRequest("bad message audience")
-                up.expiresAt?.let { if (it <= now || it > now + 7 * 24 * HOUR) badRequest("Messages disappear within 7 days") }
+                // Disappearing messages last at most 90 days (a day's slack for clocks).
+                up.expiresAt?.let { if (it <= now || it > now + 91 * 24 * HOUR) badRequest("Messages disappear within 90 days") }
             }
             Kind.REACTION -> {
                 val p = parent ?: badRequest("A reaction needs a message")

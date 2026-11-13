@@ -295,6 +295,9 @@ class SyncEngine(
         ingest(emptyList())
     }
 
+    /** Media of something removed (unsent, expired, no longer shared with us): the app drops its decrypted copies. */
+    var onMediaGone: ((List<String>) -> Unit)? = null
+
     fun remove(id: String) {
         val entities = state.value.entities
         val doomed = linkedSetOf(id)
@@ -311,7 +314,9 @@ class SyncEngine(
         }
         for (doomedId in doomed) db?.deleteObject(doomedId)
         synchronized(ingestLock) { doomed.forEach(pending::remove) }
+        val blobs = doomed.flatMap { entities[it]?.dto?.blobIds.orEmpty() }
         state.update { it.copy(entities = it.entities - doomed) }
+        if (blobs.isNotEmpty()) runCatching { onMediaGone?.invoke(blobs) }
     }
 
     private fun removeWhere(predicate: (Entity) -> Boolean) {

@@ -291,6 +291,9 @@ fun Chat(threadId: String, focus: String? = null) {
         if (vanish) {
             Text("Vanish mode: seen messages disappear when you leave the chat", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().background(Brand.messageGradient).padding(6.dp))
+        } else if (custom.disappearAfter > 0) {
+            Text("New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(custom.disappearAfter)}", color = Aez.colors.text2,
+                fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().background(Aez.colors.elev1).padding(6.dp))
         }
         val listState = rememberLazyListState()
         val reversed = messages.asReversed()

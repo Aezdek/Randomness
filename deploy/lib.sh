@@ -556,10 +556,31 @@ local_key() {
   as_owner cat "$1/data/local.key" 2>/dev/null | head -c 64 | tr -cd '0-9a-f'
 }
 
+# password_problem PASSWORD: why it won't do as a new server password, or nothing if it will. The apps check against a
+# list of 10,000 common passwords (shared/client PasswordRules.kt); this catches the same kinds without the list.
+password_problem() {
+  local pw=$1 core distinct
+  [ ${#pw} -ge 12 ] || { echo "Use at least 12 characters. A few unrelated words make a good one."; return 0; }
+  [[ $pw =~ ^[0-9]+$ ]] && { echo "Mix in some letters. Numbers alone are easy to guess."; return 0; }
+  distinct=$(printf '%s' "$pw" | fold -w1 | sort -u | wc -l)
+  [ "$distinct" -ge 6 ] || { echo "Use more different characters. Repeats are easy to guess."; return 0; }
+  core=$(printf '%s' "$pw" | tr 'A-Z' 'a-z' | sed -E 's/^[^a-z]+//; s/[^a-z]+$//' | tr '0134@$!' 'oieaasi')
+  case $core in
+    password* | passw?rd* | qwerty* | asdf* | letmein* | welcome* | admin* | iloveyou* | monkey* | dragon* | football* | \
+      baseball* | sunshine* | princess* | master* | superman* | trustno* | changeme* | secret* | hush* | server*)
+      echo "That one is on the lists attackers try first." ;;
+  esac
+  return 0
+}
+
 # ask_password new|existing [ABOUT]: from HUSH_SERVER_PASSWORD, else typed (never shown) at the terminal or in a box.
 ask_password() {
-  local first second about=${2:+$2$'\n\n'}
+  local first second problem about=${2:+$2$'\n\n'}
   if [ -n "${HUSH_SERVER_PASSWORD:-}" ]; then
+    if [ "$1" = new ]; then
+      problem=$(password_problem "$HUSH_SERVER_PASSWORD")
+      [ -z "$problem" ] || die "HUSH_SERVER_PASSWORD: $problem"
+    fi
     printf '%s' "$HUSH_SERVER_PASSWORD"
     return 0
   fi
@@ -568,7 +589,8 @@ ask_password() {
       while :; do
         first=$(ui_secret "Hush" "${about}Server password") || die "no password given"
         if [ "$1" = new ]; then
-          [ ${#first} -ge 12 ] || { ui_say "Hush" "Use at least 12 characters."; continue; }
+          problem=$(password_problem "$first")
+          [ -z "$problem" ] || { ui_say "Hush" "$problem"; continue; }
           second=$(ui_secret "Hush" "The same password again, to be sure") || die "no password given"
           [ "$first" = "$second" ] || { ui_say "Hush" "Those two don't match. Once more."; continue; }
         fi
@@ -582,7 +604,8 @@ ask_password() {
     read -rsp "    Server password: " first </dev/tty || die "no password given"
     echo >&2
     if [ "$1" = new ]; then
-      [ ${#first} -ge 12 ] || { warn "use at least 12 characters"; continue; }
+      problem=$(password_problem "$first")
+      [ -z "$problem" ] || { warn "$problem"; continue; }
       read -rsp "    Again, to be sure: " second </dev/tty || die "no password given"
       echo >&2
       [ "$first" = "$second" ] || { warn "they don't match; once more"; continue; }

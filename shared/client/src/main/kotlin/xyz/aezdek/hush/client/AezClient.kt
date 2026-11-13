@@ -185,9 +185,10 @@ class AezClient(
 
     /**
      * Suspected compromise: a brand-new identity. Every content key we can open is re-sealed to the new box key, the
-     * old wraps are replaced, and contacts see a key-change warning. Content that leaked before stays leaked.
+     * old wraps are replaced, and contacts see a key-change warning. Content that leaked before stays leaked. [next]
+     * also changes the password in the same step (keys and password at once); without it the password stays.
      */
-    suspend fun resetKeys(password: String, onProgress: (String) -> Unit = {}) {
+    suspend fun resetKeys(password: String, onProgress: (String) -> Unit = {}, next: String = password) {
         val me = state.value.me ?: return
         onProgress("Checking your password…")
         val old = derive(password)
@@ -195,7 +196,7 @@ class AezClient(
         val fresh = AccountKeys.generate()
         val pub = fresh.publicKeys()
         val salt = PasswordKeys.newSalt()
-        val derived = withContext(Dispatchers.Default) { PasswordKeys.derive(password, salt, kdf) }
+        val derived = withContext(Dispatchers.Default) { PasswordKeys.derive(next, salt, kdf) }
         onProgress("Re-sealing your content…")
         val rewraps = state.value.entities.values.filter { it.dto.wrap != null }
             .map { WrapUpload(it.id, me.id, B64.encode(ObjectCrypto.wrap(it.key, fresh.boxPk))) }

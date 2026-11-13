@@ -1,5 +1,7 @@
 package xyz.aezdek.hush.ui.messages
 
+import androidx.compose.material.icons.outlined.Timer
+import xyz.aezdek.hush.protocol.Disappearing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -114,9 +116,9 @@ private fun HeroButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
-/** Theme, Nicknames and Quick reaction rows. */
+/** Theme, Nicknames, Quick reaction and Disappearing messages rows. */
 @Composable
-internal fun CustomRows(custom: ChatCustom, onTheme: () -> Unit, onNicknames: () -> Unit, onReaction: () -> Unit) {
+internal fun CustomRows(custom: ChatCustom, onTheme: () -> Unit, onNicknames: () -> Unit, onReaction: () -> Unit, onDisappearing: () -> Unit) {
     val theme = ChatThemes.byId(custom.theme) ?: ChatThemes.all.first()
     DetailRow(Icons.Outlined.Palette, "Theme", onTheme) {
         Box(Modifier.size(20.dp).clip(CircleShape).background(theme.brush()))
@@ -126,6 +128,35 @@ internal fun CustomRows(custom: ChatCustom, onTheme: () -> Unit, onNicknames: ()
     DetailRow(Icons.Outlined.Label, "Nicknames", onNicknames)
     DetailRow(Icons.Outlined.EmojiEmotions, "Quick reaction", onReaction) {
         Text(custom.quickReaction, fontSize = 20.sp)
+    }
+    DetailRow(Icons.Outlined.Timer, "Disappearing messages", onDisappearing) {
+        Text(Disappearing.label(custom.disappearAfter), fontSize = 14.sp, color = Aez.colors.text2)
+    }
+}
+
+/** How long new messages last in this chat; everyone in it sees the change. */
+@Composable
+internal fun DisappearingSheet(threadId: String, current: Long, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
+        Text("Disappearing messages", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Aez.colors.text, modifier = Modifier.padding(horizontal = 20.dp))
+        Text(
+            "New messages are deleted from the server and from everyone's phones this long after they're sent, so nobody can read " +
+                "them later, even with someone's password. Messages already sent stay as they are. Everyone in the chat sees the change.",
+            fontSize = 13.sp, color = Aez.colors.text2, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        for (after in Disappearing.CHOICES) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable {
+                    onDismiss()
+                    if (after != current) change(threadId, ChatEvent(disappearAfter = after))
+                }.padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(Disappearing.label(after), fontSize = 15.sp, color = Aez.colors.text, modifier = Modifier.weight(1f))
+                if (after == current) Icon(Icons.Filled.Check, "Chosen", tint = Aez.colors.text, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.navigationBarsPadding().size(16.dp))
     }
 }
 

@@ -54,6 +54,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import xyz.aezdek.hush.Graph
+import xyz.aezdek.hush.client.PasswordRules
 import xyz.aezdek.hush.ui.components.AezButton
 import xyz.aezdek.hush.ui.components.AezField
 import xyz.aezdek.hush.ui.components.BrandMark
@@ -150,8 +151,7 @@ fun Welcome() {
         error = when {
             username.isBlank() -> "Choose a username"
             creating && invite.isBlank() -> "Enter your invite code"
-            creating && password.length < 10 -> "Use at least 10 characters for your password"
-            creating && password != confirm -> "The passwords don't match"
+            creating -> PasswordRules.check(password, username)?.message ?: if (password != confirm) "The passwords don't match" else null
             password.isEmpty() -> "Enter your password"
             else -> null
         }
@@ -159,7 +159,13 @@ fun Welcome() {
         busy = true
         scope.launch {
             try {
-                if (creating) Graph.client.signUp(invite, username, password) else Graph.client.signIn(username, password)
+                if (creating) {
+                    Graph.client.signUp(invite, username, password)
+                } else {
+                    Graph.client.signIn(username, password)
+                    // An older password the rules would refuse now: ask for a better one, once signed in.
+                    Graph.prefs.setWeakPassword(PasswordRules.check(password, username) != null)
+                }
             } catch (e: Exception) {
                 error = Graph.messageOf(e)
             } finally {
@@ -193,7 +199,10 @@ fun Welcome() {
                     if (create) AezField(invite, { invite = it.uppercase() }, "Invite code", supporting = "Ask someone already on Hush")
                 }
                 AezField(username, { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '.' || ch == '_' }.take(30) }, "Username")
-                AezField(password, { password = it }, "Password", password = true)
+                AezField(
+                    password, { password = it }, "Password", password = true,
+                    supporting = if (creating && password.isNotEmpty()) PasswordRules.check(password, username)?.message ?: "Strong enough." else null,
+                )
                 AnimatedContent(creating, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "confirm") { create ->
                     if (create) AezField(confirm, { confirm = it }, "Confirm password", password = true)
                 }

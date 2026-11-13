@@ -367,11 +367,14 @@ class Composer(
 
     suspend fun sendMessage(threadId: String, payload: MessagePayload, audience: String = Audience.THREAD, expiresAt: Long? = null,
                             blobIds: List<String>? = null): Entity {
+        // Disappearing messages: everything but the chat's own settings lasts as long as the chat says.
+        val lasts = if (payload.type == xyz.aezdek.hush.protocol.MessageType.SYSTEM) 0L else index().chatCustom(threadId).disappearAfter
+        val expiry = expiresAt ?: lasts.takeIf { it > 0 }?.let { System.currentTimeMillis() + it }
         repeat(2) { attempt ->
             val epoch = epochForSending(threadId)
             try {
                 return publish(Draft(Kind.MESSAGE, audience, payload, parentId = epoch.id, threadId = threadId,
-                    blobIds = blobIds ?: mediaBlobIds(payload.media), expiresAt = expiresAt))
+                    blobIds = blobIds ?: mediaBlobIds(payload.media), expiresAt = expiry))
             } catch (e: ApiException) {
                 if (e.code != "stale_epoch" || attempt > 0) throw e
                 engine.sync()
