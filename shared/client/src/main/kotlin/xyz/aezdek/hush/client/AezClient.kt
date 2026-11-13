@@ -188,7 +188,7 @@ class AezClient(
      * old wraps are replaced, and contacts see a key-change warning. Content that leaked before stays leaked. [next]
      * also changes the password in the same step (keys and password at once); without it the password stays.
      */
-    suspend fun resetKeys(password: String, onProgress: (String) -> Unit = {}, next: String = password) {
+    suspend fun resetKeys(password: String, next: String = password, onProgress: (String) -> Unit = {}) {
         val me = state.value.me ?: return
         onProgress("Checking your password…")
         val old = derive(password)

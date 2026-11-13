@@ -469,7 +469,7 @@ private fun AccountSection() {
         scope.launch {
             val done = if (withKeys) {
                 status = "Starting…"
-                Graph.attempt { Graph.client.resetKeys(current, { status = it }, next) }
+                Graph.attempt { Graph.client.resetKeys(current, next) { status = it } }
             } else {
                 status = "Changing…"
                 Graph.attempt { Graph.client.changePassword(current, next) }

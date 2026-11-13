@@ -340,6 +340,16 @@ def main() -> int:
     step("theme picker", lambda: tap("Theme"))
     step("pick a theme", lambda: tap("Aurora", timeout=10))
     step("chat in the new theme", lambda: open_screen(f"chat:{thread}"))
+
+    def disappearing():
+        open_screen(f"chat-info:{thread}")
+        tap("Disappearing messages")
+        tap("7 days", timeout=10)
+        open_screen(f"chat:{thread}")
+        if not visible("New messages disappear after 7 days", timeout=15):
+            raise Missing("the disappearing messages line in the chat")
+    step("disappearing messages for 7 days", disappearing)
+    step("send a disappearing message", send_message)
     step("new chat", lambda: open_screen("new-chat"))
     step("my profile", lambda: open_screen("profile"))
     step("edit profile", lambda: open_screen("edit-profile"))
@@ -352,6 +362,16 @@ def main() -> int:
     for section in ("notifications", "archive", "privacy", "close-friends", "blocked", "security", "account",
                     "appearance", "updates", "admin"):
         step(f"settings: {section}", lambda s=section: open_screen(f"settings:{s}"))
+    def weak_password_refused():
+        open_screen("settings:account")
+        boxes = fields()
+        if len(boxes) < 2:
+            raise Missing("the change-password fields")
+        type_into(boxes[1], "ava1234567890")
+        if not visible("Leave your username out of your password.", timeout=10):
+            raise Missing("the advice under a weak new password")
+        tap("Password and keys")
+    step("change password refuses a weak one", weak_password_refused)
     step("call readiness", lambda: open_screen("readiness"))
     step("back to home", lambda: open_screen("home"))
 
