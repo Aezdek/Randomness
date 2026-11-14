@@ -23,6 +23,10 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import xyz.aezdek.hush.protocol.PasskeyLoginRequest
+import xyz.aezdek.hush.protocol.AdminAlertKind
+import xyz.aezdek.hush.protocol.AdminAlertDto
+import xyz.aezdek.hush.protocol.AddPasskeyRequest
 import xyz.aezdek.hush.protocol.AddMembersRequest
 import xyz.aezdek.hush.protocol.ServerState
 import xyz.aezdek.hush.protocol.SetupStatus
@@ -197,13 +201,48 @@ fun Route.api(s: Services) = route("/api/v1") {
         // Wrong passwords for one account from everywhere together: guessing from many addresses at once stops here.
         val failures = "login-failed:$username"
         if (s.limiter.exhausted(failures, 200, 60 * MINUTE)) s.limiter.tooMany()
+        val fx = Effects()
         val response = try {
-            blocking { s.accounts.login(req) }
+            blocking { s.accounts.login(req, fx) }
         } catch (e: ApiException) {
             if (e.status == HttpStatusCode.Unauthorized) s.limiter.record(failures, 60 * MINUTE)
             throw e
         }
+        s.realtime.apply(fx)
         call.respond(response)
+    }
+    // A passkey sign-in: no username; the passkey's own id finds the account. Limited like password sign-ins.
+    post("/auth/passkey") {
+        val req = call.receive<PasskeyLoginRequest>()
+        val ip = call.clientIp(s)
+        s.limiter.check("login-ip:$ip", 40, 10 * MINUTE)
+        val failures = "passkey-failed:${req.credentialId.take(64)}"
+        if (s.limiter.exhausted(failures, 20, 60 * MINUTE)) s.limiter.tooMany()
+        val fx = Effects()
+        val response = try {
+            blocking { s.accounts.passkeyLogin(req, fx) }
+        } catch (e: ApiException) {
+            if (e.status == HttpStatusCode.Unauthorized) s.limiter.record(failures, 60 * MINUTE)
+            throw e
+        }
+        s.realtime.apply(fx)
+        call.respond(response)
+    }
+    get("/auth/passkeys") {
+        val session = call.session(s)
+        call.respond(blocking { s.accounts.passkeys(session) })
+    }
+    post("/auth/passkeys") {
+        val session = call.session(s)
+        val req = call.receive<AddPasskeyRequest>()
+        // It checks the password, so it shares the password's allowance.
+        s.limiter.check("password:${session.userId}", 10, 60 * MINUTE)
+        call.respond(blocking { s.accounts.addPasskey(session, req) })
+    }
+    delete("/auth/passkeys/{id}") {
+        val session = call.session(s)
+        blocking { s.accounts.deletePasskey(session, call.param("id")) }
+        call.respond(OkResponse())
     }
     post("/auth/logout") {
         val session = call.session(s)
@@ -543,6 +582,13 @@ fun Route.api(s: Services) = route("/api/v1") {
         if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
         call.respond(blocking { adminStatus(s) })
     }
+    // What the admin should know about right now (a failed backup, a nearly full disk, an update): see adminAlerts.
+    get("/admin/alerts") {
+        val session = call.session(s)
+        webAdminGate(s)
+        if (!blocking { s.accounts.isAdmin(session.userId) }) forbidden("Admins only")
+        call.respond(blocking { adminAlerts(s) })
+    }
     get("/admin/invites") {
         val session = call.session(s)
         webAdminGate(s)
@@ -682,6 +728,38 @@ fun adminStatus(s: Services): AdminStatus {
         updateAvailable = updateAvailable(s, latest),
         inviteDays = s.settings.inviteDays,
     )
+}
+
+/**
+ * What whoever runs the server should hear about without opening the admin panel. Each alert's id names the kind and
+ * the moment it began, so the same problem is announced once, and a new one again.
+ */
+fun adminAlerts(s: Services): List<AdminAlertDto> {
+    val status = adminStatus(s)
+    val out = ArrayList<AdminAlertDto>()
+    val now = s.clock.now()
+    val lastBackup = status.lastBackupAt
+    val backupStale = lastBackup != null && now - lastBackup > 2 * 24 * 60 * 60 * 1000L
+    if (status.lastBackupOk == false || backupStale) {
+        val since = lastBackup ?: 0
+        out += AdminAlertDto(
+            "backup-$since", AdminAlertKind.BACKUP, "The backup isn't working",
+            if (status.lastBackupOk == false) "The last backup failed: ${status.backupMessage ?: "see the admin panel"}."
+            else "Nothing has been backed up for over two days.",
+        )
+    }
+    val floor = s.settings.minFreeBytes
+    if (status.uploadsBlocked || status.diskFreeBytes < floor + floor / 2) {
+        out += AdminAlertDto(
+            "disk-${status.uploadsBlocked}", AdminAlertKind.DISK,
+            if (status.uploadsBlocked) "The server's disk is full" else "The server's disk is nearly full",
+            if (status.uploadsBlocked) "Photos and videos can't be uploaded until space is freed." else "Uploads stop when it reaches the limit in the server settings.",
+        )
+    }
+    if (status.updateAvailable && status.latestVersion != null) {
+        out += AdminAlertDto("update-${status.latestVersion}", AdminAlertKind.UPDATE, "Hush ${status.latestVersion} is available", "Install it from the admin panel's Server tab, or run update.sh.")
+    }
+    return out
 }
 
 // By commit when both sides know theirs: version numbers restart when the CI workflow is renamed.

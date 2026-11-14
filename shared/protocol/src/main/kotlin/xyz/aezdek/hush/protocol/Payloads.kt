@@ -139,7 +139,16 @@ data class SettingsPayload(
     val notifyMessages: Boolean = true,
     val notifyFollows: Boolean = true,
     val notifyStories: Boolean = true,
+    /** What notifications show: [NotifyPreview.FULL], only who it is from, or nothing but "New message". */
+    val notifyPreview: String = NotifyPreview.FULL,
 )
+
+object NotifyPreview {
+    const val FULL = "full"
+    const val NAME = "name"
+    const val NONE = "none"
+    val ALL = listOf(FULL, NAME, NONE)
+}
 
 @Serializable
 data class ActivityPayload(val type: String, val objectId: String, val text: String? = null)
@@ -150,7 +159,13 @@ object ActivityType {
 }
 
 @Serializable
-data class ThreadPayload(val name: String? = null, val avatar: MediaRef? = null, val theme: String? = null)
+data class ThreadPayload(
+    val name: String? = null,
+    val avatar: MediaRef? = null,
+    val theme: String? = null,
+    /** A shared album: a group whose photos and videos are shown as a gallery rather than a conversation. */
+    val album: Boolean = false,
+)
 
 @Serializable
 data class EpochPayload(val memberIds: List<String>)
@@ -177,6 +192,37 @@ data class MessagePayload(
     val forwarded: Boolean = false,
     /** For [MessageType.POLL]: the question and its options. Votes are [Kind.VOTE] children with [VotePayload.option]. */
     val poll: Poll? = null,
+    /** For [MessageType.PLAN]: what, when and where. Answers are [Kind.VOTE] children with a [PlanAnswer] as the option. */
+    val plan: Plan? = null,
+    /** For [MessageType.LOCATION]: where the sender is, kept up to date by editing this one message until it expires. */
+    val location: LiveLocation? = null,
+)
+
+/** A plan in a chat: "Dinner, Saturday 19:30, at Leo's". Everyone in the chat sees who is coming. */
+@Serializable
+data class Plan(val title: String, val at: Long, val place: String? = null)
+
+/** The answers to a [Plan], as the option of a vote. */
+object PlanAnswer {
+    const val GOING = 0
+    const val MAYBE = 1
+    const val NO = 2
+    /** The sticker id plan votes carry, to tell them from poll votes. */
+    const val STICKER = "plan"
+}
+
+/**
+ * Where someone is, shared with a chat until [until]. The sender's app replaces the message with each new position
+ * (so the server never holds a trail, only the latest ciphertext) and the message is deleted when the time is up.
+ */
+@Serializable
+data class LiveLocation(
+    val lat: Double,
+    val lng: Double,
+    /** How sure the device is, in metres. */
+    val accuracy: Float? = null,
+    val until: Long,
+    val updatedAt: Long,
 )
 
 /** A poll in a group chat, as on Instagram. Everyone in the chat sees who voted for what. */
@@ -234,6 +280,8 @@ object MessageType {
     const val HEART = "heart"
     const val SYSTEM = "system"
     const val POLL = "poll"
+    const val PLAN = "plan"
+    const val LOCATION = "location"
 }
 
 @Serializable
@@ -266,6 +314,8 @@ data class CallSignal(
     /** For [CallSignalType.STATE]: whether the sender's camera and microphone are on. */
     val camera: Boolean? = null,
     val mic: Boolean? = null,
+    /** For [CallSignalType.STATE]: the sender's video is their screen, not their camera (shown whole, not cropped). */
+    val screen: Boolean? = null,
 )
 
 object CallSignalType {

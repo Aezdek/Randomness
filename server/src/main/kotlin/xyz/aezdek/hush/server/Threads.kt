@@ -51,9 +51,10 @@ class Threads(private val db: Db, private val clock: Clock, private val objects:
     fun create(me: String, req: CreateThreadRequest, fx: Effects): ThreadDto = db.tx {
         val now = clock.now()
         val members = (req.memberIds + me).distinct()
-        if (members.size < 2) badRequest("A chat needs someone else in it")
+        // One member is "Notes to self": a one-to-one chat with only you in it, one per account, that nobody can join.
+        if (members.size < 2 && req.isGroup) badRequest("A group needs someone else in it")
         if (members.size > MAX_MEMBERS) badRequest("Chats hold up to $MAX_MEMBERS people")
-        if (!req.isGroup && members.size != 2) badRequest("A one-to-one chat has two people")
+        if (!req.isGroup && members.size > 2) badRequest("A one-to-one chat has two people")
         for (member in members) {
             if (!exists("SELECT 1 FROM users WHERE id = ? AND deleted = 0", member)) badRequest("Unknown member")
             if (member != me && exists(

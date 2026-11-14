@@ -7,10 +7,13 @@ package xyz.aezdek.hush.server
 class Effects {
     val syncUsers = linkedSetOf<String>()
     val pushes = mutableListOf<PushHint>()
+    /** Accounts a new device just signed in to, with that device's name: their other devices are told at once. */
+    val signIns = mutableListOf<Pair<String, String>>()
 
     fun merge(other: Effects) {
         syncUsers += other.syncUsers
         pushes += other.pushes
+        signIns += other.signIns
     }
 }
 

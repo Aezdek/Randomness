@@ -34,6 +34,7 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -69,6 +70,18 @@ class Services(val config: ServerConfig, val clock: Clock, app: Application) {
     val realtime = Realtime(db, presence, push, app, clock)
     val jobs = Jobs(config, db, objects, blobs, realtime, accounts)
     val limiter = RateLimiter(clock)
+
+    private val announced = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Tells the admins about each alert once (see adminAlerts): a nudge if they are online, a push if not. */
+    fun announceAlerts() {
+        val alerts = adminAlerts(this)
+        announced.retainAll(alerts.map { it.id }.toSet())
+        val fresh = alerts.filter { announced.add(it.id) }
+        if (fresh.isEmpty()) return
+        val admins = db.tx { strings("SELECT id FROM users WHERE is_admin = 1 AND deleted = 0") }
+        for (alert in fresh) realtime.alertAdmins(admins, alert.kind)
+    }
 }
 
 /**
@@ -97,7 +110,17 @@ fun Application.hush(config: ServerConfig, clock: Clock = Clock.SYSTEM): Service
     basePlugins()
 
     services.accounts.bootstrap(config)
-    if (config.runJobs) services.jobs.start(this)
+    if (config.runJobs) {
+        services.jobs.start(this)
+        // Every half hour, whether anything needs the admins' attention.
+        kotlinx.coroutines.CoroutineScope(coroutineContext).launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(60_000)
+            while (true) {
+                runCatching { services.announceAlerts() }.onFailure { LoggerFactory.getLogger("hush").warn("admin alerts failed: {}", it.message) }
+                kotlinx.coroutines.delay(30 * 60_000L)
+            }
+        }
+    }
 
     routing {
         get("/healthz") { call.respond(Health(ok = true, version = config.version)) }

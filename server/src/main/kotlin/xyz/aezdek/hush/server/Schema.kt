@@ -186,6 +186,22 @@ object Schema {
         """
         ALTER TABLE users ADD COLUMN read_receipts INTEGER NOT NULL DEFAULT 1;
         """.trimIndent(),
+        // 6: passkeys (a second way to sign in: its own auth key and its own sealed copy of the account's keys), and
+        // pushes that don't say who they are from.
+        """
+        CREATE TABLE passkeys (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            credential_id TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            auth_hash BLOB NOT NULL,
+            vault BLOB NOT NULL,
+            created_at INTEGER NOT NULL,
+            last_used_at INTEGER
+        );
+        CREATE INDEX passkeys_user ON passkeys(user_id);
+        ALTER TABLE push_prefs ADD COLUMN hide_names INTEGER NOT NULL DEFAULT 0;
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

@@ -3,6 +3,7 @@ package xyz.aezdek.hush.server
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 import xyz.aezdek.hush.protocol.PushPrefs
+import xyz.aezdek.hush.protocol.PushType
 import xyz.aezdek.hush.protocol.PushSubscriptionRequest
 import xyz.aezdek.hush.protocol.Wire
 import xyz.aezdek.hush.protocol.WsType
@@ -90,21 +91,28 @@ class WebPush(private val db: Db, private val clock: Clock, private val subject:
 
     fun setPrefs(session: Session, prefs: PushPrefs) = db.tx {
         if (prefs.mutedTypes.size > 32 || prefs.mutedThreads.size > 500) badRequest("Too many entries")
+        if (prefs.mutedTypes.any { it.length > 32 || ',' in it } || prefs.mutedThreads.any { it.length > 64 || ',' in it }) badRequest("Bad entry")
         exec(
-            "INSERT OR REPLACE INTO push_prefs (user_id, muted_types, muted_threads) VALUES (?, ?, ?)",
-            session.userId, prefs.mutedTypes.joinToString(","), prefs.mutedThreads.joinToString(","),
+            "INSERT OR REPLACE INTO push_prefs (user_id, muted_types, muted_threads, hide_names) VALUES (?, ?, ?, ?)",
+            session.userId, prefs.mutedTypes.joinToString(","), prefs.mutedThreads.joinToString(","), prefs.hideNames,
         )
     }
 
     fun prefs(userId: String): PushPrefs = db.tx {
-        one("SELECT muted_types, muted_threads FROM push_prefs WHERE user_id = ?", userId) {
-            PushPrefs(it.str("muted_types").split(',').filter(String::isNotEmpty), it.str("muted_threads").split(',').filter(String::isNotEmpty))
+        one("SELECT muted_types, muted_threads, hide_names FROM push_prefs WHERE user_id = ?", userId) {
+            PushPrefs(
+                it.str("muted_types").split(',').filter(String::isNotEmpty), it.str("muted_threads").split(',').filter(String::isNotEmpty),
+                it.bool("hide_names"),
+            )
         }
     } ?: PushPrefs()
 
-    /** Test rings always go through; everything else honours the user's mirrored notification switches. */
+    /**
+     * Test rings and security alerts (a new sign-in, something wrong with the server) always go through: nobody, and
+     * no stolen session, can switch those off. Everything else honours the user's mirrored notification switches.
+     */
     fun wanted(userId: String, message: PushMessage): Boolean {
-        if (message.type == WsType.RING_TEST) return true
+        if (message.type == WsType.RING_TEST || message.type in PushType.UNMUTABLE) return true
         val prefs = prefs(userId)
         if (message.type in prefs.mutedTypes) return false
         return !(message.type in setOf("message", "reaction") && message.ref != null && message.ref in prefs.mutedThreads)
@@ -117,7 +125,9 @@ class WebPush(private val db: Db, private val clock: Clock, private val subject:
                 Triple(it.str("endpoint"), it.bytes("p256dh"), it.bytes("auth"))
             }
         }
-        val body = Wire.json.encodeToString(PushMessage.serializer(), message).encodeToByteArray()
+        // With previews off, a push says only what kind of thing happened: no name, and nothing that leads to one.
+        val shown = if (message.type !in PushType.UNMUTABLE && message.type != "call" && prefs(userId).hideNames) PushMessage(message.type) else message
+        val body = Wire.json.encodeToString(PushMessage.serializer(), shown).encodeToByteArray()
         for ((endpoint, p256dh, auth) in subscriptions) {
             val status = runCatching { send(endpoint, p256dh, auth, body, urgent) }.getOrElse {
                 log.warn("push to {} failed: {}", URI(endpoint).host, it.message)

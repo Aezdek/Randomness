@@ -327,6 +327,10 @@ object WsType {
     const val PING = "ping"
     const val PONG = "pong"
     const val RING_TEST = "ring_test"
+    /** Another device just signed in to this account: look at /auth/sessions and ask whether that was you. */
+    const val SESSION = "session"
+    /** Something whoever runs the server should know about: look at /admin/alerts. */
+    const val ADMIN = "admin"
 }
 
 @Serializable
@@ -343,7 +347,49 @@ data class PushSubscriptionRequest(val endpoint: String, val p256dh: String, val
  * them here: Web Push has to show every push it receives, so muted ones must not be sent at all.
  */
 @Serializable
-data class PushPrefs(val mutedTypes: List<String> = emptyList(), val mutedThreads: List<String> = emptyList())
+data class PushPrefs(
+    val mutedTypes: List<String> = emptyList(),
+    val mutedThreads: List<String> = emptyList(),
+    /** Pushes say only that something happened, not who it is from (notification previews turned off). */
+    val hideNames: Boolean = false,
+)
+
+/** What a push is about, where the server needs to tell kinds apart. Security kinds can't be muted. */
+object PushType {
+    const val SIGN_IN = "sign_in"
+    const val ADMIN_ALERT = "admin_alert"
+    val UNMUTABLE = setOf(SIGN_IN, ADMIN_ALERT)
+}
+
+// ------------------------------------------------------------------------------------------------------------ passkeys
+
+/** A passkey that can sign in to this account, as the account's owner sees it. */
+@Serializable
+data class PasskeyDto(val id: String, val name: String, val createdAt: Long, val lastUsedAt: Long? = null)
+
+/**
+ * Adds a passkey. The passkey gives the browser a secret only that authenticator can produce (WebAuthn's PRF); from it
+ * come [authKey], which the server checks at sign-in exactly like the password's, and a key that never leaves the
+ * device and seals [vault], a second copy of the account's private keys. Needs the password once ([currentAuthKey]),
+ * so a stolen session can't add a way in.
+ */
+@Serializable
+data class AddPasskeyRequest(val currentAuthKey: String, val credentialId: String, val name: String, val authKey: String, val vault: String)
+
+@Serializable
+data class PasskeyLoginRequest(val credentialId: String, val authKey: String, val device: DeviceInfo)
+
+// --------------------------------------------------------------------------------------------------------- admin alerts
+
+/** Something wrong with the server that an admin should hear about without opening the panel. */
+@Serializable
+data class AdminAlertDto(val id: String, val kind: String, val title: String, val text: String)
+
+object AdminAlertKind {
+    const val BACKUP = "backup"
+    const val DISK = "disk"
+    const val UPDATE = "update"
+}
 
 @Serializable
 data class TestRingRequest(val delaySeconds: Int = 20)

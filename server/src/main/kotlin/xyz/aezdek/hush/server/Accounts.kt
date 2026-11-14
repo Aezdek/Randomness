@@ -2,6 +2,7 @@ package xyz.aezdek.hush.server
 
 import org.slf4j.LoggerFactory
 import xyz.aezdek.hush.protocol.AccountStatus
+import xyz.aezdek.hush.protocol.AddPasskeyRequest
 import xyz.aezdek.hush.protocol.AdminChatDto
 import xyz.aezdek.hush.protocol.AdminDeviceDto
 import xyz.aezdek.hush.protocol.AdminMemberDto
@@ -13,6 +14,8 @@ import xyz.aezdek.hush.protocol.FollowState
 import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.LoginRequest
 import xyz.aezdek.hush.protocol.MAX_MEMBERS
+import xyz.aezdek.hush.protocol.PasskeyDto
+import xyz.aezdek.hush.protocol.PasskeyLoginRequest
 import xyz.aezdek.hush.protocol.Me
 import xyz.aezdek.hush.protocol.PreloginResponse
 import xyz.aezdek.hush.protocol.ResetKeysRequest
@@ -124,7 +127,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         AuthResponse(token, me(id), req.vault)
     }
 
-    fun login(req: LoginRequest): AuthResponse = db.tx {
+    fun login(req: LoginRequest, fx: Effects = Effects()): AuthResponse = db.tx {
         checkDevice(req.device)
         val authKey = B64u.dec(req.authKey, "authKey", size = 32)
         val row = one("SELECT id, auth_hash, vault, status FROM users WHERE username = ? AND deleted = 0", req.username.trim().lowercase()) {
@@ -134,10 +137,74 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         // Only after the password checks out, so the message can't be used to probe which accounts exist.
         if (row.status == AccountStatus.DISABLED) forbidden("This account has been disabled. Ask the admin.")
         val token = newSession(row.id, req.device, clock.now())
+        fx.signIns += row.id to req.device.name
         AuthResponse(token, me(row.id), B64u.enc(row.vault))
     }
 
+    // -------------------------------------------------------------------------------------------------- passkeys
+
+    /**
+     * Adds a passkey. It works like a second password that only that authenticator can produce: the browser derives
+     * an auth key from the passkey's secret (WebAuthn's PRF), which is stored hashed like the password's, and a key
+     * that never leaves the device, which seals [AddPasskeyRequest.vault]. The password is needed once, here, so a
+     * stolen session can't add itself a way back in.
+     */
+    fun addPasskey(session: Session, req: AddPasskeyRequest): PasskeyDto = db.tx {
+        checkAuthKey(session.userId, req.currentAuthKey)
+        val credential = req.credentialId.trim()
+        if (!CREDENTIAL_ID.matches(credential)) badRequest("Not a passkey id")
+        val name = req.name.trim().take(60).ifEmpty { "Passkey" }
+        if ((long("SELECT COUNT(*) FROM passkeys WHERE user_id = ?", session.userId) ?: 0) >= MAX_PASSKEYS) {
+            badRequest("An account can have up to $MAX_PASSKEYS passkeys")
+        }
+        if (exists("SELECT 1 FROM passkeys WHERE credential_id = ?", credential)) conflict("That passkey is already in use", "exists")
+        val id = Ids.random(9)
+        val now = clock.now()
+        exec(
+            "INSERT INTO passkeys (id, user_id, credential_id, name, auth_hash, vault, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            id, session.userId, credential, name, sha256(B64u.dec(req.authKey, "authKey", size = 32)), B64u.dec(req.vault, "vault", max = 1024), now,
+        )
+        PasskeyDto(id, name, now)
+    }
+
+    fun passkeys(session: Session): List<PasskeyDto> = db.tx {
+        query("SELECT id, name, created_at, last_used_at FROM passkeys WHERE user_id = ? ORDER BY created_at", session.userId) {
+            PasskeyDto(it.str("id"), it.str("name"), it.getLong("created_at"), it.longOrNull("last_used_at"))
+        }
+    }
+
+    fun deletePasskey(session: Session, id: String) = db.tx {
+        if (exec("DELETE FROM passkeys WHERE id = ? AND user_id = ?", id, session.userId) == 0) notFound("No such passkey")
+    }
+
+    /** Signs in with a passkey: the same answer as a password sign-in, with that passkey's own sealed keys. */
+    fun passkeyLogin(req: PasskeyLoginRequest, fx: Effects): AuthResponse = db.tx {
+        checkDevice(req.device)
+        val authKey = B64u.dec(req.authKey, "authKey", size = 32)
+        val credential = req.credentialId.trim().takeIf { CREDENTIAL_ID.matches(it) } ?: unauthorized("That passkey isn't known here")
+        val row = one(
+            """SELECT p.id, p.user_id, p.auth_hash, p.vault, u.status FROM passkeys p JOIN users u ON u.id = p.user_id
+               WHERE p.credential_id = ? AND u.deleted = 0""",
+            credential,
+        ) { PasskeyRow(it.str("id"), it.str("user_id"), it.bytes("auth_hash"), it.bytes("vault"), it.str("status")) }
+        if (row == null || !MessageDigest.isEqual(row.authHash, sha256(authKey))) unauthorized("That passkey isn't known here")
+        if (row.status == AccountStatus.DISABLED) forbidden("This account has been disabled. Ask the admin.")
+        val now = clock.now()
+        exec("UPDATE passkeys SET last_used_at = ? WHERE id = ?", now, row.id)
+        val token = newSession(row.userId, req.device, now)
+        fx.signIns += row.userId to req.device.name
+        AuthResponse(token, me(row.userId), B64u.enc(row.vault))
+    }
+
+    private class PasskeyRow(val id: String, val userId: String, val authHash: ByteArray, val vault: ByteArray, val status: String)
+
     private class LoginRow(val id: String, val authHash: ByteArray, val vault: ByteArray, val status: String)
+
+    private companion object PasskeyLimits {
+        const val MAX_PASSKEYS = 10
+        /** A WebAuthn credential id in base64url: at most 1023 bytes, which is 1364 characters. */
+        val CREDENTIAL_ID = Regex("^[A-Za-z0-9_-]{16,1364}$")
+    }
 
     /** Argon2id's cost, as the client chose it: not so low the password is cheap to guess, not so high sign-in can't run. */
     private fun checkKdf(opsLimit: Long, memLimit: Int) {
@@ -456,6 +523,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             }
             exec("DELETE FROM wrap_tasks WHERE author_id = ? OR recipient_id = ?", userId, userId)
             exec("DELETE FROM push_subscriptions WHERE user_id = ?", userId)
+            exec("DELETE FROM passkeys WHERE user_id = ?", userId)
             exec("DELETE FROM push_prefs WHERE user_id = ?", userId)
             val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", userId)
             exec("DELETE FROM sessions WHERE user_id = ?", userId)
@@ -488,6 +556,8 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             )
             // Wraps sealed to the old key are useless now; keep only the re-sealed ones.
             exec("DELETE FROM wraps WHERE recipient_id = ?", session.userId)
+            // So are passkeys: each holds a sealed copy of the old keys. They can be added again.
+            exec("DELETE FROM passkeys WHERE user_id = ?", session.userId)
             for (wrap in req.rewraps) {
                 if (!exists("SELECT 1 FROM objects WHERE id = ? AND deleted = 0", wrap.objectId)) continue
                 exec(

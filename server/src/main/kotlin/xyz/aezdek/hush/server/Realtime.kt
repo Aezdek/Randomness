@@ -7,6 +7,7 @@ import io.ktor.websocket.close
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import xyz.aezdek.hush.protocol.PushType
 import xyz.aezdek.hush.protocol.WsFrame
 import xyz.aezdek.hush.protocol.WsType
 import xyz.aezdek.hush.protocol.Wire
@@ -78,6 +79,19 @@ class Realtime(
             if (now - last < 3_000) continue
             lastPush[hint.userId] = now
             pushTo(hint.userId, hint.type, hint.fromUserId, hint.ref, urgent = false)
+        }
+        // A new sign-in is told to every other device of the account, connected or not: it may not have been them.
+        for ((userId, device) in fx.signIns) {
+            presence.send(userId, WsFrame(WsType.SESSION))
+            pushTo(userId, PushType.SIGN_IN, null, device, urgent = true)
+        }
+    }
+
+    /** Something the admins should know about (see adminAlerts): a nudge to their connected devices, a push to the rest. */
+    fun alertAdmins(adminIds: Collection<String>, kind: String) {
+        for (admin in adminIds) {
+            presence.send(admin, WsFrame(WsType.ADMIN))
+            pushTo(admin, PushType.ADMIN_ALERT, null, kind, urgent = false)
         }
     }
 
