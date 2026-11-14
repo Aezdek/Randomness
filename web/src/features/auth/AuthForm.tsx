@@ -1,9 +1,10 @@
-import { ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { messageOf } from '../../core/errors';
 import { checkPassword, loadPasswordRules, passwordAdvice } from '../../core/passwordRules';
-import { signIn, signUp } from '../../core/session';
+import { passkeysSupported } from '../../core/passkeys';
+import { signIn, signInWithPasskey, signUp } from '../../core/session';
 import { setWeakPassword } from '../../core/ui';
 import { Segmented, Spinner } from '../../ui/bits';
 
@@ -45,6 +46,19 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
       history.replaceState(null, '', '/');
     } catch (err) {
       setError(messageOf(err));
+      setBusy(false);
+    }
+  };
+
+  const withPasskey = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await signInWithPasskey();
+      history.replaceState(null, '', '/');
+    } catch (err) {
+      // Closing the browser's passkey prompt is not an error worth showing.
+      if (!(err instanceof DOMException && err.name === 'NotAllowedError')) setError(messageOf(err));
       setBusy(false);
     }
   };
@@ -126,6 +140,11 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
           </>
         )}
       </button>
+      {mode === 'signin' && passkeysSupported() && (
+        <button type="button" className="btn btn-secondary btn-block" disabled={busy} onClick={() => void withPasskey()}>
+          <Fingerprint size={18} /> Sign in with a passkey
+        </button>
+      )}
       <p className="fine">
         {mode === 'join'
           ? 'Your password encrypts your keys. If you forget it, nobody can recover your messages, not even the server.'

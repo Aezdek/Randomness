@@ -61,7 +61,11 @@ enum class CallStatus { IDLE, OUTGOING, INCOMING, ACTIVE }
 enum class PeerState { RINGING, CONNECTING, CONNECTED, RECONNECTING, LEFT, DECLINED }
 
 /** [camera] and [mic] are what they told us (null until they say; older apps never do). */
-data class PeerUi(val userId: String, val state: PeerState, val video: VideoTrack? = null, val camera: Boolean? = null, val mic: Boolean? = null)
+data class PeerUi(
+    val userId: String, val state: PeerState, val video: VideoTrack? = null, val camera: Boolean? = null, val mic: Boolean? = null,
+    /** Their video is their screen (shared from the web app): shown whole, not cropped. */
+    val screen: Boolean = false,
+)
 data class LiveComment(val id: Long, val from: String, val text: String)
 data class LiveUi(val host: Boolean, val hostId: String, val objectId: String? = null, val comments: List<LiveComment> = emptyList(), val hearts: Int = 0)
 
@@ -270,7 +274,7 @@ class CallManager(private val context: Context, private val client: AezClient) {
                 maybeEnd()
             }
             CallSignalType.STATE -> if (sameCall) {
-                _state.update { st -> st.copy(peers = st.peers + (from to (st.peers[from] ?: PeerUi(from, PeerState.CONNECTING)).copy(camera = s.camera, mic = s.mic))) }
+                _state.update { st -> st.copy(peers = st.peers + (from to (st.peers[from] ?: PeerUi(from, PeerState.CONNECTING)).copy(camera = s.camera, mic = s.mic, screen = s.screen == true))) }
             }
             CallSignalType.CHAT -> {
                 if (!sameCall || state.live == null || s.text.isNullOrBlank()) return

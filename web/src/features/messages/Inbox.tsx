@@ -1,4 +1,4 @@
-import { ChevronLeft, Edit, Heart, MessageCircle, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { Bookmark, ChevronLeft, Edit, Heart, MessageCircle, Plus, Search, Send, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -13,9 +13,14 @@ import { Avatar } from '../../ui/Avatar';
 import { Ago, Empty } from '../../ui/bits';
 import { Sheet } from '../../ui/Sheet';
 import { NewChat } from './NewChat';
+import { safeText } from '../../core/safe';
+import { Guard } from '../../ui/Guard';
+import { notesToSelfId, openNotesToSelf, searchMessages } from '../../core/circle';
 
 export function previewOf(payload: MessagePayload, mine: boolean): string {
   const you = mine ? 'You: ' : '';
+  // Whatever a modified client sent, the row shows text.
+  payload = { ...payload, text: safeText(payload.text, 300) || null };
   switch (payload.type) {
     case MessageType.TEXT:
       return you + (payload.text ?? '');
@@ -37,6 +42,10 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
       return you + (payload.text || '❤️');
     case MessageType.POLL:
       return `${mine ? 'You created a poll' : 'Poll'}: ${payload.poll?.question ?? ''}`;
+    case MessageType.PLAN:
+      return `${mine ? 'You made a plan' : 'Plan'}: ${payload.plan?.title ?? ''}`;
+    case MessageType.LOCATION:
+      return mine ? 'You’re sharing your live location' : 'Shared their live location';
     default:
       return payload.text ?? '';
   }
@@ -157,6 +166,10 @@ export function ThreadList({ activeId }: { activeId?: string }) {
   const index = useIndex();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'groups'>('all');
+  const navigate = useNavigate();
+  const hasNotes = !!notesToSelfId({ threads, me });
+  // Searching also looks inside every chat, here on the device (the server can't: it only holds ciphertext).
+  const found = useMemo(() => (query.trim().length >= 2 ? searchMessages(index, query, 30) : []), [index, query]);
   const pinned = new Set(index.settings?.payload.pinnedThreads ?? []);
   const sorted = useMemo(
     () =>
@@ -171,9 +184,9 @@ export function ThreadList({ activeId }: { activeId?: string }) {
     <>
       <div className="search" style={{ padding: '4px 20px 12px' }}>
         <Search size={17} style={{ left: 34 }} />
-        <input className="input" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="input" placeholder="Search chats and messages" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search chats and messages" />
       </div>
-      <Notes />
+      {!query && <Notes />}
       <div className="thread-list-head">
         <b>Messages</b>
       </div>
@@ -195,7 +208,8 @@ export function ThreadList({ activeId }: { activeId?: string }) {
         const other = thread.members.find((m) => m.userId !== me.id)?.userId;
         const isTyping = Object.entries(typing[thread.id] ?? {}).some(([u, until]) => u !== me.id && until > Date.now());
         return (
-          <Link key={thread.id} to={`/direct/${thread.id}`} className={`thread-row ${activeId === thread.id ? 'active' : ''} ${unread ? 'unread' : ''}`}>
+          <Guard key={thread.id}>
+          <Link to={`/direct/${thread.id}`} className={`thread-row ${activeId === thread.id ? 'active' : ''} ${unread ? 'unread' : ''}`}>
             {thread.isGroup ? (
               <span className="group-avatar">
                 {thread.members.filter((m) => m.userId !== me.id).slice(0, 2).map((m) => (
@@ -203,7 +217,7 @@ export function ThreadList({ activeId }: { activeId?: string }) {
                 ))}
               </span>
             ) : (
-              <Avatar userId={other} size={56} presence />
+              <Avatar userId={other ?? me.id} size={56} presence={!!other} />
             )}
             <span className="thread-text">
               <span className="truncate thread-title">{title}</span>
@@ -232,13 +246,69 @@ export function ThreadList({ activeId }: { activeId?: string }) {
             </span>
             {unread > 0 && <span className="dot" style={{ width: 9, height: 9, background: 'var(--link)' }} />}
           </Link>
+          </Guard>
         );
       })}
-      {!sorted.length && (
+      {!query && filter === 'all' && !hasNotes && (
+        <button className="thread-row" onClick={() => void openNotesToSelf().then((id) => navigate(`/direct/${id}`)).catch((e) => toast(messageOf(e), 'error'))}>
+          <span className="notes-self-icon">
+            <Bookmark size={24} />
+          </span>
+          <span className="thread-text">
+            <span className="truncate thread-title">Notes to self</span>
+            <span className="thread-preview">
+              <span className="truncate">Save links, lists and photos for later</span>
+            </span>
+          </span>
+        </button>
+      )}
+      {found.length > 0 && (
+        <>
+          <div className="thread-list-head">
+            <b>In messages</b>
+          </div>
+          {found.map((m) => {
+            const thread = threads[m.dto.threadId ?? ''];
+            if (!thread) return null;
+            return (
+              <Link key={m.dto.id} to={`/direct/${thread.id}`} state={{ jumpTo: m.dto.id }} className="thread-row search-hit">
+                <Avatar userId={m.dto.authorId} size={44} />
+                <span className="thread-text">
+                  <span className="truncate thread-title">{threadTitle(thread, index, users, me.id)}</span>
+                  <span className="thread-preview">
+                    <span className="truncate">
+                      <Highlight text={`${m.dto.authorId === me.id ? 'You' : nameIn(thread.id, m.dto.authorId, index, users)}: ${m.payload.plan?.title ?? m.payload.poll?.question ?? m.payload.text ?? m.payload.quote ?? ''}`} query={query} />
+                    </span>
+                    <span className="thread-preview-time">
+                      {' · '}
+                      <Ago at={m.dto.receivedAt} className="" />
+                    </span>
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </>
+      )}
+      {!sorted.length && !found.length && (
         <p className="faint" style={{ padding: '24px 20px' }}>
           {filter === 'unread' ? "You're all caught up." : filter === 'groups' ? 'No group chats yet.' : 'No chats yet.'}
         </p>
       )}
+    </>
+  );
+}
+
+/** The matched words in bold. */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim().toLowerCase();
+  const at = text.toLowerCase().indexOf(q);
+  if (!q || at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <b>{text.slice(at, at + q.length)}</b>
+      {text.slice(at + q.length)}
     </>
   );
 }

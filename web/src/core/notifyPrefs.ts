@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { api } from './api';
-import type { SettingsPayload } from './payloads';
+import { NotifyPreview, type SettingsPayload } from './payloads';
 import { useIndex } from './selectors';
 import { useApp } from './store';
 
@@ -17,6 +17,8 @@ export function pushPrefsOf(settings: SettingsPayload | undefined) {
   return {
     mutedTypes: TYPES.filter(([key]) => settings?.[key] === false).flatMap(([, types]) => types),
     mutedThreads: settings?.mutedThreads ?? [],
+    // A Web Push can't be decrypted, so it only ever shows who it is from; "nothing" means the server leaves that out too.
+    hideNames: settings?.notifyPreview === NotifyPreview.NONE,
   };
 }
 

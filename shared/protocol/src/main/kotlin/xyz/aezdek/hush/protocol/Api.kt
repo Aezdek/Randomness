@@ -376,6 +376,14 @@ data class PasskeyDto(val id: String, val name: String, val createdAt: Long, val
 @Serializable
 data class AddPasskeyRequest(val currentAuthKey: String, val credentialId: String, val name: String, val authKey: String, val vault: String)
 
+/**
+ * Asked before the browser makes a passkey: whether the password is right and the account has room for another. Without
+ * it, a wrong password would leave a passkey on the device that the server never accepted, which the browser would
+ * then keep offering at sign-in.
+ */
+@Serializable
+data class PasskeyCheckRequest(val currentAuthKey: String)
+
 @Serializable
 data class PasskeyLoginRequest(val credentialId: String, val authKey: String, val device: DeviceInfo)
 

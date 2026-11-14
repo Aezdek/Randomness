@@ -84,6 +84,7 @@ class Index(
             event.disappearAfter != null && event.disappearAfter!! > 0 ->
                 "$who turned on disappearing messages. New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(event.disappearAfter!!)}."
             event.disappearAfter != null -> "$who turned off disappearing messages"
+            event.screenshot == true -> "$who took a screenshot"
             else -> "$who changed the chat"
         }
     }

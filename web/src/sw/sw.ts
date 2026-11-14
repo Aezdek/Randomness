@@ -153,7 +153,15 @@ interface PushData {
 
 function describe(data: PushData): { title: string; body: string; url: string; urgent?: boolean } {
   const who = data.from ? `@${data.from}` : 'Someone';
+  // Previews turned off (Settings → Notifications): the server sent no name, so say only that something happened.
+  const hidden = !data.from && data.type !== 'sign_in' && data.type !== 'admin_alert' && data.type !== 'ring_test';
+  if (hidden && (data.type === 'message' || data.type === 'reaction')) return { title: 'Hush', body: 'New message', url: '/direct' };
+  if (hidden && data.type !== 'call') return { title: 'Hush', body: 'New activity', url: '/activity' };
   switch (data.type) {
+    case 'sign_in':
+      return { title: 'New sign-in to your account', body: 'Was this you? Open Hush to check.', url: '/settings/security', urgent: true };
+    case 'admin_alert':
+      return { title: 'Your Hush server needs a look', body: 'Open Hush to see what is wrong.', url: '/admin' };
     case 'message':
       return { title: who, body: 'Sent you a message', url: data.ref ? `/direct/${data.ref}` : '/direct' };
     case 'reaction':

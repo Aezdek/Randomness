@@ -167,6 +167,14 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         PasskeyDto(id, name, now)
     }
 
+    /** Before a passkey is made: the password is right, and there is room for one more. Changes nothing. */
+    fun checkPasskey(session: Session, currentAuthKey: String) = db.tx {
+        checkAuthKey(session.userId, currentAuthKey)
+        if ((long("SELECT COUNT(*) FROM passkeys WHERE user_id = ?", session.userId) ?: 0) >= MAX_PASSKEYS) {
+            badRequest("An account can have up to $MAX_PASSKEYS passkeys")
+        }
+    }
+
     fun passkeys(session: Session): List<PasskeyDto> = db.tx {
         query("SELECT id, name, created_at, last_used_at FROM passkeys WHERE user_id = ? ORDER BY created_at", session.userId) {
             PasskeyDto(it.str("id"), it.str("name"), it.getLong("created_at"), it.longOrNull("last_used_at"))
@@ -272,7 +280,11 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         if (!MessageDigest.isEqual(hash, sha256(B64u.dec(authKey, "authKey", size = 32)))) forbidden("Wrong password")
     }
 
-    /** Re-seals the same private keys under a new password, and signs out every other device. */
+    /**
+     * Re-seals the same private keys under a new password, signs out every other device and removes every passkey: a
+     * password change is what someone does after "that wasn't me", and a passkey added with the old password would
+     * otherwise still get in.
+     */
     fun changePassword(session: Session, req: ChangePasswordRequest) {
         val revoked = db.tx {
             checkAuthKey(session.userId, req.currentAuthKey)
@@ -285,6 +297,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             val others = strings("SELECT id FROM sessions WHERE user_id = ? AND id != ?", session.userId, session.id)
             exec("DELETE FROM sessions WHERE user_id = ? AND id != ?", session.userId, session.id)
             exec("DELETE FROM push_subscriptions WHERE user_id = ? AND session_id != ?", session.userId, session.id)
+            exec("DELETE FROM passkeys WHERE user_id = ?", session.userId)
             others
         }
         sessionCache.entries.removeIf { it.value.first.userId == session.userId && it.value.first.id != session.id }

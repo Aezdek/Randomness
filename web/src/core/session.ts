@@ -78,6 +78,14 @@ export async function signIn(username: string, password: string) {
   await start(response.token, response.me, keys);
 }
 
+/** Signs in with a passkey made earlier on this account (Settings → Encryption and devices). */
+export async function signInWithPasskey() {
+  const { passkeySignIn } = await import('./passkeys');
+  const { response, keys } = await passkeySignIn(deviceInfo());
+  await saveSession(response.token, response.me, keys);
+  await start(response.token, response.me, keys);
+}
+
 export async function signOut(tellServer = true) {
   const me = getState().me;
   if (tellServer) await api.post('/auth/logout').catch(() => undefined);

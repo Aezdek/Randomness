@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronRight,
   Download,
+  Fingerprint,
   HardDrive,
   KeyRound,
   Laptop,
@@ -24,7 +25,9 @@ import { displayName, useIndex } from '../../core/selectors';
 import { changePassword, deleteAccount, enablePush, pushSupported, resetKeys, signOut, updateMe } from '../../core/session';
 import { toast, useApp } from '../../core/store';
 import { applyTheme, useUi } from '../../core/ui';
-import type { IdList, SessionDto } from '../../core/types';
+import type { IdList, PasskeyDto, SessionDto } from '../../core/types';
+import { addPasskey, passkeysSupported } from '../../core/passkeys';
+import { NotifyPreview } from '../../core/payloads';
 import { Avatar } from '../../ui/Avatar';
 import { Ago, Center, Segmented, Spinner, Switch, Verified } from '../../ui/bits';
 import { Confirm } from '../../ui/Sheet';
@@ -111,8 +114,8 @@ function AccountSection() {
         />
         <p className="faint small">
           {what === 'password'
-            ? 'Your keys stay the same and are sealed under the new password. Your other devices are signed out. A copy of the server’s data taken earlier still opens with your old password.'
-            : 'You also get brand-new keys, and everything you can read is sealed to them, so nothing taken earlier opens with your old password or old keys. Your other devices are signed out, and your contacts are told your security code changed.'}
+            ? 'Your keys stay the same and are sealed under the new password. Your other devices are signed out and your passkeys removed. A copy of the server’s data taken earlier still opens with your old password.'
+            : 'You also get brand-new keys, and everything you can read is sealed to them, so nothing taken earlier opens with your old password or old keys. Your other devices are signed out, your passkeys removed, and your contacts are told your security code changed.'}
         </p>
         <input className="input" type="password" placeholder="Current password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
         <div>
@@ -251,6 +254,25 @@ function NotificationsSection() {
           </button>
         </Row>
       </Card>
+      <Card title="Previews">
+        <Segmented
+          id="notify-preview"
+          value={(s.notifyPreview as string | undefined) ?? NotifyPreview.FULL}
+          onChange={(v) => void run(saveSettings({ notifyPreview: v }))}
+          options={[
+            { id: NotifyPreview.FULL, label: 'Show everything' },
+            { id: NotifyPreview.NAME, label: 'Only who' },
+            { id: NotifyPreview.NONE, label: 'Nothing' },
+          ]}
+        />
+        <p className="faint small">
+          {s.notifyPreview === NotifyPreview.NONE
+            ? 'Notifications say only “New message” or “New activity”, on the lock screen and everywhere else. Your server leaves out who it is from too.'
+            : s.notifyPreview === NotifyPreview.NAME
+              ? 'Notifications say who it is from, but never what they said. The Android app follows this too.'
+              : 'The Android app shows the message itself (it decrypts it on the phone). Browser notifications never carry what was said, only who.'}
+        </p>
+      </Card>
       <Card title="Notify me about">
         {toggles.map(([key, label]) => (
           <Row key={key} title={label}>
@@ -322,6 +344,7 @@ function SecuritySection() {
           ))
         )}
       </Card>
+      <PasskeysCard />
       <Card title="Reset encryption keys">
         <p className="faint small">Only if you think your keys leaked. You get a new identity and keep your password; everything you can read is re-sealed to it, and your contacts are told your code changed. To change your password at the same time, use Change password.</p>
         <input className="input" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -340,6 +363,89 @@ function SecuritySection() {
       </Card>
     </>
   );
+}
+
+/** Passkeys: sign in with a fingerprint, face or security key instead of typing the password. */
+function PasskeysCard() {
+  const [passkeys, setPasskeys] = useState<PasskeyDto[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<PasskeyDto | null>(null);
+  const load = () => void api.get<PasskeyDto[]>('/auth/passkeys').then(setPasskeys).catch(() => setPasskeys([]));
+  useEffect(load, []);
+  if (!passkeysSupported()) return null;
+  const add = async () => {
+    setBusy(true);
+    try {
+      await addPasskey(password, name || defaultPasskeyName());
+      toast('Passkey added', 'success');
+      setAdding(false);
+      setPassword('');
+      setName('');
+      load();
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'NotAllowedError')) {
+        const wrong = (e as { status?: number }).status === 403;
+        toast(wrong ? 'That isn’t your password.' : messageOf(e), 'error');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Passkeys">
+      <p className="faint small">Sign in on this browser with your fingerprint, face or a security key. The passkey unlocks your own sealed copy of your keys, so it is as end to end as your password. Changing your password or keys removes every passkey.</p>
+      {passkeys?.map((p) => (
+        <div className="user-row" key={p.id}>
+          <span className="device-icon">
+            <Fingerprint size={20} />
+          </span>
+          <span className="user-row-text">
+            <b>{p.name}</b>
+            <span className="faint">{p.lastUsedAt ? <>Used <Ago at={p.lastUsedAt} className="" suffix /></> : <>Added <Ago at={p.createdAt} className="" suffix /></>}</span>
+          </span>
+          <button className="btn btn-secondary btn-sm" onClick={() => setRemoving(p)}>
+            Remove
+          </button>
+        </div>
+      ))}
+      {adding ? (
+        <>
+          <input className="input" placeholder={defaultPasskeyName()} value={name} onChange={(e) => setName(e.target.value)} aria-label="Passkey name" maxLength={60} />
+          <input className="input" type="password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn btn-primary" disabled={!password || busy} onClick={() => void add()}>
+              {busy ? <Spinner size={16} /> : <Fingerprint size={16} />} Add passkey
+            </button>
+            <button className="btn btn-secondary" onClick={() => setAdding(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <button className="btn btn-secondary" onClick={() => setAdding(true)}>
+          <Fingerprint size={16} /> Add a passkey
+        </button>
+      )}
+      <Confirm
+        open={!!removing}
+        title="Remove this passkey?"
+        message="It won’t sign in to Hush any more. Delete it from your device’s passkey list too."
+        confirm="Remove"
+        danger
+        onConfirm={() => removing && void run(api.delete(`/auth/passkeys/${removing.id}`), 'Passkey removed').then(load)}
+        onClose={() => setRemoving(null)}
+      />
+    </Card>
+  );
+}
+
+function defaultPasskeyName(): string {
+  const ua = navigator.userAgent;
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iPhone' : /Mac OS/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : 'This device';
+  return `${os} passkey`;
 }
 
 function ArchiveSection() {

@@ -417,5 +417,6 @@ export function eventText(e: ChatEvent, authorId: string, me: string, users: Rec
       ? `${who} turned on disappearing messages. New messages disappear after ${disappearingLabel(e.disappearAfter)}.`
       : `${who} turned off disappearing messages`;
   }
+  if (e.screenshot) return `${who} took a screenshot`;
   return `${who} changed the chat`;
 }

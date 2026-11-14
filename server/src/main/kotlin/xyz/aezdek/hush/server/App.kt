@@ -152,7 +152,7 @@ internal fun Application.basePlugins() {
         header("Referrer-Policy", "no-referrer")
         header("X-Frame-Options", "DENY")
         header("Cross-Origin-Opener-Policy", "same-origin")
-        header("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=()")
+        header("Permissions-Policy", "camera=(self), microphone=(self), display-capture=(self), geolocation=(self), payment=()")
         header("Strict-Transport-Security", "max-age=31536000")
     }
     install(StatusPages) {

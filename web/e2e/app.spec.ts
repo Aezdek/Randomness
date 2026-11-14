@@ -367,8 +367,13 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await bobLaptop.page.getByRole('button', { name: 'Sign in' }).first().click();
   await bobLaptop.page.getByLabel('Username').fill('bob');
   await bobLaptop.page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-  await bobLaptop.page.getByRole('button', { name: 'Sign in' }).last().click();
+  await bobLaptop.page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
   await expect(bobLaptop.page.getByRole('navigation', { name: 'Main' }).first()).toBeVisible({ timeout: 60_000 });
+  // His phone asks at once whether the new sign-in was him.
+  await expect(bob.page.getByRole('dialog').getByText('Chrome on')).toBeVisible({ timeout: 20_000 });
+  await shot(bob.page, 'sign-in-alert-mobile');
+  await bob.page.getByRole('button', { name: 'That was me' }).click();
+  await expect(bob.page.getByRole('button', { name: 'That was me' })).toBeHidden();
   await alice.page.getByRole('button', { name: 'Video call' }).click();
   await expect(bob.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });
   await expect(bobLaptop.page.getByRole('button', { name: 'Accept' })).toBeVisible({ timeout: 20_000 });
@@ -390,7 +395,13 @@ test('three people use Hush end to end', async ({ browser, request }) => {
 
   // ----------------------------------------------------------------------------- a stranger sees nothing
   const cara = await person(browser, 'cara', false, 'light');
-  await signUp(cara, await newInvite(alice));
+  const caraInvite = await newInvite(alice);
+  // An invite can also be shown as a QR code for a phone's camera.
+  await alice.page.getByRole('button', { name: `Show QR code for ${caraInvite}` }).click();
+  await expect(alice.page.locator('.invite-qr .qr svg')).toBeVisible();
+  await shot(alice.page, 'admin-invite-qr');
+  await alice.page.keyboard.press('Escape');
+  await signUp(cara, caraInvite);
   await cara.page.goto(`/p/${postId}`);
   await expect(cara.page.getByText('Post unavailable')).toBeVisible({ timeout: 20_000 });
   await cara.page.goto('/u/alice');
@@ -407,7 +418,8 @@ test('three people use Hush end to end', async ({ browser, request }) => {
   await alice.page.getByPlaceholder('Group name (optional)').fill('Weekend');
   await alice.page.getByRole('button', { name: 'Chat', exact: true }).click();
   await alice.page.waitForURL(/\/direct\//);
-  await alice.page.getByRole('button', { name: 'Create poll' }).click();
+  await alice.page.getByRole('button', { name: 'Add to chat' }).click();
+  await alice.page.getByRole('button', { name: /^Create poll/ }).click();
   await alice.page.getByPlaceholder('Ask a question…').fill('Hike on Saturday or Sunday?');
   await alice.page.getByPlaceholder('Option 1').fill('Saturday');
   await alice.page.getByPlaceholder('Option 2').fill('Sunday');

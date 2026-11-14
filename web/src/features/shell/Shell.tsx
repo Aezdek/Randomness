@@ -24,6 +24,8 @@ import { Settings, settingsTitle } from '../settings/Settings';
 import { Admin } from '../admin/Admin';
 import { Verify } from '../settings/Verify';
 import { StoryViewerPage } from '../stories/StoryViewer';
+import { SignInAlert } from '../security/Alerts';
+import { LocationSharer } from '../messages/Circle';
 
 function useRealtimeWiring() {
   const navigate = useNavigate();
@@ -297,6 +299,8 @@ export function Shell() {
       <CallHost />
       <ConnectionBanner />
       <WeakPasswordBanner />
+      <SignInAlert />
+      <LocationSharer />
     </div>
   );
 }

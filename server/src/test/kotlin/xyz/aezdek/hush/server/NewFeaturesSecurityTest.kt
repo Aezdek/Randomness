@@ -25,9 +25,11 @@ import xyz.aezdek.hush.crypto.PasswordKeys
 import xyz.aezdek.hush.protocol.AddPasskeyRequest
 import xyz.aezdek.hush.protocol.AdminAlertDto
 import xyz.aezdek.hush.protocol.AuthResponse
+import xyz.aezdek.hush.protocol.ChangePasswordRequest
 import xyz.aezdek.hush.protocol.CreateThreadRequest
 import xyz.aezdek.hush.protocol.DeviceInfo
 import xyz.aezdek.hush.protocol.PasskeyDto
+import xyz.aezdek.hush.protocol.PasskeyCheckRequest
 import xyz.aezdek.hush.protocol.PasskeyLoginRequest
 import xyz.aezdek.hush.protocol.PreloginRequest
 import xyz.aezdek.hush.protocol.PreloginResponse
@@ -97,6 +99,26 @@ class NewFeaturesSecurityTest {
     }
 
     @Test
+    fun thePasskeyCheckGivesNothingAwayAndSharesThePasswordLimit() = serverTest {
+        val (alice, bob) = members("alice", "bob")
+        // Right password: yes. Someone else's password, or none, is refused. It never adds anything.
+        assertEquals(HttpStatusCode.OK, alice.post("/api/v1/auth/passkeys/check", PasskeyCheckRequest(B64.encode(authKeyOf(alice)))).status)
+        assertEquals(HttpStatusCode.Forbidden, alice.post("/api/v1/auth/passkeys/check", PasskeyCheckRequest(B64.encode(authKeyOf(bob)))).status)
+        assertEquals(HttpStatusCode.BadRequest, alice.post("/api/v1/auth/passkeys/check", PasskeyCheckRequest("not base64!")).status)
+        assertEquals(emptyList<PasskeyDto>(), alice.get("/api/v1/auth/passkeys").body<List<PasskeyDto>>())
+        // Without a session it's not there at all.
+        val anonymous = http.post("/api/v1/auth/passkeys/check") {
+            contentType(ContentType.Application.Json)
+            setBody(Wire.json.encodeToString(PasskeyCheckRequest.serializer(), PasskeyCheckRequest(B64.encode(authKeyOf(alice)))))
+        }
+        assertEquals(HttpStatusCode.Unauthorized, anonymous.status)
+        // Guessing through it counts against the same allowance as changing the password or adding a passkey.
+        repeat(7) { alice.post("/api/v1/auth/passkeys/check", PasskeyCheckRequest(B64.encode(bytes(32)))) }
+        assertEquals(HttpStatusCode.TooManyRequests, alice.post("/api/v1/auth/passkeys/check", PasskeyCheckRequest(B64.encode(authKeyOf(alice)))).status)
+        assertEquals(HttpStatusCode.TooManyRequests, alice.post("/api/v1/auth/passkeys", AddPasskeyRequest(B64.encode(authKeyOf(alice)), credential(), "x", B64.encode(bytes(32)), B64.encode(bytes(64)))).status)
+    }
+
+    @Test
     fun passkeyGuessingIsLimited() = serverTest {
         val (alice) = members("alice")
         val credentialId = credential()
@@ -122,6 +144,27 @@ class NewFeaturesSecurityTest {
         )
         assertEquals(HttpStatusCode.OK, reset.status)
         // Its sealed copy held the old keys: it is gone, and can't sign in.
+        assertEquals(HttpStatusCode.Unauthorized, passkeyLogin(credentialId, passkeyAuth).status)
+        assertEquals(emptyList<PasskeyDto>(), alice.get("/api/v1/auth/passkeys").body<List<PasskeyDto>>())
+    }
+
+    @Test
+    fun aPasswordChangeRetiresEveryPasskey() = serverTest {
+        // Someone who knew the old password added a passkey; the owner changes the password after "that wasn't me".
+        val (alice) = members("alice")
+        val credentialId = credential()
+        val passkeyAuth = bytes(32)
+        alice.post("/api/v1/auth/passkeys", AddPasskeyRequest(B64.encode(authKeyOf(alice)), credentialId, "Intruder", B64.encode(passkeyAuth), B64.encode(bytes(64))))
+        assertEquals(HttpStatusCode.OK, passkeyLogin(credentialId, passkeyAuth).status)
+        val salt = PasswordKeys.newSalt()
+        val derived = PasswordKeys.derive("a completely new password", salt, KdfParams.FAST_FOR_TESTS)
+        val keys = AccountKeys.generate()
+        val changed = alice.post(
+            "/api/v1/auth/password",
+            ChangePasswordRequest(B64.encode(authKeyOf(alice)), B64.encode(salt), KdfParams.FAST_FOR_TESTS.opsLimit, KdfParams.FAST_FOR_TESTS.memLimitBytes,
+                B64.encode(derived.authKey), B64.encode(keys.sealVault(derived.vaultKey))),
+        )
+        assertEquals(HttpStatusCode.OK, changed.status)
         assertEquals(HttpStatusCode.Unauthorized, passkeyLogin(credentialId, passkeyAuth).status)
         assertEquals(emptyList<PasskeyDto>(), alice.get("/api/v1/auth/passkeys").body<List<PasskeyDto>>())
     }

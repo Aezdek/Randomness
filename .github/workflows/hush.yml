@@ -251,7 +251,14 @@ jobs:
             -d "{\"code\":\"$(cat "$DATA/setup-code.txt")\",\"password\":\"the smoke test's server password\"}"
           for i in $(seq 1 30); do [ -s "$DATA/first-invite.txt" ] && break; sleep 1; done
           echo "SMOKE_INVITE=$(cat "$DATA/first-invite.txt")" >> "$GITHUB_ENV"
-          SECOND=$(curl -sf -X POST http://127.0.0.1:8470/api/v1/local/invites -H "X-Hush-Local: $(cat "$DATA/local.key")" | python3 -c 'import json,sys; print(json.load(sys.stdin)["code"])')
+          # The invite file can appear a moment before the full API takes over from the setup server (503 until then).
+          SECOND=""
+          for i in $(seq 1 30); do
+            SECOND=$(curl -sf -X POST http://127.0.0.1:8470/api/v1/local/invites -H "X-Hush-Local: $(cat "$DATA/local.key")" | jq -r '.code // empty' || true)
+            [ -n "$SECOND" ] && break
+            sleep 1
+          done
+          [ -n "$SECOND" ] || { cat "$RUNNER_TEMP/server.log"; echo "::error::Couldn't make the second invite"; exit 1; }
           echo "SEED_INVITE=$SECOND" >> "$GITHUB_ENV"
           curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "$RUNNER_TEMP/cloudflared" https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x "$RUNNER_TEMP/cloudflared"

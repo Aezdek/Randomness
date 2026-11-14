@@ -251,6 +251,11 @@ data class ChatEvent(
      * they are sent. 0 turns it off. One of [Disappearing.CHOICES].
      */
     val disappearAfter: Long? = null,
+    /**
+     * Someone's phone saw a screenshot of this chat while it was protected (vanish mode, disappearing messages or a
+     * view-once photo). Android blocks screenshots there; this tells the chat when one got through anyway.
+     */
+    val screenshot: Boolean? = null,
 )
 
 /** How long messages last in a chat with disappearing messages on (see [ChatEvent.disappearAfter]). */

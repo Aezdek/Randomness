@@ -63,6 +63,9 @@ import xyz.aezdek.hush.ui.components.TopBar
 import xyz.aezdek.hush.ui.components.ago
 import xyz.aezdek.hush.ui.feed.ringOf
 import xyz.aezdek.hush.ui.theme.Aez
+import xyz.aezdek.hush.client.notesToSelf
+import xyz.aezdek.hush.client.searchMessages
+import androidx.compose.material.icons.outlined.BookmarkBorder
 
 fun sortedThreads(state: AppState, index: Index): List<ThreadDto> {
     val pinned = index.settings.pinnedThreads.toSet()
@@ -90,6 +93,8 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.NOTE_REPLY -> if (mine) "You replied to their note: ${p.text.orEmpty()}" else "Replied to your note: ${p.text.orEmpty()}"
         MessageType.HEART -> prefix + (p.text ?: "❤️")
         MessageType.POLL -> (if (mine) "You created a poll: " else "Poll: ") + (p.poll?.question ?: p.text.orEmpty())
+        MessageType.PLAN -> (if (mine) "You made a plan: " else "Plan: ") + (p.plan?.title ?: p.text.orEmpty())
+        MessageType.LOCATION -> if (mine) "You're sharing your live location" else "Shared their live location"
         else -> prefix + (p.text ?: "")
     }
 }
@@ -109,10 +114,19 @@ fun Inbox() {
         }
     }
     var menuFor by remember { mutableStateOf<ThreadDto?>(null) }
+    var query by remember { mutableStateOf("") }
+    // Searching looks inside every chat too, here on the phone (the server only holds ciphertext).
+    val found = remember(index, query) { if (query.trim().length >= 2) index.searchMessages(query, 30) else emptyList() }
+    val shownThreads = if (query.isBlank()) threads else threads.filter { index.threadTitle(it, state.users, me.id).contains(query.trim(), ignoreCase = true) }
+    val hasNotes = index.notesToSelf(state) != null
     Column(Modifier.fillMaxSize()) {
         TopBar(me.username, actions = { IconAction(Icons.Outlined.Edit, "New message", { nav.go(Screen.NewChat) }) })
         LazyColumn(Modifier.weight(1f)) {
-            item { NotesRow(index, state) }
+            item {
+                xyz.aezdek.hush.ui.components.AezField(query, { query = it.take(80) }, "Search chats and messages",
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+            }
+            if (query.isBlank()) item { NotesRow(index, state) }
             item {
                 Text("Messages", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 6.dp))
             }
@@ -129,10 +143,50 @@ fun Inbox() {
                     }
                 }
             }
-            items(threads, key = { it.id }) { thread ->
+            if (query.isBlank() && filter == "all" && !hasNotes) {
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            Graph.launch { nav.go(Screen.Chat(Graph.client.composer.openNotesToSelf())) }
+                        }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(56.dp).clip(CircleShape).background(xyz.aezdek.hush.ui.theme.Brand.gradient), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.BookmarkBorder, null, tint = Color.White, modifier = Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Notes to self", fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Aez.colors.text)
+                            Text("Save links, lists and photos for later", fontSize = 13.sp, color = Aez.colors.text3)
+                        }
+                    }
+                }
+            }
+            items(shownThreads, key = { it.id }) { thread ->
                 ThreadRow(thread, index, state, onLongPress = { menuFor = thread }) { nav.go(Screen.Chat(thread.id)) }
             }
-            if (threads.isEmpty()) {
+            if (found.isNotEmpty()) {
+                item { Text("In messages", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp)) }
+                items(found, key = { "hit:" + it.id }) { hit ->
+                    val thread = state.threads[hit.dto.threadId] ?: return@items
+                    val p = hit.payloadAs<MessagePayload>()
+                    val who = if (hit.dto.authorId == me.id) "You" else index.nameIn(thread.id, hit.dto.authorId, state.users)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { nav.go(Screen.Chat(thread.id, focus = hit.id)) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Avatar(hit.dto.authorId, 44.dp, index, state.users[hit.dto.authorId]?.username)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(index.threadTitle(thread, state.users, me.id), fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Aez.colors.text, maxLines = 1)
+                            Text("$who: " + (p?.plan?.title ?: p?.poll?.question ?: p?.text ?: p?.quote ?: ""), fontSize = 13.sp, color = Aez.colors.text2,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(ago(hit.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3)
+                    }
+                }
+            }
+            if (shownThreads.isEmpty() && found.isEmpty()) {
                 item {
                     Text(
                         when (filter) {
@@ -230,7 +284,7 @@ private fun ThreadRow(thread: ThreadDto, index: Index, state: AppState, onLongPr
                 }
             }
         } else {
-            Avatar(first, 56.dp, index, state.users[first]?.username, online = online)
+            Avatar(first ?: me.id, 56.dp, index, state.users[first ?: me.id]?.username, online = online)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

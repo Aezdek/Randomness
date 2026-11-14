@@ -60,6 +60,7 @@ import xyz.aezdek.hush.protocol.AccountStatus
 import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.AdminUserDto
 import xyz.aezdek.hush.protocol.InviteDto
+import androidx.compose.material.icons.outlined.QrCode
 import xyz.aezdek.hush.protocol.OkResponse
 import xyz.aezdek.hush.ui.components.ActionSheet
 import xyz.aezdek.hush.ui.components.AezButton
@@ -97,6 +98,7 @@ internal fun AdminPanel(
     var status by remember { mutableStateOf(initialStatus) }
     var users by remember { mutableStateOf(initialUsers) }
     var invites by remember { mutableStateOf(initialInvites) }
+    var showing by remember { mutableStateOf<InviteDto?>(null) }
     var managing by remember { mutableStateOf<AdminUserDto?>(null) }
     var removing by remember { mutableStateOf<AdminUserDto?>(null) }
     var viewing by remember { mutableStateOf<String?>(null) }
@@ -221,6 +223,10 @@ internal fun AdminPanel(
                     }
                     if (open) {
                         Icon(
+                            Icons.Outlined.QrCode, "Show QR code", tint = Aez.colors.text,
+                            modifier = Modifier.clip(CircleShape).clickable { showing = invite }.padding(8.dp).size(20.dp),
+                        )
+                        Icon(
                             Icons.Outlined.Share, "Share", tint = Aez.colors.text,
                             modifier = Modifier.clip(CircleShape).clickable { shareInvite(context, invite.code) }.padding(8.dp).size(20.dp),
                         )
@@ -234,6 +240,25 @@ internal fun AdminPanel(
                             }.padding(8.dp),
                         )
                     }
+                }
+            }
+        }
+
+        showing?.let { invite ->
+            // A phone's camera, or Hush's own "Scan an invite", opens this with the server and the code filled in.
+            androidx.compose.ui.window.Dialog({ showing = null }) {
+                Column(
+                    Modifier.clip(RoundedCornerShape(24.dp)).background(Aez.colors.elev1).padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("Invite", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Aez.colors.text)
+                    Spacer(Modifier.height(12.dp))
+                    QrCode(inviteLink(invite.code), Modifier.size(240.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(invite.code, fontFamily = FontFamily.Monospace, fontSize = 18.sp, color = Aez.colors.text)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Scan with Hush on a new phone (Join → Scan an invite), or any camera. Works once.",
+                        fontSize = 13.sp, color = Aez.colors.text2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
             }
         }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBlobId, safeMediaType, webLink } from './safe';
+import { isBlobId, safeLocation, safeMediaType, safePlan, safePoll, safeText, webLink } from './safe';
 
 describe('content from other people', () => {
   it('only ever calls a decrypted file a photo, a video or sound', () => {
@@ -23,5 +23,26 @@ describe('content from other people', () => {
     for (const bad of ['javascript:alert(1)', 'JaVaScript:alert(1)', 'data:text/html,<script>1</script>', 'file:///etc/passwd', 'intent://x#Intent;end', 'tel:123', '', null]) {
       expect(webLink(bad)).toBeNull();
     }
+  });
+});
+
+describe('chat payload shapes from other members', () => {
+  it('keeps a well-formed plan, location and poll', () => {
+    expect(safePlan({ title: ' Dinner ', at: 5, place: ' Leo’s ' })).toEqual({ title: 'Dinner', at: 5, place: 'Leo’s' });
+    expect(safeLocation({ lat: 38.7, lng: -9.1, until: 9, updatedAt: 1, accuracy: 20 })).toEqual({ lat: 38.7, lng: -9.1, until: 9, updatedAt: 1, accuracy: 20 });
+    expect(safePoll({ question: 'Where?', options: ['A', 'B'] })).toEqual({ question: 'Where?', options: ['A', 'B'] });
+  });
+  it('refuses what a modified client could send instead', () => {
+    expect(safePlan({ title: { evil: 1 }, at: 5 })).toBeNull();
+    expect(safePlan({ title: 'x', at: '5' })).toBeNull();
+    expect(safePlan('plan')).toBeNull();
+    expect(safeLocation({ lat: '38', lng: 1, until: 1, updatedAt: 1 })).toBeNull();
+    expect(safeLocation({ lat: 91, lng: 1, until: 1, updatedAt: 1 })).toBeNull();
+    expect(safeLocation({ lat: 1, lng: 1, until: Infinity, updatedAt: 1 })).toBeNull();
+    expect(safeLocation({ lat: 1, lng: 1, until: 2, updatedAt: 1, accuracy: -4 })?.accuracy).toBeNull();
+    expect(safePoll({ question: 'q', options: 5 })).toBeNull();
+    expect(safePoll({ question: 'q', options: [1, 2, 'only one string'] })).toBeNull();
+    expect(safeText({ not: 'text' })).toBe('');
+    expect(safePlan({ title: 'x'.repeat(500), at: 1 })?.title).toHaveLength(100);
   });
 });

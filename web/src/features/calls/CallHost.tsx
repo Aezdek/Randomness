@@ -1,4 +1,4 @@
-import { Camera, Check, Heart, Lock, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff, PictureInPicture2, Radio, RefreshCcw, Send, Video, VideoOff } from 'lucide-react';
+import { Camera, Check, Heart, Lock, Maximize2, Mic, MicOff, Minimize2, MonitorUp, Phone, PhoneOff, PictureInPicture2, Radio, RefreshCcw, Send, Video, VideoOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useIndex } from '../../core/selectors';
@@ -40,8 +40,8 @@ function Tile({ peer }: { peer: Peer }) {
   const users = useApp((s) => s.users);
   const video = showsVideo(peer);
   return (
-    <div className="call-tile">
-      {peer.stream && <StreamVideo stream={peer.stream} className={video ? 'remote' : 'hidden'} />}
+    <div className={`call-tile ${peer.screen ? 'screen' : ''}`}>
+      {peer.stream && <StreamVideo stream={peer.stream} className={video ? (peer.screen ? 'remote screen' : 'remote') : 'hidden'} />}
       {!video && (
         <div className="call-tile-avatar">
           <Avatar userId={peer.userId} size={88} />
@@ -50,6 +50,7 @@ function Tile({ peer }: { peer: Peer }) {
       <span className="call-tile-name">
         {peer.mic === false && <MicOff size={13} />}
         {users[peer.userId]?.username}
+        {peer.screen && <em> · sharing their screen</em>}
         {peer.state !== 'connected' && (
           <em>
             {' '}
@@ -236,7 +237,7 @@ export function CallHost() {
           others[0] && <Tile peer={others[0]} />
         ) : hostView ? (
           <div className="call-tile">
-            <StreamVideo stream={call.local} muted mirror={call.facing !== 'environment'} />
+            <StreamVideo stream={call.local} muted mirror={!call.sharing && call.facing !== 'environment'} />
           </div>
         ) : connected.length ? (
           connected.map((p) => <Tile key={p.userId} peer={p} />)
@@ -251,7 +252,7 @@ export function CallHost() {
 
       {!call.live && hasCamera && call.local && (
         <motion.div className="call-self" drag dragConstraints={remote} dragMomentum={false} style={{ x: selfPos.x, y: selfPos.y }} onDragEnd={(_, info) => setSelfPos((p) => ({ x: p.x + info.offset.x, y: p.y + info.offset.y }))}>
-          <StreamVideo stream={call.local} muted mirror={call.facing !== 'environment'} />
+          <StreamVideo stream={call.local} muted mirror={!call.sharing && call.facing !== 'environment'} />
           {call.cameraOff && <div className="call-self-off"><VideoOff size={20} /></div>}
         </motion.div>
       )}
@@ -279,7 +280,12 @@ export function CallHost() {
             <button className={`round ${call.cameraOff ? 'off' : ''}`} onClick={() => void calls.toggleCamera()} aria-label={call.cameraOff ? 'Camera on' : 'Camera off'}>
               {call.cameraOff ? <VideoOff size={22} /> : <Video size={22} />}
             </button>
-            {hasCamera && (
+            {calls.canShareScreen && call.status === 'active' && !call.live && (
+              <button className={`round ${call.sharing ? 'on' : ''}`} onClick={() => void calls.toggleScreen()} aria-label={call.sharing ? 'Stop sharing your screen' : 'Share your screen'} aria-pressed={call.sharing}>
+                <MonitorUp size={22} />
+              </button>
+            )}
+            {hasCamera && !call.sharing && (
               <span className="call-menu-anchor">
                 <button
                   className="round"

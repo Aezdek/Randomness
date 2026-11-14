@@ -268,6 +268,22 @@ private fun NotificationsSection() {
     Card(note = "Notifications come from your own server over the app's background connection. They never contain message text: the app decrypts it on this phone.") {
         NavRow(Icons.Outlined.Call, "Calls and ringing checklist") { nav.go(Screen.Readiness) }
     }
+    // What a notification shows: everything, only who it is from, or nothing. The lock screen never shows more than "New message".
+    Card("Previews", note = when (s.notifyPreview) {
+        xyz.aezdek.hush.protocol.NotifyPreview.NONE -> "Notifications say only \"New message\" or \"New activity\". Browsers get no name either."
+        xyz.aezdek.hush.protocol.NotifyPreview.NAME -> "Notifications say who it's from, but not what they said."
+        else -> "Notifications show the message, decrypted on this phone. The lock screen shows only \"New message\" until you unlock."
+    }) {
+        androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((value, label) in listOf(
+                xyz.aezdek.hush.protocol.NotifyPreview.FULL to "Everything",
+                xyz.aezdek.hush.protocol.NotifyPreview.NAME to "Only who",
+                xyz.aezdek.hush.protocol.NotifyPreview.NONE to "Nothing",
+            )) {
+                xyz.aezdek.hush.ui.components.Chip(label, selected = s.notifyPreview == value) { saveSettings { it.copy(notifyPreview = value) } }
+            }
+        }
+    }
     Card("Notify me about") {
         ToggleRow(Icons.Outlined.ChatBubbleOutline, "Messages and calls", s.notifyMessages) { saveSettings { it.copy(notifyMessages = !it.notifyMessages) } }
         ToggleRow(Icons.Outlined.ChatBubbleOutline, "Comments and mentions", s.notifyComments) { saveSettings { it.copy(notifyComments = !it.notifyComments) } }
@@ -490,9 +506,9 @@ private fun AccountSection() {
         Text(
             if (withKeys) {
                 "You also get brand-new keys, and everything you can read is sealed to them, so nothing taken earlier opens with your " +
-                    "old password or old keys. Your other devices are signed out, and your contacts are told your security code changed."
+                    "old password or old keys. Your other devices are signed out, your passkeys removed, and your contacts are told your security code changed."
             } else {
-                "Your keys stay the same and are sealed under the new password. Your other devices are signed out. A copy of the " +
+                "Your keys stay the same and are sealed under the new password. Your other devices are signed out and your passkeys removed. A copy of the " +
                     "server's data taken earlier still opens with your old password."
             },
             fontSize = 13.sp, color = Aez.colors.text2,
@@ -602,8 +618,11 @@ internal fun Warning(text: String) {
     }
 }
 
+/** An invite as a link: the web app opens it with the code filled in, and Hush's scanner reads the server from it too. */
+internal fun inviteLink(code: String) = "${Graph.serverUrl.trimEnd('/')}/?invite=${android.net.Uri.encode(code)}"
+
 internal fun shareInvite(context: Context, code: String) {
-    val text = "Join me on Hush: ${Graph.serverUrl}\nInvite code: $code"
+    val text = "Join me on Hush: ${inviteLink(code)}\nInvite code: $code"
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Hush invite", text))
     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share invite")
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

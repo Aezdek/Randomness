@@ -192,7 +192,7 @@ private fun Grid(peers: List<PeerUi>, index: Index, names: Map<String, String>) 
                     Box(Modifier.weight(1f).fillMaxSize().padding(if (peers.size > 1) 2.dp else 0.dp).clip(RoundedCornerShape(if (peers.size > 1) 14.dp else 0.dp))) {
                         // Their video while their camera is on (older apps don't say, so a track counts as on).
                         if (peer.video != null && peer.camera != false) {
-                            VideoView(peer.video, mirror = false, Modifier.fillMaxSize())
+                            VideoView(peer.video, mirror = false, Modifier.fillMaxSize().background(Color.Black), fit = peer.screen)
                         } else {
                             Box(Modifier.fillMaxSize().background(Color(0xFF15151A)), contentAlignment = Alignment.Center) {
                                 Avatar(peer.userId, 88.dp, index, names[peer.userId])
@@ -326,7 +326,7 @@ private fun Timer(startedAt: Long?, modifier: Modifier) {
 
 /** A WebRTC video track in Compose. */
 @Composable
-fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier) {
+fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier, fit: Boolean = false) {
     var renderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
     AndroidView(
         modifier = modifier,
@@ -341,6 +341,10 @@ fun VideoView(track: VideoTrack, mirror: Boolean, modifier: Modifier) {
         },
         onRelease = { it.release() },
     )
+    // A shared screen is shown whole (text stays readable); a camera fills the tile.
+    LaunchedEffect(fit, renderer) {
+        renderer?.setScalingType(if (fit) RendererCommon.ScalingType.SCALE_ASPECT_FIT else RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+    }
     DisposableEffect(track, renderer) {
         val sink = renderer
         if (sink != null) runCatching { track.addSink(sink) }

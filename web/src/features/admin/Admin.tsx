@@ -1,4 +1,5 @@
-import { AlertCircle, Ban, Copy, Eye, HardDrive, LogOut, MoreHorizontal, PauseCircle, PlayCircle, Ticket, UserMinus, Users } from 'lucide-react';
+import { AlertCircle, Ban, Copy, Eye, HardDrive, LogOut, MoreHorizontal, PauseCircle, PlayCircle, QrCode, Ticket, UserMinus, Users } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../core/api';
@@ -14,6 +15,28 @@ import { ServerPanel, WebAdminOff } from './ServerPanel';
 
 const DAY = 86_400_000;
 const run = (p: Promise<unknown>, done?: string) => p.then(() => done && toast(done, 'success')).catch((e) => toast(messageOf(e), 'error'));
+
+const inviteLink = (code: string) => `${location.origin}/?invite=${encodeURIComponent(code)}`;
+
+/** An invite as a QR code: a phone camera opens Hush (the app, if it's installed) with the code filled in. */
+function InviteQr({ invite, onClose }: { invite: InviteDto; onClose: () => void }) {
+  const [svg, setSvg] = useState('');
+  useEffect(() => {
+    void QRCode.toString(inviteLink(invite.code), { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#0b0b0e', light: '#ffffff' } }).then(setSvg);
+  }, [invite.code]);
+  return (
+    <Sheet open onClose={onClose} title="Invite">
+      <div className="invite-qr">
+        <div className="qr" style={{ width: 240, height: 240 }} dangerouslySetInnerHTML={{ __html: svg }} />
+        <b className="tabular">{invite.code}</b>
+        <p className="faint small">Point a phone’s camera at this. It opens Hush with the invite filled in. Works once, until {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.</p>
+        <button className="btn btn-secondary btn-sm" onClick={() => copy(inviteLink(invite.code), 'Invite link copied')}>
+          <Copy size={14} /> Copy link
+        </button>
+      </div>
+    </Sheet>
+  );
+}
 
 function copy(text: string, done: string) {
   void navigator.clipboard.writeText(text).then(
@@ -57,6 +80,7 @@ export function Admin() {
   const [status, setStatus] = useState<AdminStatus | null>(null);
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [invites, setInvites] = useState<InviteDto[]>([]);
+  const [showing, setShowing] = useState<InviteDto | null>(null);
   const [menu, setMenu] = useState<AdminUserDto | null>(null);
   const [removing, setRemoving] = useState<AdminUserDto | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -227,7 +251,10 @@ export function Admin() {
               </span>
               {open && (
                 <>
-                  <button className="btn btn-secondary btn-sm" onClick={() => copy(`${location.origin}/?invite=${i.code}`, 'Invite link copied')}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowing(i)} aria-label={`Show QR code for ${i.code}`}>
+                    <QrCode size={14} /> QR
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => copy(inviteLink(i.code), 'Invite link copied')}>
                     <Copy size={14} /> Copy link
                   </button>
                   <button className="btn btn-danger btn-sm" onClick={() => void run(api.delete(`/admin/invites/${i.code}`), 'Invite withdrawn').then(load)}>
@@ -242,6 +269,7 @@ export function Admin() {
       )}
 
       {tab === 'server' && <ServerPanel status={status} onChanged={load} />}
+      {showing && <InviteQr invite={showing} onClose={() => setShowing(null)} />}
 
       <Sheet open={!!menu} onClose={() => setMenu(null)} hideHeader bottom bodyClass="flush">
         {menu && (

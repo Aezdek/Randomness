@@ -20,6 +20,11 @@ import { ThreadList } from './Inbox';
 import { EmojiPicker } from '../../ui/EmojiPicker';
 import { ShareSheet } from './ShareSheet';
 import { ThreadInfo } from './ThreadInfo';
+import { Guard } from '../../ui/Guard';
+import { safePoll, safeText } from '../../core/safe';
+import { AlbumGallery } from './Album';
+import { ExtrasSheet, LocationCard, LocationSheet, PlanCard, PlanSheet, type ChatExtra } from './Circle';
+import { isAlbum, sendPlan } from '../../core/circle';
 
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
@@ -296,11 +301,15 @@ function Bubble({
       );
   } else if (p.type === MessageType.POLL && p.poll) {
     content = <PollCard message={message} />;
+  } else if (p.type === MessageType.PLAN && p.plan) {
+    content = <PlanCard message={message} />;
+  } else if (p.type === MessageType.LOCATION && p.location) {
+    content = <LocationCard message={message} mine={mine} />;
   } else {
     content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? p.text || DEFAULT_REACTION : p.text}</span> : <RichText text={p.text ?? ''} />;
   }
 
-  const plainBubble = big || p.type === MessageType.SHARE || p.type === MessageType.POLL || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
+  const plainBubble = big || p.type === MessageType.SHARE || p.type === MessageType.POLL || p.type === MessageType.PLAN || p.type === MessageType.LOCATION || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
   return (
     <div className={`msg ${mine ? 'mine' : 'theirs'}`} id={`msg-${message.dto.id}`}>
       {!mine && <span className="msg-avatar">{showAvatar && <Avatar userId={message.dto.authorId} size={28} />}</span>}
@@ -421,11 +430,12 @@ function PollCard({ message }: { message: Entity<MessagePayload> }) {
   const index = useIndex();
   const me = useApp((s) => s.me!);
   const users = useApp((s) => s.users);
-  const poll = message.payload.poll!;
+  const poll = safePoll(message.payload.poll);
   const votes = (index.children[message.dto.id] ?? []).filter((e) => e.dto.kind === Kind.VOTE) as Entity<VotePayload>[];
   const myVote = votes.find((v) => v.dto.authorId === me.id)?.payload.option;
   const total = votes.length;
   const vote = (i: number) => void votePoll(message, i).catch((e) => toast(messageOf(e), 'error'));
+  if (!poll) return <span className="faint small">A poll that couldn’t be shown</span>;
   return (
     <div className="chat-poll-card">
       <p className="chat-poll-question">
@@ -577,6 +587,9 @@ export function Chat() {
   const [once, setOnce] = useState(false);
   const [vanish, setVanish] = useVanish(threadId);
   const [polling, setPolling] = useState(false);
+  const [extras, setExtras] = useState(false);
+  const [extra, setExtra] = useState<ChatExtra | null>(null);
+  const [gallery, setGallery] = useState<boolean | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -616,6 +629,32 @@ export function Chat() {
     if (mine && messages.at(-1)!.dto.receivedAt > mine.lastReadAt) void markRead(threadId).catch(() => undefined);
   }, [lastId, threadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const replyById = useCallback(
+    (id: string) => {
+      const target = (index.messages[threadId] ?? []).find((m) => m.dto.id === id) as Entity<MessagePayload> | undefined;
+      if (!target) return;
+      setReplyTo(target);
+      document.getElementById('chat-input')?.focus();
+    },
+    [index, threadId],
+  );
+  useChatGestures(scroller, replyById);
+
+  // Opened from a search result: show that message once the chat is on screen.
+  const routed = useLocation();
+  const jumpTo = (routed.state as { jumpTo?: string } | null)?.jumpTo;
+  useEffect(() => {
+    if (!jumpTo || !thread) return;
+    setGallery(false);
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`msg-${jumpTo}`);
+      if (!el) return toast('That message is no longer in the chat');
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('flash');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [jumpTo, !!thread]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!thread) {
     return (
       <Center style={{ minHeight: '60vh' }}>
@@ -625,6 +664,10 @@ export function Chat() {
   }
 
   const others = thread.members.filter((m) => m.userId !== me.id).map((m) => m.userId);
+  const notesToSelf = !thread.isGroup && others.length === 0;
+  const album = isAlbum(index, threadId);
+  // An album opens on its gallery; the conversation is one tap away.
+  const showGallery = album && (gallery ?? true);
   const title = threadTitle(thread, index, users, me.id);
   const typers = Object.entries(typing ?? {}).filter(([u, until]) => u !== me.id && until > Date.now()).map(([u]) => u);
   const onlineNow = others.some((id) => presence[id]);
@@ -732,16 +775,6 @@ export function Chat() {
     });
   };
 
-  const replyById = useCallback(
-    (id: string) => {
-      const target = (index.messages[threadId] ?? []).find((m) => m.dto.id === id) as Entity<MessagePayload> | undefined;
-      if (!target) return;
-      setReplyTo(target);
-      document.getElementById('chat-input')?.focus();
-    },
-    [index, threadId],
-  );
-  useChatGestures(scroller, replyById);
 
   /** Scrolls to a message (a pin, a search result) and flashes it. */
   const jump = (messageId: string) => {
@@ -786,24 +819,37 @@ export function Chat() {
                 ))}
               </span>
             ) : (
-              <Avatar userId={others[0]} size={44} presence />
+              <Avatar userId={others[0] ?? me.id} size={44} presence={!notesToSelf} />
             )}
             <span className="stack" style={{ gap: 0, alignItems: 'flex-start' }}>
               <b className="truncate" style={{ maxWidth: 260 }}>
                 {title}
               </b>
               <span className="faint" style={{ fontSize: 12.5 }}>
-                {typers.length ? 'typing…' : onlineNow ? 'Active now' : lastActive ? activeLabel(lastActive) : thread.isGroup ? `${thread.members.length} members` : ''}
+                {notesToSelf
+                  ? 'Only you can see this'
+                  : album
+                    ? `Shared album · ${thread.members.length} members`
+                    : typers.length ? 'typing…' : onlineNow ? 'Active now' : lastActive ? activeLabel(lastActive) : thread.isGroup ? `${thread.members.length} members` : ''}
               </span>
             </span>
           </button>
           <span className="spacer" />
-          <button className="icon-btn" onClick={() => calls.start(threadId, false)} aria-label="Audio call">
-            <Phone size={24} />
-          </button>
-          <button className="icon-btn" onClick={() => calls.start(threadId, true)} aria-label="Video call">
-            <Video size={26} />
-          </button>
+          {album && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setGallery(!showGallery)} aria-pressed={showGallery}>
+              {showGallery ? 'Chat' : 'Gallery'}
+            </button>
+          )}
+          {!notesToSelf && !album && (
+            <>
+              <button className="icon-btn" onClick={() => calls.start(threadId, false)} aria-label="Audio call">
+                <Phone size={24} />
+              </button>
+              <button className="icon-btn" onClick={() => calls.start(threadId, true)} aria-label="Video call">
+                <Video size={26} />
+              </button>
+            </>
+          )}
           <button className="icon-btn" onClick={() => setInfo(true)} aria-label="Details">
             <Info size={24} />
           </button>
@@ -819,7 +865,8 @@ export function Chat() {
             {custom.pinned.length > 1 && <span className="faint">{custom.pinned.length} pinned</span>}
           </button>
         )}
-        <div className="chat-scroll-wrap">
+        {showGallery && <AlbumGallery threadId={threadId} onAdd={() => file.current?.click()} onOpenChat={() => setGallery(false)} />}
+        <div className="chat-scroll-wrap" style={showGallery ? { display: 'none' } : undefined}>
         <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
           <div className="chat-intro">
             {thread.isGroup ? (
@@ -829,9 +876,10 @@ export function Chat() {
                 ))}
               </span>
             ) : (
-              <Avatar userId={others[0]} size={96} />
+              <Avatar userId={others[0] ?? me.id} size={96} />
             )}
             <h2>{title}</h2>
+            {notesToSelf && <p className="faint">Links, lists, photos and voice notes for later. Encrypted like every chat, and only you are in it.</p>}
             {!thread.isGroup && others[0] && (
               <Link className="btn btn-secondary btn-sm" to={`/u/${users[others[0]]?.username}`}>
                 View profile
@@ -854,6 +902,7 @@ export function Chat() {
                 {payload.type === MessageType.SYSTEM ? (
                   payload.event && <div className="chat-event" id={`msg-${m.dto.id}`}>{eventText(payload.event, m.dto.authorId, me.id, users, nameOf)}</div>
                 ) : (
+                  <Guard key={m.dto.id} fallback={<div className="chat-event">A message that couldn’t be shown</div>}>
                   <Bubble
                     message={m as Entity<MessagePayload>}
                     mine={m.dto.authorId === me.id}
@@ -866,9 +915,10 @@ export function Chat() {
                     }}
                     onEdit={() => {
                       setEditing(m as Entity<MessagePayload>);
-                      setText(payload.text ?? '');
+                      setText(safeText(payload.text));
                     }}
                   />
+                  </Guard>
                 )}
                 {m === lastMine && seenBy.length > 0 && (
                   <div className="seen">{thread.isGroup ? `Seen by ${seenBy.map((id) => nameOf(id)).join(', ')}` : 'Seen'}</div>
@@ -1023,11 +1073,9 @@ export function Chat() {
                   <button type="button" className="icon-btn sm" onClick={() => file.current?.click()} aria-label="Gallery">
                     <ImagePlus size={20} />
                   </button>
-                  {thread.isGroup && (
-                    <button type="button" className="icon-btn sm" onClick={() => setPolling(true)} aria-label="Create poll">
-                      <ListChecks size={20} />
-                    </button>
-                  )}
+                  <button type="button" className="icon-btn sm" onClick={() => setExtras(true)} aria-label="Add to chat" title="Plan, live location or poll">
+                    <Plus size={21} />
+                  </button>
                   <button
                     type="button"
                     className="icon-btn sm quick-reaction"
@@ -1044,6 +1092,9 @@ export function Chat() {
         </div>
       </section>
       <PollSheet open={polling} onClose={() => setPolling(false)} onSend={(poll) => void send({ type: MessageType.POLL, text: poll.question, poll }, { audience: Audience.THREAD })} />
+      <ExtrasSheet open={extras} onClose={() => setExtras(false)} group={thread.isGroup} onPick={(what) => (what === 'poll' ? setPolling(true) : setExtra(what))} />
+      <PlanSheet open={extra === 'plan'} onClose={() => setExtra(null)} onSend={(plan) => void sendPlan(threadId, plan).catch((e) => toast(messageOf(e), 'error'))} />
+      <LocationSheet open={extra === 'location'} onClose={() => setExtra(null)} threadId={threadId} />
       {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} onJump={jump} />}
     </div>
   );

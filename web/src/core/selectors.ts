@@ -161,7 +161,7 @@ export function threadTitle(thread: ThreadDto, index: Index, users: Record<strin
   const name = index.threadMeta[thread.id]?.payload.name;
   if (name) return name;
   const others = thread.members.filter((m) => m.userId !== me).map((m) => nameIn(thread.id, m.userId, index, users));
-  return others.join(', ') || 'Just you';
+  return others.join(', ') || (thread.isGroup ? 'Just you' : 'Notes to self');
 }
 
 export function unreadCount(thread: ThreadDto, index: Index, me: string): number {

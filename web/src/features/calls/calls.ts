@@ -29,6 +29,8 @@ export interface Peer {
   /** What they told us: camera and microphone on. Null until they say (older apps never do). */
   camera: boolean | null;
   mic: boolean | null;
+  /** Their video is their screen (shown whole, not cropped to fill). */
+  screen?: boolean | null;
   /** Bumped when their tracks change, so the tiles re-render. */
   rev: number;
 }
@@ -67,6 +69,8 @@ interface CallState {
   minimized: boolean;
   live: null | { role: 'host' | 'viewer'; hostId: string; objectId?: string; comments: LiveComment[]; hearts: number };
   relay: boolean;
+  /** This device is sending its screen instead of its camera. */
+  sharing: boolean;
 }
 
 const idle: CallState = {
@@ -84,6 +88,7 @@ const idle: CallState = {
   minimized: false,
   live: null,
   relay: false,
+  sharing: false,
 };
 
 export const useCall = create<CallState>()(() => ({ ...idle }));
@@ -349,7 +354,7 @@ class CallManager {
         return;
       case 'state':
         if (!sameCall) return;
-        setPeer(from, { camera: s.camera ?? null, mic: s.mic ?? null });
+        setPeer(from, { camera: s.camera ?? null, mic: s.mic ?? null, screen: s.screen ?? null });
         return;
       case 'chat':
         if (!sameCall || !state.live || !s.text) return;
@@ -570,8 +575,8 @@ class CallManager {
   private sendState(to?: string) {
     const state = useCall.getState();
     if (!state.callId || state.live?.role === 'viewer') return;
-    const camera = !state.cameraOff && !!state.local?.getVideoTracks().some((t) => t.readyState === 'live');
-    const signal: CallSignal = { type: 'state', callId: state.callId, camera, mic: !state.muted };
+    const camera = state.sharing || (!state.cameraOff && !!state.local?.getVideoTracks().some((t) => t.readyState === 'live'));
+    const signal: CallSignal = { type: 'state', callId: state.callId, camera, mic: !state.muted, screen: state.sharing };
     if (to) this.send(to, signal);
     else for (const id of this.pcs.keys()) this.send(id, signal);
   }
@@ -695,6 +700,86 @@ class CallManager {
     }
     track.enabled = state.cameraOff;
     set({ cameraOff: !state.cameraOff });
+    this.sendState();
+  }
+
+  /** Whether this browser can share its screen (desktop browsers; not phones). */
+  get canShareScreen() {
+    return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad/.test(navigator.userAgent);
+  }
+
+  /** The camera track put aside while the screen is shared, to come back to afterwards. */
+  private cameraTrack: MediaStreamTrack | null = null;
+
+  /**
+   * Sends the screen (or one window or tab, as the browser offers) instead of the camera, to everyone in the call.
+   * It goes the same way as the camera: peer to peer, encrypted end to end by WebRTC. Stopping, here or with the
+   * browser's own "Stop sharing", puts the camera back.
+   */
+  async toggleScreen() {
+    const state = useCall.getState();
+    if (state.sharing) return this.stopScreen();
+    const local = state.local;
+    if (!local || state.status !== 'active' || state.live) return;
+    let screen: MediaStream;
+    try {
+      screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+    } catch {
+      return; // The person closed the browser's picker.
+    }
+    const track = screen.getVideoTracks()[0];
+    if (!track) return;
+    track.contentHint = 'detail';
+    const camera = local.getVideoTracks()[0] ?? null;
+    this.cameraTrack = camera;
+    let renegotiate = false;
+    for (const pc of this.pcs.values()) {
+      const sender = pc.getSenders().find((x) => x.track?.kind === 'video' || (x.track === null && camera));
+      if (sender) await sender.replaceTrack(track);
+      else {
+        pc.addTrack(track, local);
+        renegotiate = true;
+      }
+    }
+    if (camera) {
+      local.removeTrack(camera);
+      camera.enabled = false;
+    }
+    local.addTrack(track);
+    track.addEventListener('ended', () => void this.stopScreen());
+    set({ sharing: true, video: true, local: new MediaStream(local.getTracks()) });
+    if (renegotiate) for (const userId of this.pcs.keys()) await this.offerTo(userId);
+    // A screen is mostly text: keep its full resolution and let the frame rate give way instead.
+    for (const pc of this.pcs.values()) {
+      for (const sender of pc.getSenders()) {
+        if (sender.track !== track) continue;
+        const params = sender.getParameters();
+        if (!params.encodings?.length) continue;
+        params.encodings[0].scaleResolutionDownBy = 1;
+        params.encodings[0].maxBitrate = 2_500_000;
+        params.degradationPreference = 'maintain-resolution';
+        await sender.setParameters(params).catch(() => undefined);
+      }
+    }
+    this.sendState();
+  }
+
+  async stopScreen() {
+    const state = useCall.getState();
+    const local = state.local;
+    if (!state.sharing || !local) return;
+    const screen = local.getVideoTracks()[0];
+    const camera = this.cameraTrack;
+    this.cameraTrack = null;
+    if (camera) camera.enabled = !state.cameraOff;
+    for (const pc of this.pcs.values()) for (const sender of pc.getSenders()) if (sender.track === screen) await sender.replaceTrack(camera);
+    if (screen) {
+      local.removeTrack(screen);
+      screen.stop();
+    }
+    if (camera) local.addTrack(camera);
+    set({ sharing: false, local: new MediaStream(local.getTracks()) });
+    void this.adapt();
     this.sendState();
   }
 
@@ -848,6 +933,8 @@ class CallManager {
     this.remote.clear();
     this.makingOffer.clear();
     useCall.getState().local?.getTracks().forEach((t) => t.stop());
+    this.cameraTrack?.stop();
+    this.cameraTrack = null;
     this.participants = [];
     set({ ...idle });
   }

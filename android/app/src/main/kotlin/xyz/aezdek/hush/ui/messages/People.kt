@@ -98,15 +98,22 @@ fun NewChat() {
     var picked by remember { mutableStateOf(listOf<String>()) }
     var name by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var album by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val people = reachable(state).filter { query.isBlank() || it.username.contains(query.lowercase()) || index.displayName(it).contains(query, ignoreCase = true) }
     Column(Modifier.fillMaxSize()) {
-        TopBar("New message")
+        TopBar(if (album) "New shared album" else "New message")
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            // A chat, or a shared album: a group whose photos everyone adds to, shown as a gallery.
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                xyz.aezdek.hush.ui.components.Chip("Chat", selected = !album) { album = false }
+                xyz.aezdek.hush.ui.components.Chip("Shared album", selected = album) { album = true }
+            }
+            Spacer(Modifier.size(8.dp))
             AezField(query, { query = it }, "Search")
-            if (picked.size > 1) {
+            if (picked.size > 1 || album) {
                 Spacer(Modifier.size(8.dp))
-                AezField(name, { name = it.take(60) }, "Group name (optional)")
+                AezField(name, { name = it.take(60) }, if (album) "Album name" else "Group name (optional)")
             }
         }
         LazyColumn(Modifier.weight(1f)) {
@@ -117,11 +124,12 @@ fun NewChat() {
             }
         }
         AezButton(
-            if (picked.size > 1) "Create group" else "Chat", {
+            if (album) "Create album" else if (picked.size > 1) "Create group" else "Chat", {
                 busy = true
                 scope.launch {
                     val id = Graph.attempt {
-                        if (picked.size == 1) Graph.client.composer.openDirect(picked.single())
+                        if (album) Graph.client.composer.createAlbum(name, picked)
+                        else if (picked.size == 1) Graph.client.composer.openDirect(picked.single())
                         else Graph.client.composer.createThread(picked, isGroup = true, meta = ThreadPayload(name = name.ifBlank { null }))
                     }
                     busy = false

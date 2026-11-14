@@ -67,6 +67,8 @@ import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.client.Index
 import xyz.aezdek.hush.client.hasUnseenStory
 import xyz.aezdek.hush.client.storyRing
+import xyz.aezdek.hush.client.onThisDay
+import xyz.aezdek.hush.ui.profile.coverOf
 import xyz.aezdek.hush.media.VideoPlayer
 import xyz.aezdek.hush.protocol.Audience
 import xyz.aezdek.hush.protocol.Kind
@@ -155,6 +157,7 @@ fun Home() {
             LazyColumn(Modifier.fillMaxSize(), state = rememberLazyListState()) {
                 item { StoriesTray(index, state) }
                 item { Hairline() }
+                item { OnThisDay(index, state) }
                 if (feed.isEmpty() && state.initialSyncDone) {
                     item {
                         Empty(Icons.Outlined.PhotoLibrary, "Welcome to Hush", "Follow people to see their photos and videos here, or share your first post.")
@@ -371,3 +374,51 @@ fun GradientDot(modifier: Modifier = Modifier) {
 }
 
 fun isVideoPost(entity: Entity) = entity.dto.kind == Kind.REEL || entity.post()?.media?.firstOrNull()?.mime?.startsWith("video/") == true
+
+/**
+ * "On this day": your own posts and archived stories from this date in earlier years, worked out on the phone. Hidden
+ * until tomorrow with the ✕.
+ */
+@Composable
+private fun OnThisDay(index: Index, state: AppState) {
+    val nav = LocalNav.current
+    val me = state.me?.id ?: return
+    val today = remember { java.time.LocalDate.now().toString() }
+    var hidden by remember { mutableStateOf(Graph.prefs.memoriesHidden == today) }
+    val memories = remember(index, me) { index.onThisDay(me) }
+    if (hidden || memories.isEmpty()) return
+    val years = java.time.Year.now().value - java.time.Instant.ofEpochMilli(memories.first().dto.createdAt).atZone(java.time.ZoneId.systemDefault()).year
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(Aez.colors.elev1).padding(vertical = 12.dp),
+    ) {
+        androidx.compose.foundation.layout.Row(Modifier.padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("On this day", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
+            Text(" · ${if (years == 1) "a year ago" else "$years years ago"}", fontSize = 14.sp, color = Aez.colors.text2, modifier = Modifier.weight(1f))
+            Text("✕", color = Aez.colors.text2, modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable {
+                Graph.prefs.memoriesHidden = today
+                hidden = true
+            }.padding(10.dp))
+        }
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(memories.take(12), key = { it.id }) { memory ->
+                val year = java.time.Instant.ofEpochMilli(memory.dto.createdAt).atZone(java.time.ZoneId.systemDefault()).year
+                val story = memory.dto.kind == xyz.aezdek.hush.protocol.Kind.STORY
+                Box(
+                    Modifier.size(if (story) 90.dp else 104.dp, if (story) 160.dp else 104.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                        .clickable { if (story) nav.go(Screen.Settings("archive")) else nav.go(Screen.Post(memory.id)) },
+                ) {
+                    val cover = if (story) memory.payloadAs<xyz.aezdek.hush.protocol.StoryPayload>()?.media?.let { it.poster ?: it }
+                    else coverOf(memory)
+                    MediaImage(cover, Modifier.fillMaxSize(), maxEdge = 480)
+                    Text("$year", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                            .background(Color(0x8C000000)).padding(horizontal = 7.dp, vertical = 2.dp))
+                }
+            }
+        }
+    }
+}

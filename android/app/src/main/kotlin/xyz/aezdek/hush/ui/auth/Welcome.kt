@@ -14,6 +14,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -72,6 +73,31 @@ internal fun serverAddress(typed: String): String? {
     return "https://$text".takeIf { it.toHttpUrlOrNull() != null }
 }
 
+private val INVITE_CODE = Regex("^[A-Z0-9]{5}-[A-Z0-9]{5}$")
+
+/**
+ * An invite link, as an admin's invite QR code holds it (https://server/?invite=CODE): the server's address and the
+ * code, or null if it isn't one. Only https, and only a well-formed code.
+ */
+internal fun parseInviteLink(text: String): Pair<String, String>? {
+    val url = text.trim().toHttpUrlOrNull() ?: return null
+    if (url.scheme != "https" || url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+    val code = url.queryParameter("invite")?.trim()?.uppercase() ?: return null
+    if (!INVITE_CODE.matches(code)) return null
+    val server = serverAddress(url.host + if (url.port != 443) ":${url.port}" else "") ?: return null
+    return server to code
+}
+
+/** Scans an invite QR code with the phone's scanner and hands back what it holds (or says why not). */
+private fun scanInvite(context: android.content.Context, onInvite: (server: String, code: String) -> Unit) {
+    com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(context).startScan()
+        .addOnSuccessListener { barcode ->
+            val invite = barcode.rawValue?.let(::parseInviteLink)
+            if (invite == null) Graph.toast("That isn't a Hush invite", error = true) else onInvite(invite.first, invite.second)
+        }
+        .addOnFailureListener { Graph.toast("The scanner isn't available on this phone", error = true) }
+}
+
 /**
  * A build that wasn't made for one particular server asks which one is yours, once. It checks that a Hush server
  * answers there before it takes the address.
@@ -125,6 +151,16 @@ private fun ChooseServer() {
                 AezField(address, { address = it.trim().lowercase() }, "Server address", supporting = "Like hush.example.com. Whoever invited you knows it.")
                 error?.let { Text(it, color = Aez.colors.danger, style = MaterialTheme.typography.bodySmall) }
                 AezButton("Continue", ::submit, Modifier.fillMaxWidth(), style = ButtonStyle.BRAND, busy = busy)
+                val context = androidx.compose.ui.platform.LocalContext.current
+                AezButton("Scan an invite", {
+                    scanInvite(context) { server, code ->
+                        // The address shows in the field, to read before Continue checks it like a typed one; the code
+                        // waits for the next screen.
+                        Graph.prefs.pendingInvite = code
+                        address = server.removePrefix("https://")
+                        Graph.toast("Check the address, then Continue")
+                    }
+                }, Modifier.fillMaxWidth(), style = ButtonStyle.SECONDARY, icon = androidx.compose.material.icons.Icons.Outlined.QrCodeScanner)
             }
             Spacer(Modifier.height(48.dp))
         }
@@ -138,8 +174,12 @@ fun Welcome() {
         ChooseServer()
         return
     }
-    var creating by remember { mutableStateOf(false) }
-    var invite by remember { mutableStateOf("") }
+    // An invite scanned before the app switched to its server waits here for the join form.
+    val scanned = remember { Graph.prefs.pendingInvite.also { Graph.prefs.pendingInvite = "" } }
+    var creating by remember { mutableStateOf(scanned.isNotEmpty()) }
+    var invite by remember { mutableStateOf(scanned) }
+    var otherServer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
@@ -196,7 +236,16 @@ fun Welcome() {
             ) {
                 Segmented(creating) { creating = it; error = null }
                 AnimatedContent(creating, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "invite") { create ->
-                    if (create) AezField(invite, { invite = it.uppercase() }, "Invite code", supporting = "Ask someone already on Hush")
+                    if (create) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AezField(invite, { invite = it.uppercase() }, "Invite code", supporting = "Ask someone already on Hush")
+                            AezButton("Scan an invite", {
+                                scanInvite(context) { server, code ->
+                                    if (server.trimEnd('/') == Graph.serverUrl.trimEnd('/')) invite = code else otherServer = server to code
+                                }
+                            }, Modifier.fillMaxWidth(), style = ButtonStyle.SECONDARY, small = true, icon = androidx.compose.material.icons.Icons.Outlined.QrCodeScanner)
+                        }
+                    }
                 }
                 AezField(username, { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '.' || ch == '_' }.take(30) }, "Username")
                 AezField(
@@ -226,6 +275,18 @@ fun Welcome() {
             }
             Spacer(Modifier.height(48.dp))
         }
+    }
+    otherServer?.let { (server, code) ->
+        xyz.aezdek.hush.ui.components.ConfirmDialog(
+            "Join a different server?",
+            "This invite is for ${server.removePrefix("https://")}, not ${Graph.serverUrl.removePrefix("https://")}. Hush will restart and use that server.",
+            "Join it", danger = false,
+            onConfirm = {
+                Graph.prefs.pendingInvite = code
+                Graph.useServer(server)
+            },
+            onDismiss = { otherServer = null },
+        )
     }
 }
 

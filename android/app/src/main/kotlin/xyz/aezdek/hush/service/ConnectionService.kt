@@ -56,6 +56,22 @@ class ConnectionService : Service() {
         val client = Graph.client
         client.realtime.connect()
         scope.launch { watchForNotifications() }
+        // A new sign-in or a server problem: the server says so the moment it happens; also looked at every half hour.
+        scope.launch {
+            client.security.collect { kind ->
+                when (kind) {
+                    xyz.aezdek.hush.protocol.WsType.SESSION -> runCatching { SecurityWatch.checkSignIns() }
+                    xyz.aezdek.hush.protocol.WsType.ADMIN -> runCatching { SecurityWatch.checkAdminAlerts() }
+                }
+            }
+        }
+        scope.launch {
+            while (true) {
+                runCatching { SecurityWatch.checkSignIns() }
+                runCatching { SecurityWatch.checkAdminAlerts() }
+                kotlinx.coroutines.delay(30 * 60 * 1000L)
+            }
+        }
         // Look for an app update every few hours, even if Hush is never opened (it installs while Hush is in the background).
         scope.launch {
             while (true) {
@@ -119,7 +135,7 @@ class ConnectionService : Service() {
         if (index.settings.notifyFollows) {
             for (id in requests - lastRequests) {
                 val name = state.users[id]?.username ?: continue
-                Graph.notifier.activity("req:$id".hashCode(), "Follow request", "@$name wants to follow you", "activity")
+                Graph.notifier.activity("req:$id".hashCode(), "Follow request", "@$name wants to follow you", "activity", index.settings.notifyPreview)
             }
         }
         lastRequests = requests
@@ -145,7 +161,7 @@ class ConnectionService : Service() {
             val lines = unread.map { entity ->
                 index.nameIn(threadId, entity.dto.authorId, state.users) to preview(entity.payloadAs<MessagePayload>())
             }
-            Graph.notifier.message(threadId, index.threadTitle(thread, state.users, me), lines, thread.isGroup)
+            Graph.notifier.message(threadId, index.threadTitle(thread, state.users, me), lines, thread.isGroup, settings.notifyPreview)
         }
     }
 
@@ -158,14 +174,14 @@ class ConnectionService : Service() {
             val parent = dto.parentId?.let { state.entities[it] }
             when {
                 dto.kind == Kind.LIKE && parent?.dto?.authorId == me && settings.notifyLikes && parent.dto.kind != Kind.MESSAGE ->
-                    Graph.notifier.activity(dto.id.hashCode(), "New like", "$who liked your ${what(parent)}", "post:${rootOf(parent, state).id}")
+                    Graph.notifier.activity(dto.id.hashCode(), "New like", "$who liked your ${what(parent)}", "post:${rootOf(parent, state).id}", settings.notifyPreview)
                 dto.kind == Kind.COMMENT && parent != null && rootOf(parent, state).dto.authorId == me && settings.notifyComments ->
                     Graph.notifier.activity(dto.id.hashCode(), "New comment", "$who: ${entity.payloadAs<CommentPayload>()?.text.orEmpty()}",
-                        "post:${rootOf(parent, state).id}")
+                        "post:${rootOf(parent, state).id}", settings.notifyPreview)
                 dto.kind == Kind.ACTIVITY && settings.notifyComments ->
-                    Graph.notifier.activity(dto.id.hashCode(), "You were mentioned", "$who mentioned you", "activity")
+                    Graph.notifier.activity(dto.id.hashCode(), "You were mentioned", "$who mentioned you", "activity", settings.notifyPreview)
                 dto.kind == Kind.ANSWER && settings.notifyStories ->
-                    Graph.notifier.activity(dto.id.hashCode(), "New answer", "$who answered your question", "activity")
+                    Graph.notifier.activity(dto.id.hashCode(), "New answer", "$who answered your question", "activity", settings.notifyPreview)
             }
         }
     }
@@ -202,6 +218,8 @@ class ConnectionService : Service() {
             MessageType.CALL -> if (payload.call?.missed == true) "Missed call" else "Call"
             MessageType.HEART -> payload.text ?: "❤️"
             MessageType.POLL -> "Poll: ${payload.poll?.question ?: payload.text.orEmpty()}"
+            MessageType.PLAN -> "Plan: ${payload.plan?.title ?: payload.text.orEmpty()}"
+            MessageType.LOCATION -> "Shared their live location"
             else -> payload.text ?: "Sent a message"
         }
 

@@ -29,3 +29,41 @@ export function webLink(raw: string | null | undefined): string | null {
     return null;
   }
 }
+
+// ------------------------------------------------------------------------------------------- chat payload shapes
+// A message's plan, live location or poll, only if it has the shape the app expects. Another member's modified client
+// could send numbers where text goes, or the other way round; shown as-is, that would break the chat for everyone in it.
+
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const str = (v: unknown, max: number): string | null => (typeof v === 'string' ? v.slice(0, max) : null);
+
+export interface SafePlan { title: string; at: number; place: string | null }
+export function safePlan(raw: unknown): SafePlan | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { title, at, place } = raw as Record<string, unknown>;
+  const t = str(title, 100)?.trim();
+  if (!t || !finite(at)) return null;
+  return { title: t, at, place: str(place, 100)?.trim() || null };
+}
+
+export interface SafeLocation { lat: number; lng: number; accuracy: number | null; until: number; updatedAt: number }
+export function safeLocation(raw: unknown): SafeLocation | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { lat, lng, accuracy, until, updatedAt } = raw as Record<string, unknown>;
+  if (!finite(lat) || !finite(lng) || !finite(until) || !finite(updatedAt)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng, accuracy: finite(accuracy) && accuracy >= 0 ? accuracy : null, until, updatedAt };
+}
+
+export interface SafePoll { question: string; options: string[] }
+export function safePoll(raw: unknown): SafePoll | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { question, options } = raw as Record<string, unknown>;
+  const q = str(question, 140)?.trim();
+  if (!q || !Array.isArray(options)) return null;
+  const opts = options.slice(0, 6).map((o) => str(o, 60) ?? '').filter(Boolean);
+  return opts.length >= 2 ? { question: q, options: opts } : null;
+}
+
+/** Text a message carries, or empty when it carries something else. */
+export const safeText = (v: unknown, max = 10_000): string => str(v, max) ?? '';

@@ -59,16 +59,24 @@ export interface SettingsPayload {
   closeFriends?: string[]; mutedPosts?: string[]; mutedStories?: string[]; pinnedThreads?: string[]; mutedThreads?: string[];
   verifiedKeys?: Record<string, string>; notifyLikes?: boolean; notifyComments?: boolean; notifyMessages?: boolean;
   notifyFollows?: boolean; notifyStories?: boolean;
+  /** What notifications show: everything, only who it is from, or nothing but "New message". One of NotifyPreview. */
+  notifyPreview?: string;
 }
 
+export const NotifyPreview = { FULL: 'full', NAME: 'name', NONE: 'none' } as const;
+
 export interface ActivityPayload { type: 'mention' | 'tag'; objectId: string; text?: string | null }
-export interface ThreadPayload { name?: string | null; avatar?: MediaRef | null; theme?: string | null }
+export interface ThreadPayload {
+  name?: string | null; avatar?: MediaRef | null; theme?: string | null;
+  /** A shared album: a group whose photos and videos are shown as a gallery rather than a conversation. */
+  album?: boolean;
+}
 export interface EpochPayload { memberIds: string[] }
 export interface CallSummary { callId: string; video: boolean; durationMs: number; missed: boolean; participants?: string[] }
 
 export const MessageType = {
   TEXT: 'text', MEDIA: 'media', VOICE: 'voice', SHARE: 'share', STORY_REPLY: 'story_reply', STORY_REACTION: 'story_reaction',
-  CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply', POLL: 'poll',
+  CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply', POLL: 'poll', PLAN: 'plan', LOCATION: 'location',
 } as const;
 
 export interface MessagePayload {
@@ -82,9 +90,20 @@ export interface MessagePayload {
   forwarded?: boolean;
   /** For POLL: the question and options; votes are VOTE children ({ stickerId: 'poll', option }). */
   poll?: Poll | null;
+  /** For PLAN: what, when and where. Answers are VOTE children ({ stickerId: 'plan', option: PlanAnswer }). */
+  plan?: Plan | null;
+  /** For LOCATION: where the sender is, kept up to date by editing this one message until it expires. */
+  location?: LiveLocation | null;
 }
 
 export interface Poll { question: string; options: string[] }
+
+/** A plan in a chat: "Dinner, Saturday 19:30, at Leo's". */
+export interface Plan { title: string; at: number; place?: string | null }
+export const PlanAnswer = { GOING: 0, MAYBE: 1, NO: 2, STICKER: 'plan' } as const;
+
+/** Where someone is, shared with a chat until [until]; replaced with each move, so no trail is kept. */
+export interface LiveLocation { lat: number; lng: number; accuracy?: number | null; until: number; updatedAt: number }
 
 /** One change to a chat's look; see ChatEvent in Payloads.kt. */
 export interface ChatEvent {
@@ -92,6 +111,8 @@ export interface ChatEvent {
   pin?: string | null; unpin?: string | null;
   /** Disappearing messages: new messages last this many milliseconds; 0 turns it off. One of DISAPPEARING. */
   disappearAfter?: number | null;
+  /** Someone's phone saw a screenshot of this chat while it was protected (see ChatEvent in Payloads.kt). */
+  screenshot?: boolean | null;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -116,4 +137,6 @@ export interface CallSignal {
   device?: string | null; toDevice?: string | null;
   /** For 'state': whether the sender's camera and microphone are on. */
   camera?: boolean | null; mic?: boolean | null;
+  /** For 'state': the sender's video is their screen, not their camera (shown whole, not cropped). */
+  screen?: boolean | null;
 }

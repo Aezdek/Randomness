@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import xyz.aezdek.hush.MainActivity
 import xyz.aezdek.hush.R
+import xyz.aezdek.hush.protocol.NotifyPreview
 
 /**
  * Notification channels and builders. Everything shown is decrypted on this phone; the server's WebSocket nudge says
@@ -78,37 +79,86 @@ class Notifier(private val context: Context) {
             .setContentIntent(openIntent("readiness", 1))
             .build()
 
-    /** One conversation-style notification per chat, with every unread message in it. */
-    fun message(threadId: String, title: String, lines: List<Pair<String, String>>, isGroup: Boolean) {
+    /**
+     * One conversation-style notification per chat, with every unread message in it. [preview] is the person's choice
+     * (Settings → Notifications): the messages themselves, only who sent them, or only that something came. Whatever
+     * it is, the lock screen shows just "New message" until the phone is unlocked.
+     */
+    fun message(threadId: String, title: String, lines: List<Pair<String, String>>, isGroup: Boolean, preview: String = NotifyPreview.FULL) {
         if (!canPost()) return
-        val me = Person.Builder().setName("You").build()
-        val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (isGroup) title else null).setGroupConversation(isGroup)
-        val now = System.currentTimeMillis()
-        lines.takeLast(8).forEachIndexed { i, (from, text) ->
-            style.addMessage(text, now - (lines.size - i), Person.Builder().setName(from).build())
-        }
-        val notification = NotificationCompat.Builder(context, MESSAGES)
+        val builder = NotificationCompat.Builder(context, MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
-            .setStyle(style)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(openIntent("chat:$threadId", threadId.hashCode()))
-            .build()
-        post(threadId.hashCode(), notification)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(hidden(MESSAGES, if (lines.size > 1) "${lines.size} new messages" else "New message", "chat:$threadId", threadId.hashCode()))
+        when (preview) {
+            NotifyPreview.NONE -> builder.setContentTitle("Hush").setContentText(if (lines.size > 1) "${lines.size} new messages" else "New message")
+            else -> {
+                val me = Person.Builder().setName("You").build()
+                val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (isGroup) title else null).setGroupConversation(isGroup)
+                val now = System.currentTimeMillis()
+                lines.takeLast(8).forEachIndexed { i, (from, text) ->
+                    style.addMessage(if (preview == NotifyPreview.NAME) "New message" else text, now - (lines.size - i), Person.Builder().setName(from).build())
+                }
+                builder.setStyle(style)
+            }
+        }
+        post(threadId.hashCode(), builder.build())
     }
 
-    fun activity(id: Int, title: String, text: String, target: String) {
+    fun activity(id: Int, title: String, text: String, target: String, preview: String = NotifyPreview.FULL) {
         if (!canPost()) return
+        val shownTitle = if (preview == NotifyPreview.NONE) "Hush" else title
+        val shownText = if (preview == NotifyPreview.NONE) "New activity" else text
         val notification = NotificationCompat.Builder(context, ACTIVITY)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentTitle(shownTitle)
+            .setContentText(shownText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(shownText))
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setAutoCancel(true)
             .setContentIntent(openIntent(target, id))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(hidden(ACTIVITY, "New activity", target, id))
             .build()
         post(id, notification)
+    }
+
+    /** What the lock screen shows instead of a notification's words. */
+    private fun hidden(channel: String, text: String, target: String, id: Int): Notification =
+        NotificationCompat.Builder(context, channel)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Hush")
+            .setContentText(text)
+            .setContentIntent(openIntent(target, id))
+            .build()
+
+    /**
+     * Another device just signed in to this account. "That was me" only dismisses it; "Not me" signs that device out
+     * at once (see [SecurityActionReceiver]) and opens Hush to change the password.
+     */
+    fun signIn(sessionId: String, device: String, newest: Long) {
+        val action = { label: String, what: String, code: Int ->
+            val intent = Intent(context, SecurityActionReceiver::class.java).setAction(what)
+                .putExtra(SecurityActionReceiver.EXTRA_SESSION, sessionId).putExtra(SecurityActionReceiver.EXTRA_AT, newest)
+            NotificationCompat.Action(0, label, PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        val text = "$device signed in to your account. If this wasn't you, sign it out now and change your password."
+        val notification = NotificationCompat.Builder(context, SECURITY)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("New sign-in. Was this you?")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openIntent("settings:security", ID_SECURITY_SIGN_IN))
+            .addAction(action("Not me", SecurityActionReceiver.NOT_ME, 71))
+            .addAction(action("That was me", SecurityActionReceiver.WAS_ME, 72))
+            .build()
+        post(ID_SECURITY_SIGN_IN, notification)
     }
 
     /** Something the person should know about their account or their server, whatever else is muted. */

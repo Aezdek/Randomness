@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Live location in a chat, only while it is being shared and Hush is open. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 14+: tells a protected chat when a screenshot got through (see ui/messages/Chat.kt). -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -80,6 +85,11 @@
 
         <receiver
             android:name=".calls.CallActionReceiver"
+            android:exported="false" />
+
+        <!-- "That was me" and "Not me" on the new sign-in notification (see service/SecurityWatch.kt). -->
+        <receiver
+            android:name=".service.SecurityActionReceiver"
             android:exported="false" />
 
         <!-- Android reports how an app update install went here (see update/AutoUpdater.kt). -->

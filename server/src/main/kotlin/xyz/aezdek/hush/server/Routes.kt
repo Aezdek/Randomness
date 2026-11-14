@@ -27,6 +27,7 @@ import xyz.aezdek.hush.protocol.PasskeyLoginRequest
 import xyz.aezdek.hush.protocol.AdminAlertKind
 import xyz.aezdek.hush.protocol.AdminAlertDto
 import xyz.aezdek.hush.protocol.AddPasskeyRequest
+import xyz.aezdek.hush.protocol.PasskeyCheckRequest
 import xyz.aezdek.hush.protocol.AddMembersRequest
 import xyz.aezdek.hush.protocol.ServerState
 import xyz.aezdek.hush.protocol.SetupStatus
@@ -238,6 +239,13 @@ fun Route.api(s: Services) = route("/api/v1") {
         // It checks the password, so it shares the password's allowance.
         s.limiter.check("password:${session.userId}", 10, 60 * MINUTE)
         call.respond(blocking { s.accounts.addPasskey(session, req) })
+    }
+    post("/auth/passkeys/check") {
+        val session = call.session(s)
+        val req = call.receive<PasskeyCheckRequest>()
+        s.limiter.check("password:${session.userId}", 10, 60 * MINUTE)
+        blocking { s.accounts.checkPasskey(session, req.currentAuthKey) }
+        call.respond(OkResponse())
     }
     delete("/auth/passkeys/{id}") {
         val session = call.session(s)

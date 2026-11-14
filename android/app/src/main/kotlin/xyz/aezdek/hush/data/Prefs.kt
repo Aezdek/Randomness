@@ -92,6 +92,28 @@ class Prefs(context: Context) {
         get() = prefs.getLong("lastUpdateCheck", 0)
         set(value) = prefs.edit().putLong("lastUpdateCheck", value).apply()
 
+    /** The newest sign-in to this account this phone has asked about (or the phone's own, at first). */
+    var signInsSeen: Long
+        get() = prefs.getLong("signInsSeen", 0)
+        set(value) = prefs.edit().putLong("signInsSeen", value).apply()
+
+    /** Server problems an admin has already been told about (by their id), so each is told once. */
+    var adminAlertsTold: Set<String>
+        get() = prefs.getStringSet("adminAlertsTold", emptySet()).orEmpty().toSet()
+        set(value) = prefs.edit().putStringSet("adminAlertsTold", value).apply()
+
+    /** The day "On this day" was hidden for (it comes back the next day). */
+    var memoriesHidden: String
+        get() = prefs.getString("memoriesHidden", "").orEmpty()
+        set(value) = prefs.edit().putString("memoriesHidden", value).apply()
+
+    /** An invite code scanned on the welcome screen, waiting for the join form after the app switched server. */
+    var pendingInvite: String
+        get() = prefs.getString("pendingInvite", "").orEmpty()
+        set(value) {
+            prefs.edit().putString("pendingInvite", value).commit()
+        }
+
     var notifiedUpTo: Long
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()

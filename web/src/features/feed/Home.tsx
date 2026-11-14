@@ -9,6 +9,8 @@ import { Center, Spinner } from '../../ui/bits';
 import { FollowButton } from '../profile/FollowButton';
 import { StoriesTray } from '../stories/StoriesTray';
 import { PostCard } from './PostCard';
+import { OnThisDay } from './Memories';
+import { AdminAlertBanner } from '../security/Alerts';
 
 function Members() {
   const users = useApp((s) => s.users);
@@ -117,7 +119,9 @@ export function Home() {
   return (
     <div className="home">
       <div className="home-feed">
+        <AdminAlertBanner />
         <StoriesTray />
+        <OnThisDay />
         {!synced && !feed.length ? (
           <Center>
             <Spinner />

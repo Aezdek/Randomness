@@ -49,6 +49,8 @@ import androidx.compose.material.icons.automirrored.outlined.Forward
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Poll
+import androidx.compose.material.icons.outlined.Add
+import xyz.aezdek.hush.client.isAlbum
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
@@ -181,6 +183,9 @@ fun Chat(threadId: String, focus: String? = null) {
     var menu by remember { mutableStateOf<Entity?>(null) }
     var forwarding by remember { mutableStateOf<MessagePayload?>(null) }
     var polling by remember { mutableStateOf(false) }
+    var extras by remember { mutableStateOf(false) }
+    var extra by remember { mutableStateOf<ChatExtra?>(null) }
+    var gallery by remember(threadId) { mutableStateOf(true) }
     var sending by remember { mutableStateOf<String?>(null) }
     val pending = remember(threadId) { mutableStateListOf<PendingText>() }
     var once by remember { mutableStateOf(false) }
@@ -191,6 +196,27 @@ fun Chat(threadId: String, focus: String? = null) {
         Graph.notifier.cancelChat(threadId)
         onDispose { if (ConnectionService.visibleThread == threadId) ConnectionService.visibleThread = null }
     }
+    // Vanish mode, disappearing messages and view-once photos: Android blocks screenshots and screen recording of the
+    // chat (FLAG_SECURE). On Android 14+, a screenshot that gets through anyway is told to the chat.
+    val protected = vanish || custom.disappearAfter > 0 || messages.any { it.dto.audience == Audience.ONCE }
+    val activity = remember(context) { context.findActivity() }
+    DisposableEffect(protected, activity) {
+        val window = activity?.window
+        if (!protected || window == null) return@DisposableEffect onDispose {}
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        val callback = if (android.os.Build.VERSION.SDK_INT >= 34) {
+            android.app.Activity.ScreenCaptureCallback {
+                Graph.launch { Graph.client.composer.sendChatEvent(threadId, ChatEvent(screenshot = true)) }
+            }.also { runCatching { activity.registerScreenCaptureCallback(activity.mainExecutor, it) } }
+        } else null
+        onDispose {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            if (android.os.Build.VERSION.SDK_INT >= 34 && callback != null) runCatching { activity.unregisterScreenCaptureCallback(callback) }
+        }
+    }
+    val notesToSelf = !thread.isGroup && others.isEmpty()
+    val album = index.isAlbum(threadId)
+
     val lastId = messages.lastOrNull()?.id
     LaunchedEffect(lastId) {
         val mine = thread.members.firstOrNull { it.userId == me.id }
@@ -242,6 +268,8 @@ fun Chat(threadId: String, focus: String? = null) {
     val online = others.any { state.presence[it] == true }
     val lastActive = others.mapNotNull { state.users[it]?.lastActiveAt }.maxOrNull()
     val subtitle = when {
+        notesToSelf -> "Only you can see this"
+        album -> "Shared album · ${thread.members.size} members"
         typing.isNotEmpty() -> "typing…"
         online -> "Active now"
         lastActive != null -> ago(lastActive).let { if (it == "now") "Active now" else "Active $it ago" }
@@ -278,13 +306,18 @@ fun Chat(threadId: String, focus: String? = null) {
         TopBar(
             title, subtitle = subtitle,
             leading = {
-                Avatar(others.firstOrNull(), 36.dp, index, state.users[others.firstOrNull()]?.username, online = online) {
+                Avatar(others.firstOrNull() ?: me.id, 36.dp, index, state.users[others.firstOrNull() ?: me.id]?.username, online = online) {
                     if (!thread.isGroup) others.firstOrNull()?.let { nav.go(Screen.Profile(it)) }
                 }
             },
             actions = {
-                IconAction(Icons.Outlined.Call, "Audio call", { Graph.calls.start(threadId, video = false) }, size = 24.dp)
-                IconAction(Icons.Outlined.Videocam, "Video call", { Graph.calls.start(threadId, video = true) }, size = 26.dp)
+                if (album) {
+                    Text(if (gallery) "Chat" else "Gallery", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Aez.colors.text,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Aez.colors.elev2).clickable { gallery = !gallery }.padding(horizontal = 14.dp, vertical = 7.dp))
+                } else if (!notesToSelf) {
+                    IconAction(Icons.Outlined.Call, "Audio call", { Graph.calls.start(threadId, video = false) }, size = 24.dp)
+                    IconAction(Icons.Outlined.Videocam, "Video call", { Graph.calls.start(threadId, video = true) }, size = 26.dp)
+                }
                 IconAction(Icons.Outlined.Info, "Details", { nav.go(Screen.ThreadInfo(threadId)) }, size = 24.dp)
             },
         )
@@ -347,6 +380,10 @@ fun Chat(threadId: String, focus: String? = null) {
         val reveal = remember { TimeReveal() }
         val theirRead = thread.members.filter { it.userId != me.id }.minOfOrNull { it.lastReadAt } ?: 0L
         val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM }
+        if (album && gallery) {
+            AlbumGallery(threadId, index, state, onAdd = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                modifier = Modifier.weight(1f).fillMaxWidth())
+        } else
         Box(Modifier.weight(1f).fillMaxWidth()) {
         LazyColumn(Modifier.fillMaxSize().clipToBounds(), state = listState, reverseLayout = true) {
             sending?.let { label -> item(key = "uploading") { UploadingRow(label, accent) } }
@@ -425,7 +462,7 @@ fun Chat(threadId: String, focus: String? = null) {
             accent = accent,
             themed = theme.hasBackground,
             onHeart = { send(MessagePayload(MessageType.HEART, text = custom.quickReaction.takeIf { it != ChatCustom.DEFAULT_REACTION })) },
-            onPoll = if (thread.isGroup) ({ polling = true }) else null,
+            onPoll = { extras = true },
             onVoice = { media ->
                 scope.launch {
                     sending = "Sending voice message…"
@@ -443,6 +480,14 @@ fun Chat(threadId: String, focus: String? = null) {
     forwarding?.let { payload -> ShareSheet(null, forward = payload) { forwarding = null } }
     if (polling) {
         PollSheet({ polling = false }) { poll -> send(MessagePayload(MessageType.POLL, text = poll.question, poll = poll), Audience.THREAD) }
+    }
+    if (extras) {
+        ExtrasSheet(thread.isGroup, { extras = false }) { picked -> if (picked == ChatExtra.POLL) polling = true else extra = picked }
+    }
+    when (extra) {
+        ChatExtra.PLAN -> PlanSheet({ extra = null }) { plan -> Graph.launch { Graph.client.composer.sendPlan(threadId, plan) } }
+        ChatExtra.LOCATION -> LocationSheet(threadId) { extra = null }
+        else -> {}
     }
     menu?.let { message ->
         val mine = message.dto.authorId == me.id
@@ -752,6 +797,8 @@ private fun Bubble(
                 }
                 p.type == MessageType.SHARE -> SharedPost(p, state, clickModifier)
                 p.type == MessageType.POLL && p.poll != null -> PollCard(message, p.poll!!, index, state, themeColor, clickModifier)
+                p.type == MessageType.PLAN && p.plan != null -> PlanCard(message, p.plan!!, index, state, themeColor, clickModifier)
+                p.type == MessageType.LOCATION && p.location != null -> LocationCard(message, p.location!!, mine, clickModifier)
                 p.type == MessageType.CALL -> CallBubble(p, mine, clickModifier.clip(shape).background(Aez.colors.bubbleOther)) {
                     message.dto.threadId?.let { Graph.calls.start(it, p.call?.video ?: true) }
                 }
@@ -925,7 +972,7 @@ private fun Composer(
     themed: Boolean,
     onHeart: () -> Unit,
     onVoice: (xyz.aezdek.hush.client.PreparedMedia) -> Unit,
-    /** Group chats only: start a poll. */
+    /** The "+": a plan, live location, or (in groups) a poll. */
     onPoll: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -1009,10 +1056,20 @@ private fun Composer(
                 IconAction(Icons.Outlined.Visibility, if (once) "View once on" else "View once off", onToggleOnce,
                     tint = if (once) Brand.pink else Aez.colors.text2, size = 22.dp)
                 IconAction(Icons.Filled.Mic, "Voice message", { micPermission.launch(Manifest.permission.RECORD_AUDIO) }, size = 24.dp)
-                onPoll?.let { IconAction(Icons.Outlined.Poll, "Create poll", it, size = 23.dp) }
+                onPoll?.let { IconAction(Icons.Outlined.Add, "Add to chat", it, size = 24.dp) }
                 if (quickReaction == ChatCustom.DEFAULT_REACTION) IconAction(Icons.Filled.Favorite, "Send a heart", onHeart, tint = if (themed) accent else Brand.pink, size = 24.dp)
                 else Text(quickReaction, fontSize = 22.sp, modifier = Modifier.clip(CircleShape).clickable(onClick = onHeart).padding(8.dp))
             }
         }
     }
+}
+
+/** The activity this context belongs to (Compose hands out wrappers). */
+internal fun android.content.Context.findActivity(): android.app.Activity? {
+    var current: android.content.Context? = this
+    while (current is android.content.ContextWrapper) {
+        if (current is android.app.Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

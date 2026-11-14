@@ -147,6 +147,8 @@ class MainActivity : FragmentActivity() {
                     SignedIn()
                     BackHandler(enabled = navigator.stack.size > 1 || navigator.current != Screen.Home) { navigator.back() }
                     Shell()
+                    // Keeps your own live locations up to date while Hush is open.
+                    xyz.aezdek.hush.ui.messages.LocationSharer()
                     xyz.aezdek.hush.ui.settings.UpdatePrompt()
                     if (weakPassword && navigator.current != Screen.Settings("account")) {
                         WeakPasswordBanner(Modifier.align(Alignment.BottomCenter)) { navigator.go(Screen.Settings("account")) }
