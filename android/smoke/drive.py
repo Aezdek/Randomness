@@ -195,15 +195,28 @@ def keyboard_shown() -> bool:
     return bool(re.search(r"mViewVisibility=0x0\b", shell("dumpsys window InputMethod")))
 
 
-def type_into(field: dict, text: str) -> None:
-    """Types into a field, then puts the keyboard away so it covers nothing the next step looks for."""
-    shell(f"input tap {field['x']} {field['y']}")
-    time.sleep(0.8)
+def type_into(field: dict, text: str, secret: bool = False) -> None:
+    """Types into a field, then puts the keyboard away so it covers nothing the next step looks for. A system dialog
+    popping up mid-typing (the emulator's launcher "isn't responding") takes the keys that come after it, so a field
+    that can be read back is checked, cleared and typed again until it says what was typed."""
     escaped = text.replace(" ", "%s").replace("'", "")
-    shell(f"input text '{escaped}'")
-    time.sleep(0.8)
-    if keyboard_shown():
-        back()
+    for attempt in range(3):
+        dismiss_dialogs(nodes())
+        shell(f"input tap {field['x']} {field['y']}")
+        time.sleep(0.8)
+        if attempt:
+            # Clear what a broken attempt left: to the end, then delete back to the start.
+            shell("input keyevent KEYCODE_MOVE_END")
+            shell("input keyevent " + " ".join(["KEYCODE_DEL"] * (len(text) + 40)))
+        shell(f"input text '{escaped}'")
+        time.sleep(0.8)
+        if keyboard_shown():
+            back()
+        if secret:
+            return
+        if any(n["cls"] == "android.widget.EditText" and n["text"] == text for n in nodes()):
+            return
+        log(f"  the field didn't take \"{text[:24]}\", typing it again")
 
 
 def visible(label: str, timeout: float = 20, exact: bool = True) -> bool:
@@ -286,7 +299,7 @@ def main() -> int:
             boxes = fields()
             if len(boxes) <= i:
                 raise Missing(f"sign-up field {i + 1} (found {len(boxes)})")
-            type_into(boxes[i], text)
+            type_into(boxes[i], text, secret=i >= 2)
         tap("Create account", which=-1)
         if not visible("Home", timeout=180):
             raise Missing("Home (signed in)")
@@ -367,7 +380,7 @@ def main() -> int:
         boxes = fields()
         if len(boxes) < 2:
             raise Missing("the change-password fields")
-        type_into(boxes[1], "ava1234567890")
+        type_into(boxes[1], "ava1234567890", secret=True)
         if not visible("Leave your username out of your password.", timeout=10):
             raise Missing("the advice under a weak new password")
         tap("Password and keys")

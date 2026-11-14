@@ -16,11 +16,14 @@ full-screen vertical feed.
 
 Messages work one to one and in groups: photos, video, voice notes, view-once and disappearing messages, reactions,
 replies, forwarding, polls, editing and unsending, read receipts you can turn off, nicknames, pinned messages and
-chat themes. Calls are video or audio, one to one or in a group, and go directly between the people in them when
-the network allows it.
+chat themes. Plans let a chat agree on a time and place, with going, maybe or can't go. Live location shares where
+you are for a set time. A shared album collects everyone's photos as a gallery, and Notes to self keeps things for
+later. Search looks through every chat at once, on your device. Calls are video or audio, one to one or in a group,
+with screen sharing from the web app, and go directly between the people in them when the network allows it.
 
-Around that there is search, an activity page, private accounts with follow requests, blocking, an app lock, a way
-to check that you are really talking to who you think you are, and an admin panel for whoever runs the server.
+Around that there is search, an activity page, On this day, private accounts with follow requests, blocking, an app
+lock, a way to check that you are really talking to who you think you are, and an admin panel for whoever runs the
+server, with invites as QR codes and alerts on the admin's phone when backups, disk space or updates need a look.
 
 ## Run your own
 
@@ -99,6 +102,17 @@ What Hush does about the usual weak spots:
 - **Disappearing messages.** Any chat can be set so new messages disappear after 24 hours, 7 days or 90 days. They are
   deleted from the server and from every device in the chat, so nobody can read them afterwards, even with someone's
   password. The setting is shown to everyone in the chat.
+- **Someone else signing in.** Every new sign-in to your account is shown at once on your other devices: "Was this
+  you?". Answering no signs that device out and takes you to change your password, which also signs out everything
+  else and removes every passkey.
+- **Passkeys.** In a browser you can sign in with a fingerprint, face or security key instead of typing the password.
+  The passkey produces a secret only it can make (WebAuthn's PRF); from it come a key the server checks, like the
+  password's, and a key that never leaves your device and unseals your own copy of your keys. Adding one needs the
+  password. Changing your password or keys removes them all.
+- **Notifications.** You choose what they show: the message, only who sent it, or nothing. On Android the lock screen
+  shows only "New message" whatever you choose, and with "nothing" the server leaves names out of browser pushes too.
+- **Screenshots.** On Android, chats in vanish mode, chats with disappearing messages and view-once photos can't be
+  screenshotted or screen-recorded. On Android 14 and later, if a screenshot gets through anyway, the chat is told.
 - **Taking access away.** When you remove a follower, block someone, take someone out of a group or remove a member,
   their app deletes what it had of yours (posts, stories, chats and the decrypted photos and videos it kept), and the
   server stops sending them anything more. A removed member is signed out everywhere and their device is wiped.
@@ -119,6 +133,11 @@ Some things to know before you rely on it:
   stop a modified app from keeping a copy. A device that never comes back online keeps what it had until it does.
 - **The server sees who, not what.** It knows who is a member, who follows and messages whom, when, and how large
   things are. It needs that to deliver anything.
+- **Screenshots in a browser, or of a screen.** No website can stop a screenshot, and nothing stops another camera
+  photographing a phone. The Android protection covers that phone only.
+- **Live location.** Where you are is encrypted like everything else and only the latest spot is kept, never a trail,
+  but the server can see that the message changes, and so how often you moved while sharing. It updates while Hush
+  is open.
 - **Deleted things linger in backups.** Disappearing, deleted and unsent messages can remain in the server's
   encrypted backups for up to thirty days.
 - **The admin panel's server controls ask for the server password**, which is checked on the server, so it travels

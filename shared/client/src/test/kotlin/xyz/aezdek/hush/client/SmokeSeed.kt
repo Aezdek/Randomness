@@ -69,6 +69,9 @@ class SmokeSeed {
             maya.composer.sendMessage(thread, MessagePayload(MessageType.TEXT, text = "Took this one this morning", replyTo = first.id))
             maya.composer.sendChatEvent(thread, ChatEvent(theme = "dusk"))
             maya.composer.react(first, "🔥")
+            // The newer kinds of message, so the phone draws them too: a plan and a live location.
+            maya.composer.sendPlan(thread, xyz.aezdek.hush.protocol.Plan("Dinner at Leo's", System.currentTimeMillis() + 86_400_000L, "Rua Augusta"))
+            maya.composer.shareLocation(thread, 38.7139, -9.1394, 20f, 60 * 60_000L)
             out.writeText("thread=$thread\npost=${post.id}\nmaya=${maya.state.value.me!!.id}\nava=${ava.id}\n")
             println("seed: wrote $out")
 

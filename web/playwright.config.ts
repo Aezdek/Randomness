@@ -18,7 +18,7 @@ export default defineConfig({
     baseURL: process.env.HUSH_URL ?? 'http://127.0.0.1:8080',
     trace: 'retain-on-failure',
     launchOptions: {
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required', '--auto-select-desktop-capture-source=Entire screen'],
     },
     permissions: ['camera', 'microphone', 'clipboard-read', 'clipboard-write'],
   },

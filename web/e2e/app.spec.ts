@@ -356,6 +356,13 @@ test('three people use Hush end to end', async ({ browser, request }) => {
     return !!v && v.readyState >= 2 && v.videoWidth > 0;
   }, undefined, { timeout: 30_000 });
   await shot(alice.page, 'call-desktop');
+  // Alice shares her screen instead of her camera; Bob sees it (whole, not cropped), then her camera again.
+  await alice.page.getByRole('button', { name: 'Share your screen' }).click();
+  await expect(bob.page.locator('.call-tile-name', { hasText: 'sharing their screen' })).toBeVisible({ timeout: 20_000 });
+  await expect(bob.page.locator('.call-tile video.screen')).toBeVisible();
+  await shot(bob.page, 'call-screen-share-mobile');
+  await alice.page.getByRole('button', { name: 'Stop sharing your screen' }).click();
+  await expect(bob.page.locator('.call-tile-name', { hasText: 'sharing their screen' })).toBeHidden({ timeout: 20_000 });
   await alice.page.getByRole('button', { name: 'Hang up' }).click();
   await expect(bob.page.locator('.call-screen')).toBeHidden({ timeout: 20_000 });
   await expect(alice.page.locator('.chat-scroll').getByText('Video call')).toBeVisible({ timeout: 20_000 });
