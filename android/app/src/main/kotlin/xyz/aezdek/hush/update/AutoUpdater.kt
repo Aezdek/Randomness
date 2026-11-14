@@ -21,9 +21,11 @@ import okhttp3.Request
 import xyz.aezdek.hush.BuildConfig
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.calls.CallStatus
+import xyz.aezdek.hush.client.BuildCheck
 import xyz.aezdek.hush.client.UserFacingException
 import xyz.aezdek.hush.protocol.AppVersion
 import xyz.aezdek.hush.protocol.Wire
+import xyz.aezdek.hush.service.Notifier
 import java.io.File
 import java.security.MessageDigest
 
@@ -34,7 +36,8 @@ import java.security.MessageDigest
  * It never interrupts: not during a call, and not while you're using the app (it asks, or waits until Hush is in the
  * background). From Android 12, once Hush has installed one of its own updates, later ones install with no tap at
  * all; before that (the first time, since a browser installed the app) Android shows its usual "Update" prompt.
- * Android itself refuses any APK not signed with the key this app was installed with.
+ * Android itself refuses any APK not signed with the key this app was installed with, and Hush refuses one whose
+ * contents are not those of the public build (see [compareWithPublicBuild]).
  */
 object AutoUpdater {
     sealed interface State {
@@ -46,6 +49,10 @@ object AutoUpdater {
         data class Ready(val version: AppVersion) : State
         data class Installing(val version: AppVersion) : State
         data class Failed(val message: String) : State
+        /** Downloaded, but there is no public record to compare it with: it installs only if the person says so. */
+        data class Unverified(val version: AppVersion, val why: String) : State
+        /** Its contents are not those of the public build. Never installed. */
+        data class Refused(val version: AppVersion, val why: String) : State
     }
 
     private const val TAG = "HushUpdate"
@@ -57,6 +64,7 @@ object AutoUpdater {
     private val mutex = Mutex()
     private var waiting: Job? = null
     private var ready: Pair<AppVersion, File>? = null
+    private var unverified: Pair<AppVersion, File>? = null
 
     /** True when [remote] is a later build than this app: the build number decides, and the version name breaks ties. */
     fun isNewer(remote: AppVersion, code: Int = BuildConfig.VERSION_CODE, name: String = BuildConfig.VERSION_NAME): Boolean =
@@ -96,9 +104,37 @@ object AutoUpdater {
                     return
                 }
                 val current = ready
-                val apk = if (current != null && current.first == latest && current.second.isFile) current.second else download(context, latest)
-                ready = latest to apk
-                _state.value = State.Ready(latest)
+                if (current != null && current.first == latest && current.second.isFile) {
+                    _state.value = State.Ready(latest)
+                } else {
+                    val held = unverified
+                    val apk = if (held != null && held.first == latest && held.second.isFile) held.second else download(context, latest)
+                    when (val verdict = compareWithPublicBuild(apk, latest)) {
+                        BuildCheck.Verdict.Matches -> {
+                            unverified = null
+                            ready = latest to apk
+                            _state.value = State.Ready(latest)
+                        }
+                        is BuildCheck.Verdict.Unknown -> {
+                            unverified = latest to apk
+                            _state.value = State.Unverified(latest, verdict.why)
+                            return
+                        }
+                        is BuildCheck.Verdict.Differs -> {
+                            apk.delete()
+                            unverified = null
+                            _state.value = State.Refused(latest, verdict.what)
+                            if (Graph.prefs.refusedUpdate != latest.versionCode) {
+                                Graph.prefs.refusedUpdate = latest.versionCode
+                                Graph.notifier.security(
+                                    Notifier.ID_SECURITY_UPDATE, "Hush refused an update",
+                                    "The update your server offers is not the public build. Tell whoever runs your server.", "settings:updates",
+                                )
+                            }
+                            return
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Update check failed", e)
                 _state.value = State.Failed(Graph.messageOf(e))
@@ -106,6 +142,31 @@ object AutoUpdater {
             }
         }
         installWhenIdle(context)
+    }
+
+    /**
+     * Compares the downloaded app with the public record of that build (BuildCheck). The server signs the app with its
+     * own key, so this is what stops a server that was taken over from handing out a changed one.
+     */
+    private suspend fun compareWithPublicBuild(apk: File, version: AppVersion): BuildCheck.Verdict {
+        if (!Graph.prefs.verifyUpdates || BuildConfig.BUILDS_URL.isBlank()) return BuildCheck.Verdict.Matches
+        val record = try {
+            BuildCheck.fetchRecord(Graph.http, BuildConfig.BUILDS_URL, version.versionCode)
+                ?: return BuildCheck.Verdict.Unknown("There is no public record of Hush ${version.versionName} yet.")
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            return BuildCheck.Verdict.Unknown(if (e is UserFacingException) e.message ?: "The public record couldn't be fetched." else "The public record couldn't be reached.")
+        }
+        return withContext(Dispatchers.IO) { BuildCheck.verifyApk(apk, record) }
+    }
+
+    /** Installs an update that couldn't be checked against the public build, because the person chose to. */
+    fun installUnverified(context: Context) {
+        val held = unverified ?: return
+        unverified = null
+        ready = held
+        _state.value = State.Ready(held.first)
+        installNow(context)
     }
 
     /** "Update now": install the downloaded update immediately (still never during a call). */
@@ -250,6 +311,7 @@ object AutoUpdater {
 
     private fun clearDownloads(context: Context) {
         ready = null
+        unverified = null
         File(context.cacheDir, "updates").listFiles()?.forEach { it.delete() }
     }
 

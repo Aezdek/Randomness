@@ -64,6 +64,30 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("autoUpdate", true)
         set(value) = prefs.edit().putBoolean("autoUpdate", value).apply()
 
+    /** Compare updates, and the server's web app, with the public record of the build (on by default). */
+    var verifyUpdates: Boolean
+        get() = prefs.getBoolean("verifyUpdates", true)
+        set(value) = prefs.edit().putBoolean("verifyUpdates", value).apply()
+
+    /** The build number of an update that was refused, so its warning is shown once. */
+    var refusedUpdate: Int
+        get() = prefs.getInt("refusedUpdate", 0)
+        set(value) = prefs.edit().putInt("refusedUpdate", value).apply()
+
+    /** The last check of the server's web app: when, for which version, how it went (1 matches, 0 unknown, -1 differs), and the words. */
+    var webCheckAt: Long
+        get() = prefs.getLong("webCheckAt", 0)
+        set(value) = prefs.edit().putLong("webCheckAt", value).apply()
+    var webCheckVersion: String
+        get() = prefs.getString("webCheckVersion", "").orEmpty()
+        set(value) = prefs.edit().putString("webCheckVersion", value).apply()
+    var webCheckResult: Int
+        get() = prefs.getInt("webCheckResult", 0)
+        set(value) = prefs.edit().putInt("webCheckResult", value).apply()
+    var webCheckText: String
+        get() = prefs.getString("webCheckText", "").orEmpty()
+        set(value) = prefs.edit().putString("webCheckText", value).apply()
+
     var lastUpdateCheck: Long
         get() = prefs.getLong("lastUpdateCheck", 0)
         set(value) = prefs.edit().putLong("lastUpdateCheck", value).apply()

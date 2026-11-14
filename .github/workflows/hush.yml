@@ -384,6 +384,14 @@ jobs:
           [ "$(jq -r .versionCode served-version.json)" = "$(jq -r .versionCode version.json)" ]
           TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)
           "${TOOLS}apksigner" verify --min-sdk-version 29 --print-certs signed.apk | tee signature.txt
+          # The public record of this build (what phones compare updates and the web app with): made from the unsigned
+          # app and the web app inside the image. The app this server just signed must still match it.
+          docker cp smoke:/app/web "$RUNNER_TEMP/web-in-image"
+          python3 tools/build-manifest.py write "hush-build-$GITHUB_RUN_NUMBER.json" --build "$GITHUB_RUN_NUMBER" --version "$VERSION" \
+            --commit "$GITHUB_SHA" --apk deploy/apk/hush-unsigned.apk --web "$RUNNER_TEMP/web-in-image"
+          python3 tools/build-manifest.py check "hush-build-$GITHUB_RUN_NUMBER.json" --apk signed.apk
+          # ...and the page the server sends is the one on record.
+          [ "$(curl -fsS http://127.0.0.1:18080/ | sha256sum | cut -c1-64)" = "$(jq -r '.web["index.html"]' "hush-build-$GITHUB_RUN_NUMBER.json")" ]
           # 16 KB alignment of the native libraries (WebRTC, libsodium), which Android 15+ devices need.
           "${TOOLS}zipalign" -c -P 16 -v 4 signed.apk > /dev/null
           # The database: nothing stored until the server password is set from the server itself, then encrypted
@@ -405,6 +413,7 @@ jobs:
       - name: Package the release
         run: |
           mkdir -p out
+          cp "hush-build-$GITHUB_RUN_NUMBER.json" out/
           docker save "$TAG" | gzip -n > out/hush-image.tar.gz
           tar -czf out/hush-deploy.tar.gz -C deploy lib.sh compose.yml update.sh backup.sh restore.sh control.sh RUNBOOK.md systemd
           # install.sh fetches the rest from the repository that published it.

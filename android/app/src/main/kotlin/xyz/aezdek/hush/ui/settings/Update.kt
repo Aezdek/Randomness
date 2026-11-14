@@ -4,6 +4,7 @@ import android.text.format.Formatter
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -15,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -25,12 +27,15 @@ import xyz.aezdek.hush.BuildConfig
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.ui.components.AezButton
 import xyz.aezdek.hush.ui.components.ButtonStyle
+import xyz.aezdek.hush.ui.components.ConfirmDialog
 import xyz.aezdek.hush.ui.components.Spinner
 import xyz.aezdek.hush.ui.messages.ToggleRow
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.Brand
 import xyz.aezdek.hush.update.AutoUpdater
 import xyz.aezdek.hush.update.AutoUpdater.State
+import xyz.aezdek.hush.update.WebAppCheck
+import kotlinx.coroutines.launch
 
 /**
  * Updates come from your own server, never a store: the APK inside the image you approved with update.sh, signed on
@@ -42,6 +47,8 @@ internal fun UpdatesSection() {
     val context = LocalContext.current
     val state by AutoUpdater.state.collectAsState()
     var auto by remember { mutableStateOf(Graph.prefs.autoUpdate) }
+    var verify by remember { mutableStateOf(Graph.prefs.verifyUpdates) }
+    var confirmUnverified by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { AutoUpdater.check(context, force = true) }
     Card("This phone") {
         Text("Hush ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", color = Aez.colors.text)
@@ -60,15 +67,34 @@ internal fun UpdatesSection() {
                 AezButton("Update now", { AutoUpdater.installNow(context) }, Modifier.fillMaxWidth(), style = ButtonStyle.BRAND, icon = Icons.Outlined.SystemUpdate)
             }
             is State.Installing -> Text("Installing Hush ${s.version.versionName}… Hush restarts when it's done.", color = Aez.colors.text)
+            is State.Unverified -> {
+                Text("Hush ${s.version.versionName} is downloaded, but it couldn't be compared with the public build.", color = Aez.colors.text)
+                Text(s.why, fontSize = 13.sp, color = Aez.colors.text2)
+                AezButton("Try again", { AutoUpdater.checkSoon(context, force = true) }, Modifier.fillMaxWidth(), style = ButtonStyle.SECONDARY)
+                AezButton("Install without checking", { confirmUnverified = true }, Modifier.fillMaxWidth(), style = ButtonStyle.GHOST)
+            }
+            is State.Refused -> {
+                Text("Hush refused the update your server offers (${s.version.versionName}).", color = Aez.colors.danger, fontWeight = FontWeight.SemiBold)
+                Text("${s.why} Someone may have changed it on the server. Tell whoever runs your server; this phone keeps the version it has.",
+                    fontSize = 13.sp, color = Aez.colors.text2)
+            }
         }
-        if (state is State.UpToDate || state is State.Failed) {
+        if (state is State.UpToDate || state is State.Failed || state is State.Refused) {
             AezButton("Check now", { AutoUpdater.checkSoon(context, force = true) }, Modifier.fillMaxWidth(), style = ButtonStyle.SECONDARY)
         }
         Text(
-            "New versions only appear after you run update.sh on the server, and Android refuses any APK not signed with your server's key.",
+            "New versions only appear after you run update.sh on the server. Android refuses any app not signed with your server's key, and " +
+                "Hush refuses one whose contents aren't those of the public build.",
             fontSize = 12.sp, color = Aez.colors.text3,
         )
     }
+    if (confirmUnverified) {
+        ConfirmDialog(
+            "Install without checking?", "Hush couldn't confirm this update is the public build. Only go on if you trust your server right now.",
+            "Install", onConfirm = { confirmUnverified = false; AutoUpdater.installUnverified(context) }, onDismiss = { confirmUnverified = false },
+        )
+    }
+    WebAppCard(verify)
     Card {
         ToggleRow(
             Icons.Outlined.SystemUpdate, "Update automatically", auto,
@@ -78,6 +104,58 @@ internal fun UpdatesSection() {
             Graph.prefs.autoUpdate = auto
             if (auto) AutoUpdater.checkSoon(context, force = true)
         }
+        if (WebAppCheck.available) {
+            ToggleRow(
+                Icons.Outlined.VerifiedUser, "Check against the public build", verify,
+                "Compares each update, and your server's web app, with the record published where Hush is built. Leave this on.",
+            ) {
+                verify = !verify
+                Graph.prefs.verifyUpdates = verify
+            }
+        }
+    }
+}
+
+/** Whether the web app the server hands out is the public build (WebAppCheck). */
+@Composable
+private fun WebAppCard(enabled: Boolean) {
+    if (!WebAppCheck.available || !enabled) return
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val last by WebAppCheck.last.collectAsState()
+    val progress by WebAppCheck.progress.collectAsState()
+    Card("Your server's web app") {
+        val running = progress
+        when {
+            running != null -> {
+                Text(if (running.second > 0) "Checking file ${running.first} of ${running.second}…" else "Checking…", color = Aez.colors.text)
+                LinearProgressIndicator(
+                    progress = { if (running.second > 0) running.first.toFloat() / running.second else 0f },
+                    modifier = Modifier.fillMaxWidth(), color = Brand.pink, trackColor = Aez.colors.elev2,
+                )
+            }
+            last.at == 0L -> Text("Not checked yet.", color = Aez.colors.text2)
+            else -> {
+                Text(
+                    when (last.result) {
+                        1 -> "Matches the public build"
+                        -1 -> "Doesn't match the public build"
+                        else -> "Couldn't be checked"
+                    },
+                    color = if (last.result == -1) Aez.colors.danger else Aez.colors.text, fontWeight = FontWeight.SemiBold,
+                )
+                Text(last.text, fontSize = 13.sp, color = Aez.colors.text2)
+                Text("Checked ${android.text.format.DateUtils.getRelativeTimeSpanString(last.at)}", fontSize = 12.sp, color = Aez.colors.text3)
+            }
+        }
+        if (running == null) {
+            AezButton("Check now", { scope.launch { runCatching { WebAppCheck.run(context) } } }, Modifier.fillMaxWidth(), style = ButtonStyle.SECONDARY)
+        }
+        Text(
+            "A browser runs whatever your server sends it. This fetches the same pages and scripts and compares every one with the public " +
+                "build, so a change made on the server gets noticed.",
+            fontSize = 12.sp, color = Aez.colors.text3,
+        )
     }
 }
 

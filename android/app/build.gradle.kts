@@ -22,6 +22,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The server this build is for (HUSH_SERVER_URL=https://hush.example.com). Without one the app asks on first start.
         buildConfigField("String", "SERVER_URL", "\"${System.getenv("HUSH_SERVER_URL")?.trim().orEmpty()}\"")
+        // Where this build's public record is published (tools/build-manifest.py): the releases of the repository that
+        // built it. Updates and the server's web app are checked against it. Blank for a build made by hand.
+        val builds = System.getenv("HUSH_BUILDS_URL")?.trim()
+            ?: System.getenv("GITHUB_REPOSITORY")?.trim()?.takeIf { it.isNotEmpty() }?.let { "https://github.com/$it/releases/download/hush-latest" }
+        buildConfigField("String", "BUILDS_URL", "\"${builds.orEmpty()}\"")
     }
 
     buildTypes {

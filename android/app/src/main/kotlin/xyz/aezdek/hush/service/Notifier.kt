@@ -48,6 +48,9 @@ class Notifier(private val context: Context) {
                 description = "A new version of Hush from your server"
                 setShowBadge(false)
             },
+            NotificationChannel(SECURITY, "Security alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "New sign-ins to your account, and anything that looks wrong with your server"
+            },
             NotificationChannel(CONNECTION, "Connection", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "Keeps Hush connected so calls can ring. You can hide this channel."
                 setShowBadge(false)
@@ -108,6 +111,21 @@ class Notifier(private val context: Context) {
         post(id, notification)
     }
 
+    /** Something the person should know about their account or their server, whatever else is muted. */
+    fun security(id: Int, title: String, text: String, target: String) {
+        val notification = NotificationCompat.Builder(context, SECURITY)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openIntent(target, id))
+            .build()
+        post(id, notification)
+    }
+
     /** Android wants a tap to install this update (the first one, or before Android 12): its prompt, one tap away. */
     fun updateReady(version: String, confirm: Intent) {
         val tap = PendingIntent.getActivity(context, ID_UPDATE, confirm, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -159,9 +177,14 @@ class Notifier(private val context: Context) {
         const val ONGOING_CALL = "ongoing_call"
         const val CONNECTION = "connection"
         const val UPDATES = "updates"
+        const val SECURITY = "security"
         const val ID_CONNECTION = 1
         const val ID_CALL = 2
         const val ID_ONGOING_CALL = 3
         const val ID_UPDATE = 4
+        const val ID_SECURITY_UPDATE = 5
+        const val ID_SECURITY_WEB = 6
+        const val ID_SECURITY_SIGN_IN = 7
+        const val ID_ADMIN_ALERT = 8
     }
 }

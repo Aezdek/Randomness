@@ -1,0 +1,10 @@
+{
+ "about": "Stand-ins for APKs. tools/build-manifest.py and BuildCheck.kt must give these fingerprints; dup.zip must be refused.",
+ "files": {
+  "app.zip": "18b696f2c15cc33087bd63e3c8ff225ed631403eef748c33c51fc267015030f4",
+  "signed.zip": "18b696f2c15cc33087bd63e3c8ff225ed631403eef748c33c51fc267015030f4",
+  "changed.zip": "fd50416d37c92687ab197cda63f38110d2f47efcae0fc7ee63263f4dc9136eea",
+  "added.zip": "01d6496c884d0bb47433dc7a50fbf03424ee521cde4c7530cc3c20ac13a5d713",
+  "sneaky.zip": "c3a2a6e926c8e6fbee904d12e65c659409a916ad64d199d2793c5c509b78f688"
+ }
+}

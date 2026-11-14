@@ -85,6 +85,16 @@ check "a config without a catch-all is refused" test $? -eq 3
 check "hostnames are read with quotes and comments" bash -c "[ \"\$(. '$DEPLOY/lib.sh'; ingress_hosts '$FIX/flush-comments.yml' | tr '\n' ' ')\" = 'photos.example.com files.example.com ' ]"
 check "a weak new server password is refused" bash -c ". '$DEPLOY/lib.sh'; [ -n \"\$(password_problem 'Password2024!!')\" ] && [ -n \"\$(password_problem '123456789012')\" ] && [ -n \"\$(password_problem 'short')\" ]"
 check "a good one is taken" bash -c ". '$DEPLOY/lib.sh'; [ -z \"\$(password_problem 'zebra violin cloud')\" ]"
+check "the build record tool gives the fingerprints the app expects" python3 - "$DEPLOY/.." <<'PY'
+import json, subprocess, sys
+root = sys.argv[1]
+expected = json.load(open(f"{root}/crypto-vectors/build-check/expected.json"))["files"]
+for name, digest in expected.items():
+    got = subprocess.check_output([sys.executable, f"{root}/tools/build-manifest.py", "digest", f"{root}/crypto-vectors/build-check/{name}"]).decode().strip()
+    assert got == digest, (name, got, digest)
+refused = subprocess.run([sys.executable, f"{root}/tools/build-manifest.py", "digest", f"{root}/crypto-vectors/build-check/dup.zip"], capture_output=True)
+assert refused.returncode != 0, "an archive naming a file twice must be refused"
+PY
 
 echo "PORTS.md"
 cp "$FIX/PORTS.md" "$WORK/PORTS.md"

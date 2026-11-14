@@ -60,6 +60,8 @@ class ConnectionService : Service() {
         scope.launch {
             while (true) {
                 runCatching { xyz.aezdek.hush.update.AutoUpdater.check(this@ConnectionService) }
+                // And, now and then, whether the server's web app is still the public build.
+                runCatching { xyz.aezdek.hush.update.WebAppCheck.maybeRun(this@ConnectionService) }
                 kotlinx.coroutines.delay(4 * 60 * 60 * 1000L)
             }
         }
