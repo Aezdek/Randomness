@@ -328,6 +328,57 @@ class Composer(
         return createThread(listOf(userId), isGroup = false, meta = ThreadPayload())
     }
 
+    /** Your "Notes to self": a chat with only you in it, made the first time it is opened. */
+    suspend fun openNotesToSelf(): String {
+        val me = self().first.id
+        state.value.threads.values.firstOrNull { t -> !t.isGroup && t.members.size == 1 && t.members.single().userId == me }?.let { return it.id }
+        return createThread(emptyList(), isGroup = false, meta = ThreadPayload())
+    }
+
+    /** A shared album: a group whose photos and videos everyone in it adds to, shown as a gallery. */
+    suspend fun createAlbum(name: String, memberIds: List<String>): String =
+        createThread(memberIds, isGroup = true, meta = ThreadPayload(name = name.trim().take(60).ifEmpty { "Album" }, album = true))
+
+    /** A plan in a chat: what, when, where. */
+    suspend fun sendPlan(threadId: String, plan: xyz.aezdek.hush.protocol.Plan): Entity {
+        val clean = plan.copy(title = plan.title.trim().take(100), place = plan.place?.trim()?.take(100)?.ifEmpty { null })
+        if (clean.title.isEmpty()) throw UserFacingException("Say what the plan is")
+        return sendMessage(threadId, MessagePayload(xyz.aezdek.hush.protocol.MessageType.PLAN, text = clean.title, plan = clean))
+    }
+
+    /** Going, maybe, or not: one answer each; choosing the same again takes it back. */
+    suspend fun answerPlan(message: Entity, answer: Int) {
+        require(answer in xyz.aezdek.hush.protocol.PlanAnswer.GOING..xyz.aezdek.hush.protocol.PlanAnswer.NO)
+        val me = self().first.id
+        val mine = index().children[message.id]?.firstOrNull {
+            it.dto.kind == Kind.VOTE && it.dto.authorId == me && it.payloadAs<VotePayload>()?.stickerId == xyz.aezdek.hush.protocol.PlanAnswer.STICKER
+        }
+        if (mine != null) delete(mine.id)
+        if (mine?.payloadAs<VotePayload>()?.option == answer) return
+        publish(Draft(Kind.VOTE, Audience.PARENT, VotePayload(xyz.aezdek.hush.protocol.PlanAnswer.STICKER, answer), parentId = message.id, threadId = message.dto.threadId))
+    }
+
+    /**
+     * Starts sharing where you are with a chat for [durationMs] (at most 8 hours). The message is deleted, here and on
+     * the server, when the time is up; [moveLocation] replaces it with each new position, so no trail is kept.
+     */
+    suspend fun shareLocation(threadId: String, lat: Double, lng: Double, accuracy: Float?, durationMs: Long): Entity {
+        val now = System.currentTimeMillis()
+        val until = now + durationMs.coerceIn(5 * 60_000L, 8 * 60 * 60_000L)
+        val location = xyz.aezdek.hush.protocol.LiveLocation(lat.coerceIn(-90.0, 90.0), lng.coerceIn(-180.0, 180.0), accuracy, until, now)
+        return sendMessage(threadId, MessagePayload(xyz.aezdek.hush.protocol.MessageType.LOCATION, location = location), expiresAt = until)
+    }
+
+    suspend fun moveLocation(message: Entity, lat: Double, lng: Double, accuracy: Float?): Entity? {
+        val payload = message.payloadAs<MessagePayload>() ?: return null
+        val current = payload.location ?: return null
+        val now = System.currentTimeMillis()
+        if (current.until <= now) return null
+        return edit(message, payload.copy(location = current.copy(lat = lat.coerceIn(-90.0, 90.0), lng = lng.coerceIn(-180.0, 180.0), accuracy = accuracy, updatedAt = now)))
+    }
+
+    suspend fun stopLocation(message: Entity) = delete(message.id)
+
     suspend fun createThread(memberIds: List<String>, isGroup: Boolean, meta: ThreadPayload): String {
         val me = self().first.id
         val all = (listOf(me) + memberIds).distinct()

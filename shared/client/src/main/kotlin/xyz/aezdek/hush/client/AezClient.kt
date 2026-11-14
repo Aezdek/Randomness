@@ -225,7 +225,23 @@ class AezClient(
                 val userId = frame.userId ?: return
                 state.update { s -> s.copy(presence = s.presence + (userId to (frame.online == true))) }
             }
+            WsType.SESSION, WsType.ADMIN -> security.tryEmit(frame.t)
         }
+    }
+
+    /**
+     * [WsType.SESSION] when another device has just signed in to this account (the app asks "Was this you?"), and
+     * [WsType.ADMIN] when the server has something for its admins (see /admin/alerts).
+     */
+    val security = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** The devices signed in to this account that started after [since], newest first, this one left out. */
+    suspend fun newSignIns(since: Long): List<xyz.aezdek.hush.protocol.SessionDto> =
+        api.get<List<xyz.aezdek.hush.protocol.SessionDto>>("/auth/sessions").filter { !it.current && it.createdAt > since }.sortedByDescending { it.createdAt }
+
+    /** "That wasn't me": signs that device out at once. */
+    suspend fun signOutDevice(sessionId: String) {
+        api.delete<xyz.aezdek.hush.protocol.OkResponse>("/auth/sessions/$sessionId")
     }
 
     fun sendTyping(threadId: String) = realtime.send(WsFrame(WsType.TYPING, threadId = threadId))

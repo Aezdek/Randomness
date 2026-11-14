@@ -176,3 +176,64 @@ fun Index.messagePayload(entity: Entity): MessagePayload? = entity.payloadAs<Mes
 
 fun UserDto.isFollowing() = followState == FollowState.FOLLOWING
 fun UserDto.followsMeBack() = followsMe == FollowState.FOLLOWING
+
+// ------------------------------------------------------------------------------------------------- circle features
+
+/** Your "Notes to self" chat, once it exists: the one-to-one chat with only you in it. */
+fun Index.notesToSelf(state: AppState): String? {
+    val me = state.me?.id ?: return null
+    return state.threads.values.firstOrNull { !it.isGroup && it.members.size == 1 && it.members.single().userId == me }?.id
+}
+
+/** Whether a chat is a shared album (its photos and videos are shown as a gallery). */
+fun Index.isAlbum(threadId: String): Boolean =
+    threadMeta[threadId]?.payloadAs<xyz.aezdek.hush.protocol.ThreadPayload>()?.album == true
+
+/** Every photo and video in an album, newest first, with who added it. */
+fun Index.albumMedia(threadId: String): List<Pair<Entity, xyz.aezdek.hush.protocol.MediaRef>> =
+    messages[threadId].orEmpty().flatMap { m -> m.payloadAs<MessagePayload>()?.media.orEmpty().map { m to it } }.asReversed()
+
+/** Who answered a plan, and how ([xyz.aezdek.hush.protocol.PlanAnswer]): the latest answer each. */
+fun Index.planAnswers(messageId: String): Map<String, Int> =
+    children[messageId].orEmpty()
+        .filter { it.dto.kind == Kind.VOTE && it.payloadAs<xyz.aezdek.hush.protocol.VotePayload>()?.stickerId == xyz.aezdek.hush.protocol.PlanAnswer.STICKER }
+        .sortedBy { it.dto.createdAt }
+        .associate { it.dto.authorId to (it.payloadAs<xyz.aezdek.hush.protocol.VotePayload>()?.option ?: -1) }
+        .filterValues { it in 0..2 }
+
+/** People sharing where they are in a chat right now, with the message to show it. */
+fun Index.liveLocations(threadId: String, now: Long = System.currentTimeMillis()): List<Entity> =
+    messages[threadId].orEmpty().filter { m ->
+        val location = m.payloadAs<MessagePayload>()?.location
+        location != null && location.until > now
+    }
+
+/**
+ * "On this day": your own posts and reels, and your archived stories, from this date in earlier years, newest year
+ * first. Worked out on the device; the server never learns what anything is about.
+ */
+fun Index.onThisDay(me: String, now: Long = System.currentTimeMillis(), zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): List<Entity> {
+    val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    fun sameDayEarlierYear(at: Long): Boolean {
+        val day = java.time.Instant.ofEpochMilli(at).atZone(zone).toLocalDate()
+        return day.year < today.year && day.monthValue == today.monthValue && day.dayOfMonth == today.dayOfMonth
+    }
+    return (posts.filter { it.dto.authorId == me } + myStoryArchive)
+        .filter { sameDayEarlierYear(it.dto.createdAt) }
+        .sortedByDescending { it.dto.createdAt }
+}
+
+/** Messages containing [query] in every chat, newest first: the text, captions of shared things, plans and polls. */
+fun Index.searchMessages(query: String, limit: Int = 100): List<Entity> {
+    val needle = query.trim().lowercase()
+    if (needle.length < 2) return emptyList()
+    return messages.values.asSequence().flatten()
+        .filter { m ->
+            val p = m.payloadAs<MessagePayload>() ?: return@filter false
+            listOfNotNull(p.text, p.quote, p.plan?.title, p.plan?.place, p.poll?.question).any { it.lowercase().contains(needle) } ||
+                p.poll?.options.orEmpty().any { it.lowercase().contains(needle) }
+        }
+        .sortedByDescending { it.dto.receivedAt }
+        .take(limit)
+        .toList()
+}
