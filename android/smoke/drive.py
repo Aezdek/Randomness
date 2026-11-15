@@ -288,6 +288,10 @@ def seeded() -> dict:
 def main() -> int:
     os.makedirs(OUT, exist_ok=True)
     adb("wait-for-device", timeout=300)
+    # A struggling emulator launcher ("Pixel Launcher isn't responding", every few seconds on a slow runner) puts up
+    # dialogs that take the keys meant for Hush. Without them Android restarts the launcher instead. Hush's own crashes
+    # and ANRs are still caught, from the system log (see check()).
+    shell("settings put global hide_error_dialogs 1")
     # A freshly booted emulator is slow for a while; let it settle before Hush is timed against anything.
     time.sleep(25)
     dismiss_dialogs(nodes())
