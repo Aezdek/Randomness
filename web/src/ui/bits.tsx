@@ -85,6 +85,9 @@ export function ago(at: number, now = Date.now()): string {
   return `${Math.floor(value)}y`;
 }
 
+/** Whether [at] is a moment a date can be made of: a number between the year 1970 and the year 9999. */
+export const isRealTime = (at: unknown): at is number => typeof at === 'number' && Number.isFinite(at) && at >= 0 && at <= 253_402_300_799_999;
+
 export function longDate(at: number) {
   return new Date(at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: new Date(at).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
@@ -102,6 +105,8 @@ export function Ago({ at, className = 'faint', suffix }: { at: number; className
     const timer = setInterval(() => tick((n) => n + 1), 60_000);
     return () => clearInterval(timer);
   }, []);
+  // A time no calendar holds (only a modified app could send one) shows as nothing rather than breaking the page.
+  if (!isRealTime(at)) return null;
   return (
     <time className={className} dateTime={new Date(at).toISOString()} title={new Date(at).toLocaleString()}>
       {suffix ? since(at) : ago(at)}

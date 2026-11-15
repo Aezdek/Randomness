@@ -262,7 +262,13 @@ class SyncEngine(
                 }
             }
             val text = plain?.decodeToString() ?: throw lastError ?: CryptoException("no key opened ${dto.id}")
-            Decoded.Ok(Entity(dto, key, Payloads.decode(dto.kind, text)))
+            val payload = Payloads.decodeOrNull(dto.kind, text)
+            if (payload == null) {
+                log.warning("Dropping ${dto.kind} ${dto.id}: not a well-formed ${dto.kind}")
+                Decoded.Fail
+            } else {
+                Decoded.Ok(Entity(dto, key, payload))
+            }
         } catch (e: CryptoException) {
             log.warning("Dropping ${dto.kind} ${dto.id}: ${e.message}")
             Decoded.Fail

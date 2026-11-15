@@ -6,7 +6,7 @@ import { LocalDb } from './db';
 import { deriveInWorker } from './kdf';
 import { clearSession, loadSession, saveSession, updateStoredMe } from './keystore';
 import { getState, resetApp, toast, useApp } from './store';
-import { setWeakPassword } from './ui';
+import { setForcedOut, setWeakPassword } from './ui';
 import { engine } from './sync';
 import type { AuthResponse, DeviceInfo, Me, PreloginResponse } from './types';
 import { realtime } from './ws';
@@ -18,9 +18,17 @@ function deviceInfo(): DeviceInfo {
   return { name: `${browser} on ${os}`, platform: 'web' };
 }
 
+/** Signing out by choice (so the refusals that follow aren't taken for being signed out from elsewhere). */
+let leaving = false;
+
 async function start(token: string, me: Me, keys: AccountKeys) {
   setToken(token);
+  leaving = false;
   setUnauthorizedHandler(() => {
+    // Requests still in the air while signing out by choice come back refused too: that isn't news.
+    if (leaving) return;
+    // Nobody here asked for this, so the sign-in screen says what happened and where to look.
+    setForcedOut(true);
     toast('You were signed out', 'error');
     void signOut(false);
   });
@@ -65,6 +73,7 @@ export async function signUp(invite: string, username: string, password: string)
     device: deviceInfo(),
   });
   await saveSession(response.token, response.me, keys);
+  setForcedOut(false);
   await start(response.token, response.me, keys);
 }
 
@@ -75,6 +84,7 @@ export async function signIn(username: string, password: string) {
   const response = await api.post<AuthResponse>('/auth/login', { username: username.trim().toLowerCase(), authKey: b64(authKey), device: deviceInfo() });
   const keys = openVault(unb64(response.vault), vaultKey);
   await saveSession(response.token, response.me, keys);
+  setForcedOut(false);
   await start(response.token, response.me, keys);
 }
 
@@ -83,10 +93,12 @@ export async function signInWithPasskey() {
   const { passkeySignIn } = await import('./passkeys');
   const { response, keys } = await passkeySignIn(deviceInfo());
   await saveSession(response.token, response.me, keys);
+  setForcedOut(false);
   await start(response.token, response.me, keys);
 }
 
 export async function signOut(tellServer = true) {
+  leaving = true;
   const me = getState().me;
   if (tellServer) await api.post('/auth/logout').catch(() => undefined);
   realtime.close();

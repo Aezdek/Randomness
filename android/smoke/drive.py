@@ -389,6 +389,29 @@ def main() -> int:
     step("back to home", lambda: open_screen("home"))
 
     # ----------------------------------------------------------------------------------------- app lifecycle
+    def stress_test():
+        """The other person turns hostile: about fifty messages no honest app sends (wrong shapes, nesting deeper than
+        any stack, 200,000 characters, 1,500 poll options, 300 photos, times outside any calendar). The app must drop
+        or tame every one, keep drawing the chat, and show the plain message that comes after them."""
+        open_screen(f"chat:{thread}")
+        boxes = fields()
+        if not boxes:
+            raise Missing("message field")
+        type_into(boxes[-1], "stress test")
+        tap("Send")
+        if not visible("Still here", timeout=120):
+            raise Missing("Still here")
+        # Scroll back through what came, so every one of them is drawn.
+        for _ in range(8):
+            shell("input swipe 540 700 540 1900 250")
+            time.sleep(0.8)
+        for _ in range(8):
+            shell("input swipe 540 1900 540 700 250")
+            time.sleep(0.5)
+    step("stress test: a member sends what no app should", stress_test)
+    step("inbox after the stress test", lambda: open_screen("inbox"))
+    step("back in the chat", lambda: open_screen(f"chat:{thread}"))
+
     def restart():
         shell(f"am force-stop {PKG}")
         time.sleep(2)

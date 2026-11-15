@@ -21,7 +21,7 @@ import { EmojiPicker } from '../../ui/EmojiPicker';
 import { ShareSheet } from './ShareSheet';
 import { ThreadInfo } from './ThreadInfo';
 import { Guard } from '../../ui/Guard';
-import { safePoll, safeText } from '../../core/safe';
+import { displayText, foldText, heartOf, MAX_MEDIA, previewText, safePoll, safeText, shownDuration } from '../../core/safe';
 import { AlbumGallery } from './Album';
 import { ExtrasSheet, LocationCard, LocationSheet, PlanCard, PlanSheet, type ChatExtra } from './Circle';
 import { isAlbum, sendPlan } from '../../core/circle';
@@ -198,7 +198,7 @@ function Voice({ message }: { message: Entity<MessagePayload> }) {
           <span key={i} style={{ height: `${h * 100}%`, opacity: i / bars.length < progress ? 1 : 0.45 }} />
         ))}
       </span>
-      <span className="voice-time tabular">{duration(ref?.durationMs ?? 0)}</span>
+      <span className="voice-time tabular">{duration(shownDuration(ref?.durationMs))}</span>
       {url && (
         <audio ref={audio} src={url} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => (setPlaying(false), setProgress(0))} onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime / (e.currentTarget.duration || 1))} />
       )}
@@ -229,6 +229,28 @@ function Shared({ message }: { message: Entity<MessagePayload> }) {
       </span>
       {cover && <MediaImage media={cover.mime.startsWith('video/') && cover.poster ? cover.poster : cover} className="shared-media" />}
     </button>
+  );
+}
+
+/** A message's text; a long one shows its start, and "Read more" shows the rest. */
+function LongText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? text : foldText(text);
+  return (
+    <>
+      <RichText text={shown} />
+      {shown.length < text.length && (
+        <button
+          className="read-more"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          Read more
+        </button>
+      )}
+    </>
   );
 }
 
@@ -264,7 +286,7 @@ function Bubble({
   const replyTarget = p.replyTo ? (entities[p.replyTo] as Entity<MessagePayload> | undefined) : undefined;
   const once = message.dto.audience === Audience.ONCE;
   const vanish = message.dto.audience === Audience.VANISH;
-  const big = p.type === MessageType.HEART || (p.type === MessageType.TEXT && /^\p{Extended_Pictographic}{1,3}$/u.test(p.text ?? ''));
+  const big = p.type === MessageType.HEART || (p.type === MessageType.TEXT && (p.text ?? '').length <= 32 && /^\p{Extended_Pictographic}{1,3}$/u.test(p.text ?? ''));
   const story = p.storyId ? (entities[p.storyId] as Entity<StoryPayload> | undefined) : undefined;
   const threadId = message.dto.threadId ?? null;
   const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, index, users));
@@ -279,7 +301,7 @@ function Bubble({
         <span className="call-icon">{p.call.missed ? <PhoneMissed size={18} /> : p.call.video ? <Video size={18} /> : <Phone size={18} />}</span>
         <span>
           <b>{p.call.missed ? 'Missed call' : `${p.call.video ? 'Video' : 'Audio'} call`}</b>
-          <span className="faint">{p.call.missed ? 'Tap to call back' : duration(p.call.durationMs)}</span>
+          <span className="faint">{p.call.missed ? 'Tap to call back' : duration(shownDuration(p.call.durationMs))}</span>
         </span>
       </div>
     );
@@ -295,8 +317,8 @@ function Bubble({
         </button>
       ) : (
         <div className={`bubble-media ${p.media.length > 1 ? 'many' : ''}`}>
-          {p.media.map((m) => (m.mime.startsWith('video/') ? <MediaVideo key={m.blobId} media={m} controls autoPlay={false} muted={false} natural /> : <MediaImage key={m.blobId} media={m} natural />))}
-          {p.text && <p className="bubble-caption">{p.text}</p>}
+          {p.media.slice(0, MAX_MEDIA).map((m, i) => (m.mime.startsWith('video/') ? <MediaVideo key={`${m.blobId}-${i}`} media={m} controls autoPlay={false} muted={false} natural /> : <MediaImage key={`${m.blobId}-${i}`} media={m} natural />))}
+          {p.text && <p className="bubble-caption">{displayText(p.text, 2_000)}</p>}
         </div>
       );
   } else if (p.type === MessageType.POLL && p.poll) {
@@ -306,7 +328,7 @@ function Bubble({
   } else if (p.type === MessageType.LOCATION && p.location) {
     content = <LocationCard message={message} mine={mine} />;
   } else {
-    content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? p.text || DEFAULT_REACTION : p.text}</span> : <RichText text={p.text ?? ''} />;
+    content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? heartOf(p.text, DEFAULT_REACTION) : p.text}</span> : <LongText text={displayText(p.text)} />;
   }
 
   const plainBubble = big || p.type === MessageType.SHARE || p.type === MessageType.POLL || p.type === MessageType.PLAN || p.type === MessageType.LOCATION || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
@@ -334,7 +356,7 @@ function Bubble({
         )}
         {replyTarget && (
           <div className="reply-ref">
-            <CornerUpLeft size={12} /> {name(replyTarget.dto.authorId)}: {replyTarget.payload.text ?? 'Attachment'}
+            <CornerUpLeft size={12} /> {name(replyTarget.dto.authorId)}: <bdi>{previewText(replyTarget.payload.text) || 'Attachment'}</bdi>
           </div>
         )}
         <div className="msg-row">
@@ -860,7 +882,7 @@ export function Chat() {
             <Pin size={15} />
             <span className="truncate">
               <b>{pinnedMessage.dto.authorId === me.id ? 'You' : nameOf(pinnedMessage.dto.authorId)}</b>{' '}
-              {pinnedMessage.payload.text || (pinnedMessage.payload.media?.length ? 'Photo or video' : 'Message')}
+              <bdi>{previewText(pinnedMessage.payload.text) || (pinnedMessage.payload.media?.length ? 'Photo or video' : 'Message')}</bdi>
             </span>
             {custom.pinned.length > 1 && <span className="faint">{custom.pinned.length} pinned</span>}
           </button>
@@ -1011,7 +1033,7 @@ export function Chat() {
         {(replyTo || editing) && (
           <div className="reply-bar">
             <span className="truncate">
-              {editing ? 'Editing message' : <>Replying to {replyTo!.dto.authorId === me.id ? 'yourself' : users[replyTo!.dto.authorId]?.username}: <span className="faint">{replyTo!.payload.text ?? 'Attachment'}</span></>}
+              {editing ? 'Editing message' : <>Replying to {replyTo!.dto.authorId === me.id ? 'yourself' : users[replyTo!.dto.authorId]?.username}: <span className="faint"><bdi>{previewText(replyTo!.payload.text) || 'Attachment'}</bdi></span></>}
             </span>
             <button className="icon-btn sm" onClick={() => (setReplyTo(null), setEditing(null), editing && setText(''))} aria-label="Cancel">
               <X size={16} />

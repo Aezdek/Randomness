@@ -136,17 +136,21 @@ class Notifier(private val context: Context) {
             .build()
 
     /**
-     * Another device just signed in to this account. "That was me" only dismisses it; "Not me" signs that device out
-     * at once (see [SecurityActionReceiver]) and opens Hush to change the password.
+     * Another device signed in to this account. "That was me" only dismisses it; "Not me" signs out every device the
+     * alert is about (see [SecurityActionReceiver]) and leads to changing the password. Both buttons need the phone
+     * unlocked first, so someone holding a locked phone can neither wave the alert away nor throw its owner's other
+     * devices out; before Android 12, which can't ask for that, there are no buttons and a tap opens Hush instead.
      */
-    fun signIn(sessionId: String, device: String, newest: Long) {
+    fun signIn(userId: String, sessionId: String, device: String, newest: Long, stillIn: Boolean) {
         val action = { label: String, what: String, code: Int ->
             val intent = Intent(context, SecurityActionReceiver::class.java).setAction(what)
-                .putExtra(SecurityActionReceiver.EXTRA_SESSION, sessionId).putExtra(SecurityActionReceiver.EXTRA_AT, newest)
-            NotificationCompat.Action(0, label, PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                .putExtra(SecurityActionReceiver.EXTRA_USER, userId).putExtra(SecurityActionReceiver.EXTRA_AT, newest)
+            NotificationCompat.Action.Builder(0, label, PendingIntent.getBroadcast(context, code, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                .setAuthenticationRequired(true).build()
         }
-        val text = "$device signed in to your account. If this wasn't you, sign it out now and change your password."
-        val notification = NotificationCompat.Builder(context, SECURITY)
+        val text = if (stillIn) "$device signed in to your account. If this wasn't you, sign it out now and change your password."
+        else "$device signed in to your account and has signed out again. If this wasn't you, change your password and keys now."
+        val builder = NotificationCompat.Builder(context, SECURITY)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("New sign-in. Was this you?")
             .setContentText(text)
@@ -155,10 +159,10 @@ class Notifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent("settings:security", ID_SECURITY_SIGN_IN))
-            .addAction(action("Not me", SecurityActionReceiver.NOT_ME, 71))
-            .addAction(action("That was me", SecurityActionReceiver.WAS_ME, 72))
-            .build()
-        post(ID_SECURITY_SIGN_IN, notification)
+        if (Build.VERSION.SDK_INT >= 31) {
+            builder.addAction(action("Not me", SecurityActionReceiver.NOT_ME, 71)).addAction(action("That was me", SecurityActionReceiver.WAS_ME, 72))
+        }
+        post(ID_SECURITY_SIGN_IN, builder.build())
     }
 
     /** Something the person should know about their account or their server, whatever else is muted. */
@@ -236,5 +240,6 @@ class Notifier(private val context: Context) {
         const val ID_SECURITY_WEB = 6
         const val ID_SECURITY_SIGN_IN = 7
         const val ID_ADMIN_ALERT = 8
+        const val ID_SECURITY_SIGNED_OUT = 9
     }
 }

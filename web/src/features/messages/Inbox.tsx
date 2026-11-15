@@ -13,14 +13,14 @@ import { Avatar } from '../../ui/Avatar';
 import { Ago, Empty } from '../../ui/bits';
 import { Sheet } from '../../ui/Sheet';
 import { NewChat } from './NewChat';
-import { safeText } from '../../core/safe';
+import { previewText, safeText } from '../../core/safe';
 import { Guard } from '../../ui/Guard';
 import { notesToSelfId, openNotesToSelf, searchMessages } from '../../core/circle';
 
 export function previewOf(payload: MessagePayload, mine: boolean): string {
   const you = mine ? 'You: ' : '';
   // Whatever a modified client sent, the row shows text.
-  payload = { ...payload, text: safeText(payload.text, 300) || null };
+  payload = { ...payload, text: previewText(safeText(payload.text)) || null };
   switch (payload.type) {
     case MessageType.TEXT:
       return you + (payload.text ?? '');
@@ -277,7 +277,7 @@ export function ThreadList({ activeId }: { activeId?: string }) {
                   <span className="truncate thread-title">{threadTitle(thread, index, users, me.id)}</span>
                   <span className="thread-preview">
                     <span className="truncate">
-                      <Highlight text={`${m.dto.authorId === me.id ? 'You' : nameIn(thread.id, m.dto.authorId, index, users)}: ${m.payload.plan?.title ?? m.payload.poll?.question ?? m.payload.text ?? m.payload.quote ?? ''}`} query={query} />
+                      <Highlight text={`${m.dto.authorId === me.id ? 'You' : nameIn(thread.id, m.dto.authorId, index, users)}: ${previewText(m.payload.plan?.title ?? m.payload.poll?.question ?? m.payload.text ?? m.payload.quote ?? '')}`} query={query} />
                     </span>
                     <span className="thread-preview-time">
                       {' · '}

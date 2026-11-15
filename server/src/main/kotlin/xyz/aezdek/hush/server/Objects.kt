@@ -37,6 +37,9 @@ private fun ResultSet.toObjectRow() = ObjectRow(
 
 private const val HOUR = 60L * 60 * 1000
 private const val MAX_PAYLOAD = 256 * 1024
+
+/** How far a new object's date may be from the server's clock: a day either way covers wrong time zones and slow clocks. */
+private const val CLOCK_SLACK = 24 * 60 * 60 * 1000L
 private const val MAX_DEPTH = 6
 /** One sealed key per member at most, with room to spare over the largest server the settings allow. */
 private const val MAX_WRAPS = xyz.aezdek.hush.protocol.ServerLimits.MAX_MEMBERS_LIMIT + 14
@@ -144,6 +147,11 @@ class Objects(private val db: Db, private val clock: Clock) {
         val now = clock.now()
         validateCommon(up)
         if (up.version != 1) badRequest("A new object starts at version 1")
+        // The author's device dates what it makes, and the date is part of what they sign, so the server can't correct
+        // it; it can refuse one that is far off. Dated ahead, a post would sit on top of every feed for good.
+        if (up.createdAt < now - CLOCK_SLACK || up.createdAt > now + CLOCK_SLACK) {
+            badRequest("Your device's clock looks wrong. Check its date and time, then try again.")
+        }
         if (load(up.id) != null) conflict("Object ${up.id} exists", "exists")
 
         val parent = up.parentId?.let { load(it) ?: notFound("Parent not found") }

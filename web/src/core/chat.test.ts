@@ -9,6 +9,18 @@ const message = (authorId: string, payload: MessagePayload, id = `m${++clock}`) 
   ({ dto: { id, authorId, receivedAt: clock }, payload }) as unknown as Entity;
 const event = (authorId: string, e: ChatEvent) => message(authorId, { type: MessageType.SYSTEM, event: e });
 
+describe('event lines from a modified app say what the chat does, not what was sent', () => {
+  const users = {} as Record<string, UserDto>;
+  const text = (e: ChatEvent) => eventText(e, 'bo', 'me', users, () => 'Bo');
+  it('caps nicknames, takes one emoji, and calls an impossible timer off', () => {
+    expect(text({ nicknameFor: 'x', nickname: 'N'.repeat(3_000) })).toBe(`Bo set the nickname for someone to ${'N'.repeat(40)}`);
+    expect(text({ quickReaction: '🔥'.repeat(500) })).toBe('Bo set the quick reaction to 🔥');
+    expect(text({ disappearAfter: Number.MAX_SAFE_INTEGER })).toBe('Bo turned off disappearing messages');
+    expect(text({ disappearAfter: -1 })).toBe('Bo turned off disappearing messages');
+    expect(text({ disappearAfter: 24 * 60 * 60 * 1000 })).toBe('Bo turned on disappearing messages. New messages disappear after 24 hours.');
+  });
+});
+
 describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
   it('has the defaults without events', () => {
     expect(chatCustom([message('ana', { type: MessageType.TEXT, text: 'hi' })])).toEqual({ theme: 'default', nicknames: {}, quickReaction: '❤️', pinned: [], disappearAfter: 0 });
@@ -25,6 +37,9 @@ describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
       event('ana', { pin: text.dto.id }),
     ]);
     expect(c).toEqual({ theme: 'love', nicknames: { ana: 'Captain' }, quickReaction: '🔥', pinned: [text.dto.id], disappearAfter: 0 });
+    // A row of emoji from a modified app becomes its first one; a family emoji stays whole.
+    expect(chatCustom([event('bo', { quickReaction: '🔥'.repeat(500) })]).quickReaction).toBe('🔥');
+    expect(chatCustom([event('bo', { quickReaction: '👩‍👩‍👧‍👦👩‍👩‍👧‍👦' })]).quickReaction).toBe('👩‍👩‍👧‍👦');
   });
 
   it('undoes with a blank nickname, an unpin, and an unknown theme', () => {

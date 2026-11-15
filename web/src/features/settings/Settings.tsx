@@ -25,7 +25,7 @@ import { displayName, useIndex } from '../../core/selectors';
 import { changePassword, deleteAccount, enablePush, pushSupported, resetKeys, signOut, updateMe } from '../../core/session';
 import { toast, useApp } from '../../core/store';
 import { applyTheme, useUi } from '../../core/ui';
-import type { IdList, PasskeyDto, SessionDto } from '../../core/types';
+import type { IdList, PasskeyDto, SessionDto, SignInDto } from '../../core/types';
 import { addPasskey, passkeysSupported } from '../../core/passkeys';
 import { NotifyPreview } from '../../core/payloads';
 import { Avatar } from '../../ui/Avatar';
@@ -293,7 +293,11 @@ function SecuritySection() {
   const [password, setPassword] = useState('');
   const [resetting, setResetting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const load = () => void api.get<SessionDto[]>('/auth/sessions').then(setSessions);
+  const [signIns, setSignIns] = useState<SignInDto[]>([]);
+  const load = () => {
+    void api.get<SessionDto[]>('/auth/sessions').then(setSessions);
+    void api.get<SignInDto[]>('/auth/sign-ins').then(setSignIns).catch(() => undefined);
+  };
   useEffect(load, []);
   return (
     <>
@@ -344,6 +348,20 @@ function SecuritySection() {
           ))
         )}
       </Card>
+      {signIns.length > 0 && (
+        <Card title="Recent sign-ins">
+          <p className="faint small">Each sign-in to your account in the last 30 days, even if that device has signed out again. One you don’t recognise means someone knows your password: change it, and your keys with it.</p>
+          {signIns.slice(0, 12).map((s) => (
+            <div className="user-row" key={s.id}>
+              <span className="user-row-text">
+                <b>{s.deviceName}</b>
+                <span className="faint">{new Date(s.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              </span>
+              <span className={s.active && !s.current ? '' : 'faint'}>{s.current ? 'This device' : s.active ? 'Signed in' : 'Signed out'}</span>
+            </div>
+          ))}
+        </Card>
+      )}
       <PasskeysCard />
       <Card title="Reset encryption keys">
         <p className="faint small">Only if you think your keys leaked. You get a new identity and keep your password; everything you can read is re-sealed to it, and your contacts are told your code changed. To change your password at the same time, use Change password.</p>

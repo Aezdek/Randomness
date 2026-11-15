@@ -229,6 +229,10 @@ fun Route.api(s: Services) = route("/api/v1") {
         s.realtime.apply(fx)
         call.respond(response)
     }
+    get("/auth/sign-ins") {
+        val session = call.session(s)
+        call.respond(blocking { s.accounts.signIns(session) })
+    }
     get("/auth/passkeys") {
         val session = call.session(s)
         call.respond(blocking { s.accounts.passkeys(session) })

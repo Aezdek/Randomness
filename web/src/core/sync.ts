@@ -6,6 +6,7 @@ import { api } from './api';
 import { ApiError } from './errors';
 import { LocalDb, type Pin } from './db';
 import { CHILD_KEYED, Kind, type HighlightPayload } from './payloads';
+import { shapeOf } from './shape';
 import { getState, useApp, type Entity } from './store';
 import type { ObjectDto, SyncResponse, ThreadDto, UserDto, WrapTaskDto, WrapUpload } from './types';
 
@@ -216,7 +217,12 @@ class SyncEngine {
         }
       }
       if (!plain) throw lastError;
-      const payload = JSON.parse(fromUtf8(plain));
+      // Whatever another member's app put in there, only a well-formed payload gets any further (see shape.ts).
+      const payload = shapeOf(dto.kind, JSON.parse(fromUtf8(plain)));
+      if (payload === undefined) {
+        console.warn(`Dropping ${dto.kind} ${dto.id}: not a well-formed ${dto.kind}`);
+        return 'fail';
+      }
       if (dto.kind === Kind.HIGHLIGHT) {
         for (const story of (payload as HighlightPayload).stories ?? []) {
           this.refKeys.set(story.id, unb64(story.key));
@@ -225,11 +231,10 @@ class SyncEngine {
       }
       return { dto, key, payload };
     } catch (e) {
-      if (e instanceof CryptoError || e instanceof SyntaxError) {
-        console.warn(`Dropping ${dto.kind} ${dto.id}: ${(e as Error).message}`);
-        return 'fail';
-      }
-      throw e;
+      // One object that can't be opened or read is dropped; it must never stop the ones after it from arriving.
+      if (!(e instanceof CryptoError || e instanceof SyntaxError)) console.warn('Unexpected error reading an object', e);
+      console.warn(`Dropping ${dto.kind} ${dto.id}: ${(e as Error)?.message ?? e}`);
+      return 'fail';
     }
   }
 

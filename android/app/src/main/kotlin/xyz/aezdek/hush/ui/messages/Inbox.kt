@@ -78,7 +78,8 @@ fun sortedThreads(state: AppState, index: Index): List<ThreadDto> {
 /** What a chat row shows under the name. */
 fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserDto>): String {
     entity ?: return "Say hi 👋"
-    val p = entity.payloadAs<MessagePayload>() ?: return ""
+    // Short and on one line, whatever someone else's app put in the message.
+    val p = entity.payloadAs<MessagePayload>()?.let { it.copy(text = it.text?.let(xyz.aezdek.hush.client.Display::preview)) } ?: return ""
     val mine = entity.dto.authorId == me
     val prefix = if (mine) "You: " else ""
     return when (p.type) {
@@ -179,7 +180,7 @@ fun Inbox() {
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(index.threadTitle(thread, state.users, me.id), fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Aez.colors.text, maxLines = 1)
-                            Text("$who: " + (p?.plan?.title ?: p?.poll?.question ?: p?.text ?: p?.quote ?: ""), fontSize = 13.sp, color = Aez.colors.text2,
+                            Text("$who: " + xyz.aezdek.hush.client.Display.preview(p?.plan?.title ?: p?.poll?.question ?: p?.text ?: p?.quote), fontSize = 13.sp, color = Aez.colors.text2,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Text(ago(hit.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3)

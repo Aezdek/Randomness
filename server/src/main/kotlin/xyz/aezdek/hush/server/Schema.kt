@@ -202,6 +202,18 @@ object Schema {
         CREATE INDEX passkeys_user ON passkeys(user_id);
         ALTER TABLE push_prefs ADD COLUMN hide_names INTEGER NOT NULL DEFAULT 0;
         """.trimIndent(),
+        // 7: a record of each sign-in, kept for 30 days whether or not the device is still signed in.
+        """
+        CREATE TABLE sign_ins (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            device_name TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            at INTEGER NOT NULL
+        );
+        CREATE INDEX sign_ins_user ON sign_ins(user_id, at);
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

@@ -135,6 +135,15 @@ object Graph {
             ConnectionService.stop(app)
             prefs.setWeakPassword(false)
         }
+        // Signed out from somewhere else: said on the sign-in screen and as a notification, since nobody here asked for it.
+        client.onForcedSignOut = {
+            prefs.setForcedOut(true)
+            notifier.security(
+                Notifier.ID_SECURITY_SIGNED_OUT, "Hush was signed out on this phone",
+                "Another device, a password change, or whoever runs your server did this. If it wasn't you, sign in and look at Settings → Security → Recent sign-ins.",
+                "home",
+            )
+        }
         // Call signals and test rings, whether or not the background service is running.
         scope.launch {
             client.realtime.frames.collect { frame ->

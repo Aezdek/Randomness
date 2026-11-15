@@ -23,7 +23,8 @@ data class ChatCustom(
             val name = event.nickname?.trim()?.take(MAX_NICKNAME)
             next = next.copy(nicknames = if (name.isNullOrEmpty()) next.nicknames - userId else next.nicknames + (userId to name))
         }
-        event.quickReaction?.takeIf { it.isNotBlank() }?.let { next = next.copy(quickReaction = it.take(16)) }
+        // One emoji: a string of them would push the composer's button out of shape for everyone in the chat.
+        event.quickReaction?.takeIf { it.isNotBlank() }?.let { next = next.copy(quickReaction = Display.firstGrapheme(it.trim())) }
         event.pin?.let { id -> next = next.copy(pinned = next.pinned.filter { it != id } + id) }
         event.unpin?.let { id -> next = next.copy(pinned = next.pinned - id) }
         event.disappearAfter?.let { after -> next = next.copy(disappearAfter = after.takeIf { it in Disappearing.CHOICES } ?: 0) }

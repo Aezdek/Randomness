@@ -144,9 +144,9 @@ internal fun PlanCard(message: Entity, plan: Plan, index: Index, state: AppState
             }
             Spacer(Modifier.width(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(plan.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
+                Text(xyz.aezdek.hush.client.Display.text(plan.title, 100).ifBlank { "Plan" }, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
                 Meta(Icons.Outlined.CalendarMonth, DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(plan.at)))
-                plan.place?.let { Meta(Icons.Outlined.Place, it) }
+                plan.place?.takeIf { it.isNotBlank() }?.let { Meta(Icons.Outlined.Place, xyz.aezdek.hush.client.Display.text(it, 100)) }
                 if (going.isNotEmpty() || maybe.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                         for (id in going.take(4)) Avatar(id, 20.dp, index, state.users[id]?.username)
@@ -252,7 +252,8 @@ internal fun PlanSheet(onDismiss: () -> Unit, onSend: (Plan) -> Unit) {
 private fun mapsUri(l: LiveLocation): Uri = Uri.parse("geo:${l.lat},${l.lng}?q=${l.lat},${l.lng}")
 
 private fun minutesLeft(until: Long): String {
-    val m = ((until - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0)
+    // Nobody can share for more than 8 hours; a longer claim shows as 8.
+    val m = ((until - System.currentTimeMillis()).coerceIn(0, 8 * 60 * 60_000L) / 60_000L)
     return if (m >= 60) "${m / 60} h ${if (m % 60 > 0) "${m % 60} min" else ""}".trim() else "$m min"
 }
 
@@ -260,6 +261,10 @@ private fun minutesLeft(until: Long): String {
 @Composable
 internal fun LocationCard(message: Entity, location: LiveLocation, mine: Boolean, modifier: Modifier) {
     val context = LocalContext.current
+    if (!xyz.aezdek.hush.client.Display.plausible(location)) {
+        Text("A location that couldn't be shown", fontSize = 13.sp, color = Aez.colors.text3, modifier = modifier.padding(8.dp))
+        return
+    }
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(message.id) {
         while (true) {
@@ -301,7 +306,7 @@ internal fun LocationCard(message: Entity, location: LiveLocation, mine: Boolean
             Text(if (live) "Live location" else "Location sharing ended", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
             Text(
                 (if (live) "Updated ${since(location.updatedAt)} · ${minutesLeft(location.until)} left" else "No longer shared") +
-                    (location.accuracy?.let { " · within ${it.toInt()} m" } ?: ""),
+                    (location.accuracy?.takeIf { it > 0 && it <= 100_000 }?.let { " · within ${it.toInt()} m" } ?: ""),
                 fontSize = 12.sp, color = Aez.colors.text2,
             )
             Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

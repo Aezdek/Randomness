@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBlobId, safeLocation, safeMediaType, safePlan, safePoll, safeText, webLink } from './safe';
+import { displayText, foldText, FOLD_CHARS, FOLD_LINES, heartOf, isBlobId, MAX_PREVIEW, MAX_TEXT, previewText, safeLocation, safeMediaType, safePlan, safePoll, safeText, shownDuration, webLink } from './safe';
 
 describe('content from other people', () => {
   it('only ever calls a decrypted file a photo, a video or sound', () => {
@@ -44,5 +44,43 @@ describe('chat payload shapes from other members', () => {
     expect(safePoll({ question: 'q', options: [1, 2, 'only one string'] })).toBeNull();
     expect(safeText({ not: 'text' })).toBe('');
     expect(safePlan({ title: 'x'.repeat(500), at: 1 })?.title).toHaveLength(100);
+  });
+});
+
+describe('times no calendar holds', () => {
+  it('are refused in plans and locations, so formatting a date never throws', () => {
+    expect(safePlan({ title: 'x', at: 1e300 })).toBeNull();
+    expect(safePlan({ title: 'x', at: -5 })).toBeNull();
+    expect(safeLocation({ lat: 1, lng: 1, until: 9e18, updatedAt: 1 })).toBeNull();
+    expect(safeLocation({ lat: 1, lng: 1, until: 2, updatedAt: -1 })).toBeNull();
+    expect(safePlan({ title: 'x', at: Date.UTC(2030, 0, 1) })).not.toBeNull();
+  });
+});
+
+describe('display limits (mirror Display.kt)', () => {
+  it('cut texts, collapse blank lines, keep hearts to one emoji and durations to a day', () => {
+    expect(displayText('W'.repeat(200_000))).toHaveLength(MAX_TEXT + 1);
+    expect(displayText(`a${'\n'.repeat(400)}b`)).toBe('a\n\nb');
+    expect(displayText({ not: 'text' })).toBe('');
+    expect(previewText(`one\ntwo ${'x'.repeat(10_000)}`)).toHaveLength(MAX_PREVIEW + 1);
+    expect(previewText('one\ntwo')).toBe('one two');
+    expect(heartOf('🔥', '❤️')).toBe('🔥');
+    expect(heartOf('👩‍👩‍👧‍👦', '❤️')).toBe('👩‍👩‍👧‍👦');
+    expect(heartOf('❤️'.repeat(2_000), '❤️')).toBe('❤️');
+    expect(heartOf('🔥'.repeat(500), '❤️')).toBe('🔥');
+    expect(heartOf('   ', '❤️')).toBe('❤️');
+    expect(shownDuration(-9e18)).toBe(0);
+    expect(shownDuration(9e18)).toBe(86_400_000);
+    expect(shownDuration('5')).toBe(0);
+  });
+});
+
+describe('long messages fold (mirror Display.fold)', () => {
+  it('at a thousand characters or twenty lines', () => {
+    expect(foldText('short')).toBe('short');
+    expect(foldText('W'.repeat(8_000))).toHaveLength(FOLD_CHARS + 1);
+    const tall = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`).join('\n');
+    expect(foldText(tall).split('\n')).toHaveLength(FOLD_LINES);
+    expect(foldText('x'.repeat(FOLD_CHARS))).toBe('x'.repeat(FOLD_CHARS));
   });
 });

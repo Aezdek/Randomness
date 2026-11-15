@@ -15,7 +15,7 @@ import {
   type VotePayload,
 } from './payloads';
 import { getState, type AppState, type Entity } from './store';
-import { safeLocation, safePlan, safePoll, safeText } from './safe';
+import { MAX_MEDIA, safeLocation, safePlan, safePoll, safeText } from './safe';
 
 const MINUTE = 60_000;
 /** How long live location can be shared for: at least 5 minutes, at most 8 hours. */
@@ -57,7 +57,7 @@ export function createAlbum(name: string, memberIds: string[]): Promise<string> 
 /** Every photo and video in a chat, newest first, with the message it came in. */
 export function albumMedia(idx: Index, threadId: string): { message: Entity<MessagePayload>; media: MediaRef }[] {
   return (idx.messages[threadId] ?? [])
-    .flatMap((m) => (Array.isArray(m.payload.media) ? m.payload.media : []).filter((media) => typeof media?.blobId === 'string').map((media) => ({ message: m, media })))
+    .flatMap((m) => (Array.isArray(m.payload.media) ? m.payload.media.slice(0, MAX_MEDIA) : []).filter((media) => typeof media?.blobId === 'string').map((media) => ({ message: m, media })))
     .reverse();
 }
 

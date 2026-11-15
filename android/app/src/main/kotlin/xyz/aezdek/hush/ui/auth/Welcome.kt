@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -201,8 +202,10 @@ fun Welcome() {
             try {
                 if (creating) {
                     Graph.client.signUp(invite, username, password)
+                    Graph.prefs.setForcedOut(false)
                 } else {
                     Graph.client.signIn(username, password)
+                    Graph.prefs.setForcedOut(false)
                     // An older password the rules would refuse now: ask for a better one, once signed in.
                     Graph.prefs.setWeakPassword(PasswordRules.check(password, username) != null)
                 }
@@ -234,6 +237,15 @@ fun Welcome() {
                 Modifier.widthIn(max = 420.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Aez.colors.elev1.copy(alpha = 0.86f)).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val forcedOut by Graph.prefs.forcedOut.collectAsState()
+                if (forcedOut && !creating) {
+                    Text(
+                        "This phone was signed out from somewhere else: another device, a password change, or whoever runs your server. " +
+                            "If that wasn't you, sign in and look at Settings → Security → Recent sign-ins.",
+                        style = MaterialTheme.typography.bodySmall, color = Aez.colors.text,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.danger.copy(alpha = 0.14f)).padding(12.dp),
+                    )
+                }
                 Segmented(creating) { creating = it; error = null }
                 AnimatedContent(creating, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "invite") { create ->
                     if (create) {

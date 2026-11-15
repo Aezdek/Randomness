@@ -138,7 +138,8 @@ export function PlanSheet({ open, onClose, onSend }: { open: boolean; onClose: (
 // ------------------------------------------------------------------------------------------------------- location
 
 function minutesLeft(until: number) {
-  const m = Math.max(0, Math.round((until - Date.now()) / 60_000));
+  // Nobody can share for more than 8 hours; a longer claim shows as 8.
+  const m = Math.round(Math.min(8 * 60 * 60_000, Math.max(0, until - Date.now())) / 60_000);
   return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}`.trim() : `${m} min`;
 }
 
@@ -166,7 +167,7 @@ export function LocationCard({ message, mine }: { message: Entity<MessagePayload
         <b>{live ? 'Live location' : 'Location sharing ended'}</b>
         <span className="faint">
           {live ? <>Updated <Ago at={location.updatedAt} className="" suffix /> · {minutesLeft(location.until)} left</> : 'No longer shared'}
-          {location.accuracy ? ` · within ${Math.round(location.accuracy)} m` : ''}
+          {location.accuracy && location.accuracy <= 100_000 ? ` · within ${Math.round(location.accuracy)} m` : ''}
         </span>
         <span className="location-actions">
           <a className="btn btn-secondary btn-sm" href={mapsLink(location)} target="_blank" rel="noopener noreferrer">

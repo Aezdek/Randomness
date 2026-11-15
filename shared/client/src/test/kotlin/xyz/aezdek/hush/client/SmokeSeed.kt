@@ -27,9 +27,15 @@ import javax.imageio.ImageIO
  * The other person in CI's Android smoke test (.github/workflows/hush.yml, android-smoke). Skipped unless
  * HUSH_SEED_URL is set. Maya signs up, posts, waits for the phone's account ("ava"), then follows it, messages it
  * (text, a photo, a reaction, a chat theme) and accepts its follow request, so every screen the phone opens has
- * something real on it. Writes the chat's id to HUSH_SEED_OUT for the script driving the phone.
+ * something real on it. Writes the chat's id to HUSH_SEED_OUT for the script driving the phone. When the phone sends
+ * "stress test" she answers with every malformed and extreme message in [Hostile], then "Still here".
  */
 class SmokeSeed {
+    private companion object {
+        /** The word that, sent by the phone, makes Maya behave like a member with a modified app (see [Hostile]). */
+        const val STRESS = "stress test"
+    }
+
     @Test
     fun seed() = runBlocking {
         val url = System.getenv("HUSH_SEED_URL")
@@ -77,13 +83,20 @@ class SmokeSeed {
 
             // Accept the phone's follow request whenever it comes, and answer what it sends, for as long as the test runs.
             val answered = HashSet<String>()
-            repeat(450) {
+            repeat(900) {
                 runCatching {
                     maya.engine.sync()
                     if (ava.id in maya.state.value.followRequests) maya.composer.acceptFollow(ava.id)
                     val index = Index.build(maya.state.value)
                     index.messages[thread].orEmpty().filter { it.dto.authorId == ava.id && answered.add(it.id) }.forEach {
-                        maya.composer.sendMessage(thread, MessagePayload(MessageType.TEXT, text = "Got it", replyTo = it.id))
+                        if (it.payloadAs<MessagePayload>()?.text?.trim().equals(STRESS, ignoreCase = true)) {
+                            // The phone asked for it: everything a modified app could send, then proof of life.
+                            val sent = Hostile.unleash(maya, thread)
+                            println("seed: sent $sent hostile messages")
+                            maya.composer.sendMessage(thread, MessagePayload(MessageType.TEXT, text = "Still here"))
+                        } else {
+                            maya.composer.sendMessage(thread, MessagePayload(MessageType.TEXT, text = "Got it", replyTo = it.id))
+                        }
                     }
                 }
                 delay(2000)

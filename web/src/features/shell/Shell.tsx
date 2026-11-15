@@ -8,6 +8,7 @@ import { engine } from '../../core/sync';
 import { applyTheme, setNavCollapsed, useDarkMode, useUi } from '../../core/ui';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
+import { Guard } from '../../ui/Guard';
 import { BrandMark, Wordmark } from '../../ui/Brand';
 import { Activity, useActivityBadge } from '../activity/Activity';
 import { CallHost } from '../calls/CallHost';
@@ -246,6 +247,23 @@ function WeakPasswordBanner() {
   );
 }
 
+function PageError() {
+  return (
+    <div className="page-error" role="alert">
+      <b>This page couldn’t be shown</b>
+      <span className="faint">Something on it isn’t in a form Hush understands. The rest of the app is fine.</span>
+      <span className="row" style={{ gap: 8 }}>
+        <Link className="btn btn-secondary btn-sm" to="/">
+          Home
+        </Link>
+        <button className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}>
+          Reload
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function ConnectionBanner() {
   const connection = useApp((s) => s.connection);
   if (connection !== 'offline') return null;
@@ -268,6 +286,8 @@ export function Shell() {
       <SideNav />
       <TopBar pathname={page} />
       <main className="main">
+        {/* One page that can't be shown doesn't take the app with it; going anywhere else starts afresh. */}
+        <Guard key={page} fallback={<PageError />}>
         <Routes location={background ?? location}>
           <Route path="/" element={<HomePage />} />
           <Route path="/explore" element={<Explore />} />
@@ -288,6 +308,7 @@ export function Shell() {
           <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
+        </Guard>
         {background && (
           <Routes>
             <Route path="/p/:id" element={<PostModal />} />

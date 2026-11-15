@@ -159,7 +159,8 @@ class ConnectionService : Service() {
             val unread = index.messages[threadId].orEmpty().filter { it.dto.authorId != me && it.dto.receivedAt > (mine?.lastReadAt ?: 0) && notifies(it) }
             if (unread.isEmpty()) continue
             val lines = unread.map { entity ->
-                index.nameIn(threadId, entity.dto.authorId, state.users) to preview(entity.payloadAs<MessagePayload>())
+                // Short enough for Android to accept, whatever someone else's app put in the message.
+                index.nameIn(threadId, entity.dto.authorId, state.users).take(100) to xyz.aezdek.hush.client.Display.preview(preview(entity.payloadAs<MessagePayload>()))
             }
             Graph.notifier.message(threadId, index.threadTitle(thread, state.users, me), lines, thread.isGroup, settings.notifyPreview)
         }

@@ -11,6 +11,8 @@ export interface SignupRequest {
 export interface Me { id: string; username: string; isAdmin: boolean; isPrivate: boolean; showActivity: boolean; createdAt: number; keyVersion: number; readReceipts?: boolean }
 export interface AuthResponse { token: string; me: Me; vault: string }
 export interface SessionDto { id: string; deviceName: string; platform: string; createdAt: number; lastSeenAt: number; current: boolean }
+/** One sign-in to the account in the last 30 days, kept after that device signs out (GET /auth/sign-ins). */
+export interface SignInDto { id: string; deviceName: string; platform: string; at: number; sessionId: string; active: boolean; current: boolean }
 export interface PasskeyDto { id: string; name: string; createdAt: number; lastUsedAt?: number | null }
 /** Something wrong with the server an admin should hear about (GET /admin/alerts). kind: backup | disk | update. */
 export interface AdminAlertDto { id: string; kind: string; title: string; text: string }

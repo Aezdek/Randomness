@@ -92,15 +92,27 @@ class Prefs(context: Context) {
         get() = prefs.getLong("lastUpdateCheck", 0)
         set(value) = prefs.edit().putLong("lastUpdateCheck", value).apply()
 
-    /** The newest sign-in to this account this phone has asked about (or the phone's own, at first). */
-    var signInsSeen: Long
-        get() = prefs.getLong("signInsSeen", 0)
-        set(value) = prefs.edit().putLong("signInsSeen", value).apply()
+    /**
+     * The newest sign-in to [userId]'s account this phone has asked about (the phone's own, at first). Kept when the
+     * phone is signed out, so a sign-in that threw it out is still asked about once it is back in.
+     */
+    fun signInsSeen(userId: String): Long = prefs.getLong("signInsSeen.$userId", 0)
+
+    fun setSignInsSeen(userId: String, at: Long) = prefs.edit().putLong("signInsSeen.$userId", at).apply()
 
     /** Server problems an admin has already been told about (by their id), so each is told once. */
     var adminAlertsTold: Set<String>
         get() = prefs.getStringSet("adminAlertsTold", emptySet()).orEmpty().toSet()
         set(value) = prefs.edit().putStringSet("adminAlertsTold", value).apply()
+
+    /** This phone was signed out from somewhere else; the sign-in screen says so until someone signs in again. */
+    private val _forcedOut = MutableStateFlow(prefs.getBoolean("forcedOut", false))
+    val forcedOut: StateFlow<Boolean> = _forcedOut
+
+    fun setForcedOut(value: Boolean) {
+        prefs.edit().putBoolean("forcedOut", value).apply()
+        _forcedOut.value = value
+    }
 
     /** The day "On this day" was hidden for (it comes back the next day). */
     var memoriesHidden: String

@@ -66,8 +66,16 @@ class AezClient(
     /** Called when the server says our session is gone (revoked from another device, or the account deleted). */
     var onSignedOut: (() -> Unit)? = null
 
+    /**
+     * Called just before [onSignedOut] when it was the server that ended the session, not the person: another device
+     * signed this one out, the password changed elsewhere, or the admin did it. The app says so, because the person
+     * didn't ask for it.
+     */
+    var onForcedSignOut: (() -> Unit)? = null
+
     init {
         api.onUnauthorized = {
+            if (state.value.me != null && !leaving) onForcedSignOut?.invoke()
             scope.launch { signOut(tellServer = false) }
         }
         scope.launch { realtime.frames.collect(::onFrame) }
@@ -136,8 +144,13 @@ class AezClient(
         start(response.token, response.me, keys)
     }
 
+    /** Signing out by choice: requests still in the air come back refused, which isn't being signed out from elsewhere. */
+    @Volatile
+    private var leaving = false
+
     suspend fun signOut(tellServer: Boolean = true) {
         if (state.value.me == null && api.token == null) return
+        leaving = tellServer
         if (tellServer) runCatching { api.post<Unit>("/auth/logout") }
         realtime.close()
         engine.close()
@@ -147,6 +160,7 @@ class AezClient(
             tables.clear()
         }
         state.value = AppState()
+        leaving = false
         onSignedOut?.invoke()
     }
 
@@ -235,9 +249,17 @@ class AezClient(
      */
     val security = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
 
-    /** The devices signed in to this account that started after [since], newest first, this one left out. */
-    suspend fun newSignIns(since: Long): List<xyz.aezdek.hush.protocol.SessionDto> =
-        api.get<List<xyz.aezdek.hush.protocol.SessionDto>>("/auth/sessions").filter { !it.current && it.createdAt > since }.sortedByDescending { it.createdAt }
+    /**
+     * Sign-ins to this account after [since], newest first, this device's own left out. From the server's record of
+     * sign-ins rather than the list of devices, so one that has already signed out again (or signed this device out)
+     * still shows; [xyz.aezdek.hush.protocol.SignInDto.active] says whether it is still in.
+     */
+    suspend fun newSignIns(since: Long): List<xyz.aezdek.hush.protocol.SignInDto> =
+        api.get<List<xyz.aezdek.hush.protocol.SignInDto>>("/auth/sign-ins").filter { !it.current && it.at > since }.sortedByDescending { it.at }
+
+    /** When this device itself signed in, by the server's clock: the starting point for "sign-ins since". */
+    suspend fun ownSignInAt(): Long? =
+        api.get<List<xyz.aezdek.hush.protocol.SignInDto>>("/auth/sign-ins").firstOrNull { it.current }?.at
 
     /** "That wasn't me": signs that device out at once. */
     suspend fun signOutDevice(sessionId: String) {

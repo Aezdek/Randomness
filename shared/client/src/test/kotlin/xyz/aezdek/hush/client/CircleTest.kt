@@ -15,6 +15,7 @@ import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -163,11 +164,19 @@ class CircleTest {
         val fresh = ana.newSignIns(before)
         assertEquals(1, fresh.size)
         assertEquals("Pixel 9", fresh.single().deviceName)
-        ana.signOutDevice(fresh.single().id)
+        assertTrue(fresh.single().active)
+        ana.signOutDevice(fresh.single().sessionId)
         withTimeout(10_000) {
             runCatching { intruder.engine.sync() }
             while (intruder.signedIn) delay(50)
         }
-        assertTrue(ana.newSignIns(before).isEmpty())
+        // It stays on record, marked as gone: signing out doesn't erase that it happened.
+        assertFalse(ana.newSignIns(before).single().active)
+        // Someone who signs in and straight out again is on record too.
+        val quick = client()
+        quick.signIn("ana", "tangerine kettle orbit")
+        quick.signOut()
+        assertEquals(2, ana.newSignIns(before).size)
+        assertTrue(ana.newSignIns(before).none { it.active })
     }
 }

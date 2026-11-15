@@ -71,17 +71,20 @@ class Index(
 
     /** The line a chat event shows in the conversation and the inbox: "You changed the theme to Ocean". */
     fun eventText(threadId: String?, authorId: String, event: xyz.aezdek.hush.protocol.ChatEvent, users: Map<String, UserDto>, me: String): String {
+        // What the event did once applied (see ChatCustom.apply), not what it carried: a modified app could send a
+        // 3,000-letter nickname or a disappearing time of 292 million years, and the line must not claim either.
         val who = if (authorId == me) "You" else nameIn(threadId, authorId, users)
         fun whom(id: String) = if (id == me) "you" else users[id]?.username ?: "someone"
+        val nickname = event.nickname?.trim()?.take(ChatCustom.MAX_NICKNAME).orEmpty()
         return when {
             event.theme != null -> "$who changed the theme to ${ChatThemes.byId(event.theme)?.name ?: "Hush"}"
-            event.nicknameFor != null && event.nickname.isNullOrBlank() -> "$who removed the nickname for ${whom(event.nicknameFor!!)}"
-            event.nicknameFor != null -> if (event.nicknameFor == authorId) "$who set ${if (authorId == me) "your" else "their"} nickname to ${event.nickname!!.trim()}"
-                else "$who set the nickname for ${whom(event.nicknameFor!!)} to ${event.nickname!!.trim()}"
-            event.quickReaction != null -> "$who set the quick reaction to ${event.quickReaction}"
+            event.nicknameFor != null && nickname.isEmpty() -> "$who removed the nickname for ${whom(event.nicknameFor!!)}"
+            event.nicknameFor != null -> if (event.nicknameFor == authorId) "$who set ${if (authorId == me) "your" else "their"} nickname to $nickname"
+                else "$who set the nickname for ${whom(event.nicknameFor!!)} to $nickname"
+            !event.quickReaction.isNullOrBlank() -> "$who set the quick reaction to ${Display.firstGrapheme(event.quickReaction!!.trim())}"
             event.pin != null -> "$who pinned a message"
             event.unpin != null -> "$who unpinned a message"
-            event.disappearAfter != null && event.disappearAfter!! > 0 ->
+            event.disappearAfter != null && event.disappearAfter!! in xyz.aezdek.hush.protocol.Disappearing.CHOICES && event.disappearAfter!! > 0 ->
                 "$who turned on disappearing messages. New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(event.disappearAfter!!)}."
             event.disappearAfter != null -> "$who turned off disappearing messages"
             event.screenshot == true -> "$who took a screenshot"
@@ -192,7 +195,7 @@ fun Index.isAlbum(threadId: String): Boolean =
 
 /** Every photo and video in an album, newest first, with who added it. */
 fun Index.albumMedia(threadId: String): List<Pair<Entity, xyz.aezdek.hush.protocol.MediaRef>> =
-    messages[threadId].orEmpty().flatMap { m -> m.payloadAs<MessagePayload>()?.media.orEmpty().map { m to it } }.asReversed()
+    messages[threadId].orEmpty().flatMap { m -> m.payloadAs<MessagePayload>()?.media.orEmpty().take(Display.MAX_MEDIA).map { m to it } }.asReversed()
 
 /** Who answered a plan, and how ([xyz.aezdek.hush.protocol.PlanAnswer]): the latest answer each. */
 fun Index.planAnswers(messageId: String): Map<String, Int> =
@@ -206,7 +209,7 @@ fun Index.planAnswers(messageId: String): Map<String, Int> =
 fun Index.liveLocations(threadId: String, now: Long = System.currentTimeMillis()): List<Entity> =
     messages[threadId].orEmpty().filter { m ->
         val location = m.payloadAs<MessagePayload>()?.location
-        location != null && location.until > now
+        location != null && location.until > now && Display.plausible(location)
     }
 
 /**

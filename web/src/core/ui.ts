@@ -12,6 +12,8 @@ interface UiState {
   navCollapsed: boolean;
   /** Signed in with a password the rules would refuse today: a banner asks for a better one until it changes. */
   weakPassword: boolean;
+  /** This browser was signed out from somewhere else; the sign-in form says so until someone signs in again. */
+  forcedOut: boolean;
 }
 
 function initialWeak(): boolean {
@@ -30,6 +32,24 @@ export function setWeakPassword(weak: boolean) {
     /* private mode */
   }
   useUi.setState({ weakPassword: weak });
+}
+
+function initialForcedOut(): boolean {
+  try {
+    return localStorage.getItem('hush.forcedOut') === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setForcedOut(value: boolean) {
+  try {
+    if (value) localStorage.setItem('hush.forcedOut', '1');
+    else localStorage.removeItem('hush.forcedOut');
+  } catch {
+    /* private mode */
+  }
+  useUi.setState({ forcedOut: value });
 }
 
 function initialNav(): boolean {
@@ -63,6 +83,7 @@ export const useUi = create<UiState>()(() => ({
   theme: initialTheme(),
   navCollapsed: initialNav(),
   weakPassword: initialWeak(),
+  forcedOut: initialForcedOut(),
 }));
 
 export function applyTheme(theme: UiState['theme']) {

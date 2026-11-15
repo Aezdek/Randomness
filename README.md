@@ -104,13 +104,20 @@ What Hush does about the usual weak spots:
   password. The setting is shown to everyone in the chat.
 - **Someone else signing in.** Every new sign-in to your account is shown at once on your other devices: "Was this
   you?". Answering no signs that device out and takes you to change your password, which also signs out everything
-  else and removes every passkey.
+  else and removes every passkey. The server keeps a record of each sign-in for 30 days (Settings → Recent sign-ins),
+  so one that signs straight out again, or signs your own devices out first, is still shown when you're back. A
+  device's name is cleaned of invisible characters that could make an alert read as something else.
 - **Passkeys.** In a browser you can sign in with a fingerprint, face or security key instead of typing the password.
   The passkey produces a secret only it can make (WebAuthn's PRF); from it come a key the server checks, like the
   password's, and a key that never leaves your device and unseals your own copy of your keys. Adding one needs the
   password. Changing your password or keys removes them all.
 - **Notifications.** You choose what they show: the message, only who sent it, or nothing. On Android the lock screen
   shows only "New message" whatever you choose, and with "nothing" the server leaves names out of browser pushes too.
+- **What other people's apps send.** Everything members send each other is encrypted, so the server can't check it.
+  Both apps check it instead, as it arrives: anything that isn't the shape an honest app sends is dropped, and what
+  is merely outsized is cut down to what an honest app could send (one emoji as a quick reaction, ten photos to a
+  message, six poll options, long messages folded behind "Read more"). One bad message can't take a chat or the app
+  down with it. CI checks this on every build by sending the Android app about fifty such messages.
 - **Screenshots.** On Android, chats in vanish mode, chats with disappearing messages and view-once photos can't be
   screenshotted or screen-recorded. On Android 14 and later, if a screenshot gets through anyway, the chat is told.
 - **Taking access away.** When you remove a follower, block someone, take someone out of a group or remove a member,

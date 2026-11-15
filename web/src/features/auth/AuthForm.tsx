@@ -5,7 +5,7 @@ import { messageOf } from '../../core/errors';
 import { checkPassword, loadPasswordRules, passwordAdvice } from '../../core/passwordRules';
 import { passkeysSupported } from '../../core/passkeys';
 import { signIn, signInWithPasskey, signUp } from '../../core/session';
-import { setWeakPassword } from '../../core/ui';
+import { setWeakPassword, useUi } from '../../core/ui';
 import { Segmented, Spinner } from '../../ui/bits';
 
 export type AuthMode = 'signin' | 'join';
@@ -23,6 +23,7 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
   const [, setRulesReady] = useState(false);
   useEffect(() => void loadPasswordRules().then(() => setRulesReady(true)), []);
   const advice = mode === 'join' && password ? passwordAdvice(password, username) : null;
+  const forcedOut = useUi((s) => s.forcedOut);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,6 +78,12 @@ export function AuthForm({ mode, onMode, initialInvite = '' }: { mode: AuthMode;
           { id: 'join', label: 'Join with invite' },
         ]}
       />
+      {forcedOut && mode === 'signin' && (
+        <p className="forced-out" role="status">
+          This browser was signed out from somewhere else: another device, a password change, or whoever runs your server. If that wasn’t you, sign in and
+          look at Settings → Encryption and devices → Recent sign-ins.
+        </p>
+      )}
       <AnimatePresence initial={false}>
         {mode === 'join' && (
           <motion.label className="field" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>

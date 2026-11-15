@@ -397,3 +397,20 @@
   color: var(--bg);
   font-weight: 650;
 }
+
+.forced-out {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.page-error {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 80px 24px;
+  text-align: center;
+}

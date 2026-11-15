@@ -115,6 +115,7 @@ import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.client.AppState
 import xyz.aezdek.hush.client.ChatCustom
+import xyz.aezdek.hush.client.Display
 import xyz.aezdek.hush.client.ChatThemes
 import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.client.Index
@@ -371,7 +372,7 @@ fun Chat(threadId: String, focus: String? = null) {
                 Spacer(Modifier.width(10.dp))
                 Text(
                     (if (pinned.dto.authorId == me.id) "You" else index.nameIn(threadId, pinned.dto.authorId, state.users)) + "  " +
-                        (p?.text?.takeIf { it.isNotBlank() } ?: if (p?.media?.isNotEmpty() == true) "Photo or video" else "Message"),
+                        (Display.preview(p?.text).takeIf { it.isNotBlank() } ?: if (p?.media?.isNotEmpty() == true) "Photo or video" else "Message"),
                     fontSize = 13.sp, color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 )
                 if (custom.pinned.size > 1) Text("${custom.pinned.size} pinned", fontSize = 12.sp, color = Aez.colors.text3)
@@ -554,9 +555,9 @@ private fun PollCard(message: Entity, poll: Poll, index: Index, state: AppState,
         Row(verticalAlignment = Alignment.Top) {
             Icon(Icons.Outlined.Poll, null, tint = Aez.colors.text2, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(poll.question, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
+            Text(Display.text(poll.question, 300), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Aez.colors.text)
         }
-        poll.options.forEachIndexed { i, option ->
+        poll.options.take(Display.MAX_POLL_OPTIONS).forEachIndexed { i, option ->
             val voters = votes.filter { it.payloadAs<VotePayload>()?.option == i }
             val share = if (votes.isEmpty()) 0f else voters.size / votes.size.toFloat()
             val chosen = myVote == i
@@ -692,7 +693,7 @@ private fun Bubble(
     val reactions = index.reactionsOf(message.id)
     val once = message.dto.audience == Audience.ONCE
     var opened by remember { mutableStateOf(false) }
-    val big = p.type == MessageType.HEART || (p.type == MessageType.TEXT && EMOJI.matches(p.text.orEmpty().trim()))
+    val big = p.type == MessageType.HEART || (p.type == MessageType.TEXT && p.text.orEmpty().length <= 32 && EMOJI.matches(p.text.orEmpty().trim()))
     val shape = RoundedCornerShape(
         topStart = if (!mine && !firstOfGroup) 6.dp else 20.dp, topEnd = if (mine && !firstOfGroup) 6.dp else 20.dp,
         bottomStart = if (!mine && !lastOfGroup) 6.dp else 20.dp, bottomEnd = if (mine && !lastOfGroup) 6.dp else 20.dp,
@@ -759,7 +760,7 @@ private fun Bubble(
         p.replyTo?.let { id ->
             val quoted = state.entities[id]?.payloadAs<MessagePayload>()
             Text(
-                quoted?.text ?: "Original message", fontSize = 12.sp, color = Aez.colors.text2, maxLines = 2,
+                quoted?.text?.let(Display::preview) ?: "Original message", fontSize = 12.sp, color = Aez.colors.text2, maxLines = 2,
                 modifier = Modifier.padding(start = if (mine) 0.dp else 38.dp, top = 4.dp).widthIn(max = 240.dp)
                     .clip(RoundedCornerShape(14.dp)).background(Aez.colors.elev1).padding(horizontal = 12.dp, vertical = 6.dp),
             )
@@ -774,7 +775,7 @@ private fun Bubble(
                 Graph.launch { Graph.client.composer.react(message, "❤️") }
             }, onClick = {})
             when {
-                big -> Text(if (p.type == MessageType.HEART) p.text ?: ChatCustom.DEFAULT_REACTION else p.text.orEmpty(), fontSize = 44.sp, modifier = clickModifier.padding(4.dp))
+                big -> Text(if (p.type == MessageType.HEART) Display.heart(p.text, ChatCustom.DEFAULT_REACTION) else p.text.orEmpty(), fontSize = 44.sp, modifier = clickModifier.padding(4.dp))
                 p.type == MessageType.MEDIA && once && !mine && !opened -> {
                     Row(
                         Modifier.clip(shape).background(Aez.colors.bubbleOther).combinedClickable(onLongClick = onLongPress) {
@@ -789,8 +790,8 @@ private fun Bubble(
                     }
                 }
                 p.type == MessageType.MEDIA -> Column(clickModifier.widthIn(max = 260.dp).clip(RoundedCornerShape(18.dp)), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    for (ref in p.media) MediaBubble(ref)
-                    p.text?.takeIf { it.isNotBlank() }?.let { Text(it, modifier = Modifier.background(Aez.colors.bubbleOther).padding(10.dp), color = Aez.colors.text) }
+                    for (ref in p.media.take(Display.MAX_MEDIA)) MediaBubble(ref)
+                    p.text?.takeIf { it.isNotBlank() }?.let { Text(Display.text(it, 2_000), modifier = Modifier.background(Aez.colors.bubbleOther).padding(10.dp), color = Aez.colors.text) }
                 }
                 p.type == MessageType.VOICE && p.media.isNotEmpty() -> Box(clickModifier.clip(shape).background(if (mine) themeColor else Aez.colors.bubbleOther)) {
                     VoiceBubble(p.media.first(), if (mine) mineText else Aez.colors.text)
@@ -827,7 +828,18 @@ private fun Bubble(
                                 .then(if (flash) Modifier.border(2.dp, themeColor, shape) else Modifier)
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         ) {
-                            RichText(p.text.orEmpty(), style = TextStyle(color = if (mine) mineText else Aez.colors.text, fontSize = 15.sp, lineHeight = 20.sp))
+                            // A long message shows its start; "Read more" shows the rest.
+                            var expanded by remember(message.id) { mutableStateOf(false) }
+                            val full = Display.text(p.text)
+                            val shown = if (expanded) full else Display.fold(full)
+                            val tone = if (mine) mineText else Aez.colors.text
+                            Column {
+                                RichText(shown, style = TextStyle(color = tone, fontSize = 15.sp, lineHeight = 20.sp))
+                                if (shown.length < full.length) {
+                                    Text("Read more", color = tone, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(6.dp)).clickable { expanded = true })
+                                }
+                            }
                         }
                     }
                 }
@@ -889,7 +901,7 @@ private fun CallBubble(p: MessagePayload, mine: Boolean, modifier: Modifier, onC
         Spacer(Modifier.width(10.dp))
         Column {
             Text(if (call.missed) "Missed call" else if (call.video) "Video call" else "Audio call", fontWeight = FontWeight.SemiBold, color = Aez.colors.text)
-            val s = call.durationMs / 1000
+            val s = Display.duration(call.durationMs) / 1000
             Text(if (call.missed) "Tap to call back" else "%d:%02d".format(s / 60, s % 60), fontSize = 12.sp, color = Aez.colors.text3)
         }
     }
@@ -950,7 +962,7 @@ private fun VoiceBubble(ref: MediaRef, tint: Color) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        val s = (ref.durationMs ?: 0) / 1000
+        val s = Display.duration(ref.durationMs) / 1000
         Text("%d:%02d".format(s / 60, s % 60), color = tint, fontSize = 12.sp)
     }
 }

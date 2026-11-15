@@ -98,6 +98,21 @@ object Payloads {
         return json.decodeFromString(serializer, text)!!
     }
 
+    /**
+     * [decode] for what other people's apps sent: null when it isn't a well-formed payload of its kind. That includes one
+     * nested so deep that reading it runs out of stack (256 KB is room for some twenty thousand levels), which must be
+     * refused like any other malformed payload rather than take the app down.
+     */
+    fun decodeOrNull(kind: String, text: String): Any? = try {
+        decode(kind, text)
+    } catch (e: kotlinx.serialization.SerializationException) {
+        null
+    } catch (e: IllegalArgumentException) {
+        null
+    } catch (e: StackOverflowError) {
+        null
+    }
+
     fun encode(kind: String, payload: Any): String {
         @Suppress("UNCHECKED_CAST")
         val serializer = serializers[kind] as KSerializer<Any>? ?: return json.encodeToString(JsonElement.serializer(), payload as JsonElement)

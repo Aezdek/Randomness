@@ -15,6 +15,7 @@ import xyz.aezdek.hush.protocol.InviteDto
 import xyz.aezdek.hush.protocol.LoginRequest
 import xyz.aezdek.hush.protocol.MAX_MEMBERS
 import xyz.aezdek.hush.protocol.PasskeyDto
+import xyz.aezdek.hush.protocol.SignInDto
 import xyz.aezdek.hush.protocol.PasskeyLoginRequest
 import xyz.aezdek.hush.protocol.Me
 import xyz.aezdek.hush.protocol.PreloginResponse
@@ -137,7 +138,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         // Only after the password checks out, so the message can't be used to probe which accounts exist.
         if (row.status == AccountStatus.DISABLED) forbidden("This account has been disabled. Ask the admin.")
         val token = newSession(row.id, req.device, clock.now())
-        fx.signIns += row.id to req.device.name
+        fx.signIns += row.id to deviceName(req.device)
         AuthResponse(token, me(row.id), B64u.enc(row.vault))
     }
 
@@ -200,7 +201,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         val now = clock.now()
         exec("UPDATE passkeys SET last_used_at = ? WHERE id = ?", now, row.id)
         val token = newSession(row.userId, req.device, now)
-        fx.signIns += row.userId to req.device.name
+        fx.signIns += row.userId to deviceName(req.device)
         AuthResponse(token, me(row.userId), B64u.enc(row.vault))
     }
 
@@ -209,6 +210,9 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
     private class LoginRow(val id: String, val authHash: ByteArray, val vault: ByteArray, val status: String)
 
     private companion object PasskeyLimits {
+        const val SIGN_IN_DAYS = 30
+        /** Characters that show nothing but change how text reads: direction marks and overrides, line and paragraph separators. */
+        val INVISIBLE = setOf(Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR)
         const val MAX_PASSKEYS = 10
         /** A WebAuthn credential id in base64url: at most 1023 bytes, which is 1364 characters. */
         val CREDENTIAL_ID = Regex("^[A-Za-z0-9_-]{16,1364}$")
@@ -224,11 +228,24 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         if (device.name.length > 80 || device.platform !in setOf("android", "web")) badRequest("Unknown device")
     }
 
+    /**
+     * A device's name as it will be shown in "Where you're signed in" and in sign-in alerts. Whoever signs in chooses
+     * it, so anything that could make an alert read as something else is taken out: control characters, line breaks
+     * and the invisible marks that reorder text.
+     */
+    private fun deviceName(device: DeviceInfo): String =
+        device.name.map { if (it.isISOControl() || Character.getType(it).toByte() in INVISIBLE) ' ' else it }
+            .joinToString("").replace(Regex(" {2,}"), " ").trim().ifEmpty { "Unknown device" }
+
     private fun Tx.newSession(userId: String, device: DeviceInfo, now: Long): String {
         val token = Ids.token()
+        val sessionId = Ids.random(9)
+        val name = deviceName(device)
+        // On record for 30 days, whatever happens to the session: see [signIns].
+        exec("INSERT INTO sign_ins (id, user_id, session_id, device_name, platform, at) VALUES (?, ?, ?, ?, ?, ?)", Ids.random(9), userId, sessionId, name, device.platform, now)
         exec(
             "INSERT INTO sessions (id, token_hash, user_id, device_name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            Ids.random(9), sha256(token.encodeToByteArray()), userId, device.name, device.platform, now, now,
+            sessionId, sha256(token.encodeToByteArray()), userId, name, device.platform, now, now,
         )
         return token
     }
@@ -262,6 +279,24 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             SessionDto(
                 it.str("id"), it.str("device_name"), it.str("platform"), it.getLong("created_at"),
                 it.getLong("last_seen_at"), it.str("id") == session.id,
+            )
+        }
+    }
+
+    /**
+     * Every sign-in to the account in the last 30 days, newest first: what the apps ask "Was this you?" about. Unlike
+     * the list of devices, it still shows a device that has signed out again or been signed out.
+     */
+    fun signIns(session: Session): List<SignInDto> = db.tx {
+        query(
+            """SELECT i.id, i.device_name, i.platform, i.at, i.session_id, s.id AS live FROM sign_ins i
+               LEFT JOIN sessions s ON s.id = i.session_id
+               WHERE i.user_id = ? AND i.at >= ? ORDER BY i.at DESC LIMIT 50""",
+            session.userId, clock.now() - SIGN_IN_DAYS * DAY,
+        ) {
+            SignInDto(
+                it.str("id"), it.str("device_name"), it.str("platform"), it.getLong("at"), it.str("session_id"),
+                active = it.strOrNull("live") != null, current = it.str("session_id") == session.id,
             )
         }
     }
@@ -537,6 +572,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             exec("DELETE FROM wrap_tasks WHERE author_id = ? OR recipient_id = ?", userId, userId)
             exec("DELETE FROM push_subscriptions WHERE user_id = ?", userId)
             exec("DELETE FROM passkeys WHERE user_id = ?", userId)
+            exec("DELETE FROM sign_ins WHERE user_id = ?", userId)
             exec("DELETE FROM push_prefs WHERE user_id = ?", userId)
             val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", userId)
             exec("DELETE FROM sessions WHERE user_id = ?", userId)
@@ -599,6 +635,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
         // A phone that has held its connection open all along is in use, whatever the last request's date says.
         val connected = presence.connectedSessions()
         val ended = db.tx {
+            exec("DELETE FROM sign_ins WHERE at < ?", clock.now() - SIGN_IN_DAYS * DAY)
             strings("SELECT id FROM sessions WHERE last_seen_at < ?", cutoff).filter { it !in connected }.onEach { id ->
                 exec("DELETE FROM sessions WHERE id = ?", id)
                 exec("DELETE FROM push_subscriptions WHERE session_id = ?", id)

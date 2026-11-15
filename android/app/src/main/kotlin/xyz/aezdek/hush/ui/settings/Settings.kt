@@ -369,11 +369,13 @@ private fun SecuritySection() {
     val keys = state.keys ?: return
     val scope = rememberCoroutineScope()
     var sessions by remember { mutableStateOf<List<SessionDto>?>(null) }
+    var signIns by remember { mutableStateOf<List<xyz.aezdek.hush.protocol.SignInDto>>(emptyList()) }
     var password by remember { mutableStateOf("") }
     var confirmReset by remember { mutableStateOf(false) }
     var resetStatus by remember { mutableStateOf<String?>(null) }
     suspend fun load() {
         sessions = Graph.attempt { Graph.client.api.get<List<SessionDto>>("/auth/sessions") } ?: sessions
+        signIns = runCatching { Graph.client.api.get<List<xyz.aezdek.hush.protocol.SignInDto>>("/auth/sign-ins") }.getOrDefault(signIns)
     }
     LaunchedEffect(Unit) { load() }
 
@@ -428,6 +430,25 @@ private fun SecuritySection() {
                             load()
                         }
                     }, style = ButtonStyle.SECONDARY, small = true)
+                }
+            }
+        }
+    }
+    if (signIns.isNotEmpty()) {
+        // Every sign-in in the last 30 days, including devices that have signed out again: one you don't recognise
+        // means someone has your password.
+        Card("Recent sign-ins", note = "Each sign-in to your account in the last 30 days, even if that device has signed out again. One you don't recognise means someone knows your password: change it, and your keys with it.") {
+            signIns.take(12).forEach { entry ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.deviceName, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = Aez.colors.text)
+                        Text(
+                            java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(entry.at)),
+                            fontSize = 12.sp, color = Aez.colors.text2,
+                        )
+                    }
+                    Text(if (entry.current) "This phone" else if (entry.active) "Signed in" else "Signed out", fontSize = 12.sp,
+                        color = if (entry.active && !entry.current) Aez.colors.text else Aez.colors.text3)
                 }
             }
         }

@@ -5677,3 +5677,27 @@ button.thread-row {
 .call-grid.nine {
   padding-bottom: calc(116px + var(--safe-b));
 }
+
+/* Other people's words don't reorder the app's own words next to them (direction marks are invisible but strong). */
+.bubble,
+.bubble-caption,
+.thread-preview .truncate,
+.thread-title,
+.msg-sender,
+.reply-ref,
+.plan-title,
+.chat-poll-question,
+.note-text {
+  unicode-bidi: isolate;
+}
+
+.read-more {
+  display: block;
+  margin-top: 6px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.chat-event {
+  overflow-wrap: anywhere;
+}

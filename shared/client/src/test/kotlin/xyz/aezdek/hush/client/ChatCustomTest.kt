@@ -8,6 +8,7 @@ import xyz.aezdek.hush.protocol.ObjectDto
 import xyz.aezdek.hush.protocol.UserDto
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 class ChatCustomTest {
     private var clock = 0L
@@ -42,6 +43,9 @@ class ChatCustomTest {
         assertEquals("love", custom.theme)
         assertEquals(mapOf("ana" to "Captain"), custom.nicknames)
         assertEquals("🔥", custom.quickReaction)
+        // A row of emoji from a modified app becomes its first one.
+        assertEquals("🔥", ChatCustom().apply(ChatEvent(quickReaction = "🔥".repeat(500))).quickReaction)
+        assertEquals("👩‍👩‍👧‍👦", ChatCustom().apply(ChatEvent(quickReaction = "👩‍👩‍👧‍👦👩‍👩‍👧‍👦")).quickReaction)
         assertEquals(listOf(text.id), custom.pinned)
     }
 
@@ -115,4 +119,14 @@ class ChatCustomTest {
     private fun user(id: String, name: String) =
         UserDto(id = id, username = name, signPk = "", boxPk = "", boxPkSig = "", keyVersion = 1, isPrivate = false, createdAt = 0,
             followState = "none", followsMe = "none", blockedByMe = false)
+
+    @Test
+    fun eventLinesSayWhatTheChatDoesNotWhatWasSent() {
+        fun text(e: ChatEvent) = Index.EMPTY.eventText(null, "bo", e, emptyMap(), "me")
+        assertEquals("someone set the nickname for someone to ${"N".repeat(40)}", text(ChatEvent(nicknameFor = "x", nickname = "N".repeat(3_000))))
+        assertEquals("someone set the quick reaction to 🔥", text(ChatEvent(quickReaction = "🔥".repeat(500))))
+        assertEquals("someone turned off disappearing messages", text(ChatEvent(disappearAfter = Long.MAX_VALUE)))
+        assertEquals("someone turned off disappearing messages", text(ChatEvent(disappearAfter = -1)))
+        assertTrue(text(ChatEvent(disappearAfter = 24 * 60 * 60 * 1000L)).startsWith("someone turned on disappearing messages"))
+    }
 }

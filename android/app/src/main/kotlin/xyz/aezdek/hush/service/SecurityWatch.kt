@@ -6,7 +6,6 @@ import android.content.Intent
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.protocol.AdminAlertDto
-import xyz.aezdek.hush.protocol.SessionDto
 
 /**
  * Security news for this account and its server, raised as notifications whatever else is muted:
@@ -17,15 +16,14 @@ import xyz.aezdek.hush.protocol.SessionDto
 object SecurityWatch {
     suspend fun checkSignIns() {
         val client = Graph.client
-        if (!client.signedIn) return
-        val sessions = client.api.get<List<SessionDto>>("/auth/sessions")
+        val me = client.state.value.me?.id ?: return
         val prefs = Graph.prefs
         // The first time on this phone, sign-ins before its own are not news.
-        if (prefs.signInsSeen == 0L) prefs.signInsSeen = sessions.firstOrNull { it.current }?.createdAt ?: System.currentTimeMillis()
-        val fresh = sessions.filter { !it.current && it.createdAt > prefs.signInsSeen }.sortedByDescending { it.createdAt }
+        if (prefs.signInsSeen(me) == 0L) prefs.setSignInsSeen(me, client.ownSignInAt() ?: System.currentTimeMillis())
+        val fresh = client.newSignIns(prefs.signInsSeen(me))
         val newest = fresh.firstOrNull() ?: return
         val device = if (fresh.size > 1) "${newest.deviceName} (and ${fresh.size - 1} more)" else newest.deviceName
-        Graph.notifier.signIn(newest.id, device, newest.createdAt)
+        Graph.notifier.signIn(me, newest.sessionId, device, newest.at, stillIn = fresh.any { it.active })
     }
 
     suspend fun checkAdminAlerts() {
@@ -45,22 +43,29 @@ object SecurityWatch {
 /** The actions on the "New sign-in" notification. Not exported: only Hush's own notification can send these. */
 class SecurityActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val session = intent.getStringExtra(EXTRA_SESSION) ?: return
+        val user = intent.getStringExtra(EXTRA_USER) ?: return
         val at = intent.getLongExtra(EXTRA_AT, 0)
         Graph.notifier.cancel(Notifier.ID_SECURITY_SIGN_IN)
         val pending = goAsync()
         Graph.scope.launch {
             try {
-                if (at > Graph.prefs.signInsSeen) Graph.prefs.signInsSeen = at
+                // Only for the account the alert was about, and only if it is still the one signed in here.
+                if (Graph.client.state.value.me?.id != user) return@launch
+                val since = Graph.prefs.signInsSeen(user)
                 if (intent.action == NOT_ME) {
-                    val ok = runCatching { Graph.client.signOutDevice(session) }.isSuccess
+                    // Every sign-in the alert covered that is still in, not just the newest.
+                    val ok = runCatching {
+                        Graph.client.newSignIns(since).filter { it.active && it.at <= at }.forEach { Graph.client.signOutDevice(it.sessionId) }
+                    }.isSuccess
                     Graph.notifier.security(
                         Notifier.ID_SECURITY_SIGN_IN,
-                        if (ok) "That device was signed out" else "Couldn't sign that device out",
-                        if (ok) "Change your password now, so it can't sign in again. Tap to open Hush." else "Open Hush and sign it out in Settings → Encryption and devices.",
+                        if (ok) "Signed out. Now change your password" else "Couldn't sign that device out",
+                        if (ok) "Whoever it was knew your password. Change it, and your keys with it, so they can't come back or read what they copied. Tap to open Hush."
+                        else "Open Hush and sign it out in Settings → Security and encryption.",
                         if (ok) "settings:account" else "settings:security",
                     )
                 }
+                if (at > since) Graph.prefs.setSignInsSeen(user, at)
             } finally {
                 pending.finish()
             }
@@ -70,7 +75,7 @@ class SecurityActionReceiver : BroadcastReceiver() {
     companion object {
         const val NOT_ME = "xyz.aezdek.hush.SIGN_IN_NOT_ME"
         const val WAS_ME = "xyz.aezdek.hush.SIGN_IN_WAS_ME"
-        const val EXTRA_SESSION = "session"
+        const val EXTRA_USER = "user"
         const val EXTRA_AT = "at"
     }
 }

@@ -9,6 +9,7 @@ import { Center, Spinner } from '../../ui/bits';
 import { FollowButton } from '../profile/FollowButton';
 import { StoriesTray } from '../stories/StoriesTray';
 import { PostCard } from './PostCard';
+import { Guard } from '../../ui/Guard';
 import { OnThisDay } from './Memories';
 import { AdminAlertBanner } from '../security/Alerts';
 
@@ -127,7 +128,11 @@ export function Home() {
             <Spinner />
           </Center>
         ) : feed.length ? (
-          feed.map((entity) => <PostCard key={entity.dto.id} entity={entity} />)
+          feed.map((entity) => (
+            <Guard key={entity.dto.id}>
+              <PostCard entity={entity} />
+            </Guard>
+          ))
         ) : (
           <Welcome />
         )}

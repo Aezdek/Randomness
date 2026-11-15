@@ -1,4 +1,5 @@
 import { DISAPPEARING, disappearingLabel, MessageType, type ChatEvent, type MessagePayload } from './payloads';
+import { firstGrapheme } from './safe';
 import type { Entity } from './store';
 import type { UserDto } from './types';
 
@@ -370,7 +371,8 @@ export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
     else delete nicknames[e.nicknameFor];
     next = { ...next, nicknames };
   }
-  if (e.quickReaction?.trim()) next = { ...next, quickReaction: e.quickReaction.slice(0, 16) };
+  // One emoji: a string of them would push the composer's button out of shape for everyone in the chat.
+  if (typeof e.quickReaction === 'string' && e.quickReaction.trim()) next = { ...next, quickReaction: firstGrapheme(e.quickReaction.trim()) };
   if (e.pin != null) next = { ...next, pinned: [...next.pinned.filter((id) => id !== e.pin), e.pin] };
   if (e.unpin != null) next = { ...next, pinned: next.pinned.filter((id) => id !== e.unpin) };
   if (e.disappearAfter != null) {
@@ -399,22 +401,29 @@ export function chatCustom(messages: Entity[] | undefined): ChatCustom {
 }
 
 /** The line a chat event shows in the conversation and the inbox: "You changed the theme to Ocean". */
+/**
+ * The line a chat shows for one of its events. It describes what the event did once applied (see [applyEvent]), not
+ * what it carried: another member's modified app could send a 3,000-letter nickname or a disappearing time of 292
+ * million years, and the line must not claim something the chat isn't doing.
+ */
 export function eventText(e: ChatEvent, authorId: string, me: string, users: Record<string, UserDto>, nameOf: (userId: string) => string): string {
   const who = authorId === me ? 'You' : nameOf(authorId);
   const whom = (id: string) => (id === me ? 'you' : (users[id]?.username ?? 'someone'));
   if (e.theme != null) return `${who} changed the theme to ${themeOf(e.theme).name}`;
-  if (e.nicknameFor != null && !e.nickname?.trim()) return `${who} removed the nickname for ${whom(e.nicknameFor)}`;
+  const nickname = typeof e.nickname === 'string' ? e.nickname.trim().slice(0, MAX_NICKNAME) : '';
+  if (e.nicknameFor != null && !nickname) return `${who} removed the nickname for ${whom(e.nicknameFor)}`;
   if (e.nicknameFor != null) {
     return e.nicknameFor === authorId
-      ? `${who} set ${authorId === me ? 'your' : 'their'} nickname to ${e.nickname!.trim()}`
-      : `${who} set the nickname for ${whom(e.nicknameFor)} to ${e.nickname!.trim()}`;
+      ? `${who} set ${authorId === me ? 'your' : 'their'} nickname to ${nickname}`
+      : `${who} set the nickname for ${whom(e.nicknameFor)} to ${nickname}`;
   }
-  if (e.quickReaction != null) return `${who} set the quick reaction to ${e.quickReaction}`;
+  if (typeof e.quickReaction === 'string' && e.quickReaction.trim()) return `${who} set the quick reaction to ${firstGrapheme(e.quickReaction.trim())}`;
   if (e.pin != null) return `${who} pinned a message`;
   if (e.unpin != null) return `${who} unpinned a message`;
   if (e.disappearAfter != null) {
-    return e.disappearAfter > 0
-      ? `${who} turned on disappearing messages. New messages disappear after ${disappearingLabel(e.disappearAfter)}.`
+    const after = (DISAPPEARING as readonly number[]).includes(e.disappearAfter) ? e.disappearAfter : 0;
+    return after > 0
+      ? `${who} turned on disappearing messages. New messages disappear after ${disappearingLabel(after)}.`
       : `${who} turned off disappearing messages`;
   }
   if (e.screenshot) return `${who} took a screenshot`;

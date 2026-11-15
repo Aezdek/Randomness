@@ -141,7 +141,8 @@ export function StoryViewerPage() {
   const isVideo = story?.payload.media?.mime.startsWith('video/');
   useEffect(() => {
     if (!story || isVideo || halted) return;
-    const duration = story.payload.durationMs ?? 5000;
+    // Between one second and a minute, whatever the story says: zero would skip it, a huge number would hold it forever.
+    const duration = Math.min(60_000, Math.max(1000, story.payload.durationMs ?? 5000));
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {

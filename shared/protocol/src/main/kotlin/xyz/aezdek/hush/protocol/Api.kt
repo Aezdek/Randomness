@@ -361,6 +361,14 @@ object PushType {
     val UNMUTABLE = setOf(SIGN_IN, ADMIN_ALERT)
 }
 
+/**
+ * One sign-in to this account in the last 30 days. Kept after the device signs out again, so someone who signs in,
+ * copies what they want and leaves within seconds is still on record for the account's owner to see.
+ * [active] says whether that device is still signed in ([sessionId] ends it); [current] marks the asking device's own.
+ */
+@Serializable
+data class SignInDto(val id: String, val deviceName: String, val platform: String, val at: Long, val sessionId: String, val active: Boolean, val current: Boolean)
+
 // ------------------------------------------------------------------------------------------------------------ passkeys
 
 /** A passkey that can sign in to this account, as the account's owner sees it. */
