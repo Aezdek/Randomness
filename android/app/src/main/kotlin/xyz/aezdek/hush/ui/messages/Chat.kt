@@ -348,16 +348,25 @@ fun Chat(threadId: String, focus: String? = null) {
         val scrolledUp by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
         var newBelow by remember(threadId) { mutableIntStateOf(0) }
         var seenSize by remember(threadId) { mutableIntStateOf(-1) }
+        var newestSeen by remember(threadId) { mutableStateOf<String?>(null) }
         LaunchedEffect(messages.size) {
             val first = seenSize < 0
             val grew = messages.size > seenSize
+            val added = messages.size - seenSize.coerceAtLeast(0)
             seenSize = messages.size
+            // Was the newest message on screen when these arrived? The list keeps its place on what it showed, so a burst
+            // of several new messages leaves the newest below, out of view; whoever was looking at the latest is taken
+            // down to it. (Counting how far up the list is would call that "scrolled up".)
+            val wasAtLatest = newestSeen == null || listState.layoutInfo.visibleItemsInfo.any { it.key == newestSeen }
+            newestSeen = messages.lastOrNull()?.id
             if (!focused && focus != null) {
                 focused = true
                 jump(focus)
-            } else if (messages.isNotEmpty() && (first || !scrolledUp || messages.last().dto.authorId == me.id)) {
+            } else if (messages.isNotEmpty() && (first || wasAtLatest || messages.last().dto.authorId == me.id)) {
                 newBelow = 0
-                listState.animateScrollToItem(0)
+                // One new message slides in; a burst (or opening the chat) goes straight there, so a second burst
+                // arriving mid-slide can't leave the list stranded halfway.
+                if (first || added > 1) listState.scrollToItem(0) else listState.animateScrollToItem(0)
             } else if (grew) newBelow++
         }
         LaunchedEffect(scrolledUp) { if (!scrolledUp) newBelow = 0 }

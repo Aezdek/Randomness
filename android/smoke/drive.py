@@ -389,6 +389,17 @@ def main() -> int:
     step("back to home", lambda: open_screen("home"))
 
     # ----------------------------------------------------------------------------------------- app lifecycle
+    def screenshots_blocked():
+        """In a chat with disappearing messages the window is marked secure: Android must refuse to capture it (an
+        empty capture, or a black one, which compresses to almost nothing)."""
+        open_screen(f"chat:{thread}")
+        time.sleep(2)
+        data = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True, timeout=30).stdout
+        log(f"  a capture of the protected chat: {len(data)} bytes")
+        if len(data) > 40_000:
+            raise Missing("a blocked screenshot (the protected chat could be captured)")
+    step("screenshots are blocked in a disappearing chat", screenshots_blocked)
+
     def stress_test():
         """The other person turns hostile: about fifty messages no honest app sends (wrong shapes, nesting deeper than
         any stack, 200,000 characters, 1,500 poll options, 300 photos, times outside any calendar). The app must drop
@@ -399,15 +410,26 @@ def main() -> int:
             raise Missing("message field")
         type_into(boxes[-1], "stress test")
         tap("Send")
+        # Whoever was at the bottom stays at the bottom: the newest message must come into view by itself, without
+        # tapping "Jump to latest", however many arrive at once.
         if not visible("Still here", timeout=120):
             raise Missing("Still here")
-        # Scroll back through what came, so every one of them is drawn.
-        for _ in range(8):
-            shell("input swipe 540 700 540 1900 250")
-            time.sleep(0.8)
-        for _ in range(8):
-            shell("input swipe 540 1900 540 700 250")
-            time.sleep(0.5)
+        # Back up through everything that came, to "stress test" itself, so every one of them is drawn...
+        for _ in range(40):
+            if find(labelled("stress test"), timeout=1):
+                break
+            shell("input swipe 540 700 540 1900 300")
+            time.sleep(0.6)
+        else:
+            raise Missing("stress test, scrolling back up through the messages")
+        # ...and down again to the newest.
+        for _ in range(40):
+            if find(labelled("Still here"), timeout=1):
+                break
+            shell("input swipe 540 1900 540 700 300")
+            time.sleep(0.6)
+        else:
+            raise Missing("Still here, scrolling back down")
     step("stress test: a member sends what no app should", stress_test)
     step("inbox after the stress test", lambda: open_screen("inbox"))
     step("back in the chat", lambda: open_screen(f"chat:{thread}"))
@@ -429,6 +451,10 @@ def main() -> int:
     return report()
 
 
+# Steps whose miss fails the run, as a crash does.
+REQUIRED = ("stress test", "screenshots are blocked")
+
+
 def report() -> int:
     with open(os.path.join(OUT, "logcat.txt"), "w") as out:
         out.write(adb("logcat", "-d", "-v", "threadtime", timeout=120))
@@ -443,6 +469,13 @@ def report() -> int:
             log(crash + "\n")
         return 1
     log("No crashes.")
+    # Some steps are what this test is for, not things a changed screen could break: missing them fails the run too.
+    failed = [m for m in misses if any(m.startswith(step) for step in REQUIRED)]
+    if failed:
+        log("Required steps failed:")
+        for miss in failed:
+            log(f"  {miss}")
+        return 1
     return 0
 
 

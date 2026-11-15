@@ -143,8 +143,11 @@ export function useProfile(id: string | undefined | null): ProfilePayload | unde
   return id ? index.profiles[id]?.payload : undefined;
 }
 
+/** Characters a name (someone's display name, a group's) shows: another member's app could send any number. */
+export const MAX_NAME = 100;
+
 export function displayName(user: UserDto | undefined, profile: ProfilePayload | undefined): string {
-  return profile?.displayName?.trim() || user?.username || 'Someone';
+  return profile?.displayName?.trim().slice(0, MAX_NAME) || user?.username || 'Someone';
 }
 
 export function useUserByName(username: string | undefined): UserDto | undefined {
@@ -154,12 +157,12 @@ export function useUserByName(username: string | undefined): UserDto | undefined
 /** What a chat calls someone: their nickname there, else their display name, else their username. */
 export function nameIn(threadId: string | null | undefined, userId: string, index: Index, users: Record<string, UserDto>): string {
   const nickname = threadId ? chatCustom(index.messages[threadId]).nicknames[userId] : undefined;
-  return nickname || index.profiles[userId]?.payload.displayName || users[userId]?.username || 'someone';
+  return nickname || index.profiles[userId]?.payload.displayName?.trim().slice(0, MAX_NAME) || users[userId]?.username || 'someone';
 }
 
 export function threadTitle(thread: ThreadDto, index: Index, users: Record<string, UserDto>, me: string): string {
-  const name = index.threadMeta[thread.id]?.payload.name;
-  if (name) return name;
+  const name = index.threadMeta[thread.id]?.payload.name?.trim();
+  if (name) return name.slice(0, MAX_NAME);
   const others = thread.members.filter((m) => m.userId !== me).map((m) => nameIn(thread.id, m.userId, index, users));
   return others.join(', ') || (thread.isGroup ? 'Just you' : 'Notes to self');
 }

@@ -61,12 +61,12 @@ class Index(
     /** What a chat calls someone: their nickname there, else their display name, else their username. */
     fun nameIn(threadId: String?, userId: String, users: Map<String, UserDto>): String =
         threadId?.let { chatCustom(it).nicknames[userId] }
-            ?: profile(userId)?.displayName?.takeIf { it.isNotBlank() } ?: users[userId]?.username ?: "someone"
+            ?: profile(userId)?.displayName?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_NAME) ?: users[userId]?.username ?: "someone"
 
     fun threadTitle(thread: ThreadDto, users: Map<String, UserDto>, me: String): String {
-        threadMeta[thread.id]?.payloadAs<xyz.aezdek.hush.protocol.ThreadPayload>()?.name?.takeIf { it.isNotBlank() }?.let { return it }
+        threadMeta[thread.id]?.payloadAs<xyz.aezdek.hush.protocol.ThreadPayload>()?.name?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.take(MAX_NAME) }
         val others = thread.members.filter { it.userId != me }.map { member -> nameIn(thread.id, member.userId, users) }
-        return others.joinToString(", ").ifEmpty { "Just you" }
+        return others.joinToString(", ").ifEmpty { if (thread.isGroup) "Just you" else "Notes to self" }
     }
 
     /** The line a chat event shows in the conversation and the inbox: "You changed the theme to Ocean". */
@@ -93,9 +93,12 @@ class Index(
     }
 
     fun displayName(user: UserDto?): String =
-        profile(user?.id)?.displayName?.trim()?.takeIf { it.isNotEmpty() } ?: user?.username ?: "Someone"
+        profile(user?.id)?.displayName?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_NAME) ?: user?.username ?: "Someone"
 
     companion object {
+        /** Characters a name (someone's display name, a group's) shows: another member's app could send any number. */
+        const val MAX_NAME = 100
+
         fun build(state: AppState, now: Long = System.currentTimeMillis()): Index {
             val me = state.me?.id
             val profiles = HashMap<String, Entity>()

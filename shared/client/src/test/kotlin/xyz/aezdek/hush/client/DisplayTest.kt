@@ -58,5 +58,10 @@ class DisplayTest {
         assertFalse(Display.plausible(LiveLocation(91.5, 181.5, null, 1, 1)))
         assertFalse(Display.plausible(LiveLocation(Double.NaN, 0.0, null, 1, 1)))
         assertFalse(Display.plausible(null))
+        assertFalse(Display.plausible(LiveLocation(1.0, 1.0, null, Long.MAX_VALUE, 1)))
+        assertFalse(Display.plausible(LiveLocation(1.0, 1.0, null, 2, Long.MIN_VALUE)))
+        assertTrue(Display.plausibleTime(1_800_000_000_000))
+        assertFalse(Display.plausibleTime(Long.MAX_VALUE))
+        assertFalse(Display.plausibleTime(-1))
     }
 }

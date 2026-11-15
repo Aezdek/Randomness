@@ -118,6 +118,11 @@ private val ANSWERS = listOf(
 @Composable
 internal fun PlanCard(message: Entity, plan: Plan, index: Index, state: AppState, accent: Color, modifier: Modifier) {
     val me = state.me ?: return
+    // A date no calendar holds (only a modified app sends one) isn't drawn, as on the web.
+    if (!xyz.aezdek.hush.client.Display.plausibleTime(plan.at)) {
+        Text("A plan that couldn't be shown", fontSize = 13.sp, color = Aez.colors.text3, modifier = modifier.padding(8.dp))
+        return
+    }
     val answers = index.planAnswers(message.id)
     val mine = answers[me.id]
     val going = answers.filterValues { it == PlanAnswer.GOING }.keys.toList()

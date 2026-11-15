@@ -275,7 +275,7 @@ jobs:
         run: |
           HUSH_SEED_URL=http://127.0.0.1:8470 HUSH_SEED_INVITE="$SEED_INVITE" HUSH_SEED_OUT="$RUNNER_TEMP/seed.env" \
             HUSH_SEED_PHOTOS="$GITHUB_WORKSPACE/web/e2e/fixtures/city.jpg:$GITHUB_WORKSPACE/web/e2e/fixtures/sea.jpg" \
-            nohup ./gradlew --no-daemon :shared:client:test --tests 'xyz.aezdek.hush.client.SmokeSeed' --rerun >"$RUNNER_TEMP/seed.log" 2>&1 &
+            nohup ./gradlew --no-daemon :shared:client:test --tests 'xyz.aezdek.hush.client.SmokeSeed' --rerun -i >"$RUNNER_TEMP/seed.log" 2>&1 &
       - name: Drive the app
         uses: reactivecircus/android-emulator-runner@v2
         env:

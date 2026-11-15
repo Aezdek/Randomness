@@ -71,7 +71,11 @@ object Display {
     /** A duration someone else's app reported, as something a clock can show: never negative, never more than a day. */
     fun duration(ms: Long?): Long = (ms ?: 0).coerceIn(0, 24 * 60 * 60 * 1000L)
 
+    /** Whether [at] is a moment worth drawing as a date: 1970 to the year 9999, as the web app allows. */
+    fun plausibleTime(at: Long): Boolean = at in 0..253_402_300_799_999
+
     /** Whether a live location is a place on Earth, and so worth drawing. */
     fun plausible(location: LiveLocation?): Boolean = location != null &&
-        location.lat.isFinite() && location.lng.isFinite() && location.lat in -90.0..90.0 && location.lng in -180.0..180.0
+        location.lat.isFinite() && location.lng.isFinite() && location.lat in -90.0..90.0 && location.lng in -180.0..180.0 &&
+        plausibleTime(location.until) && plausibleTime(location.updatedAt)
 }

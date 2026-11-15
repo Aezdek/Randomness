@@ -141,7 +141,8 @@ Some things to know before you rely on it:
 - **The server sees who, not what.** It knows who is a member, who follows and messages whom, when, and how large
   things are. It needs that to deliver anything.
 - **Screenshots in a browser, or of a screen.** No website can stop a screenshot, and nothing stops another camera
-  photographing a phone. The Android protection covers that phone only.
+  photographing a phone. The Android protection covers that phone only, and stops pictures of the screen, not apps
+  the phone's owner has given accessibility access: those can still read a protected chat's words.
 - **Live location.** Where you are is encrypted like everything else and only the latest spot is kept, never a trail,
   but the server can see that the message changes, and so how often you moved while sharing. It updates while Hush
   is open.
