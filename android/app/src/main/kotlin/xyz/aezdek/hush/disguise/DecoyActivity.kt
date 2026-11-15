@@ -129,9 +129,10 @@ class DecoyActivity : ComponentActivity() {
         }
         val trigger = Disguise.trigger
         detector = TriggerDetector(trigger)
+        // White status bar icons over the dimmed home screen, as with the real message.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
         )
         // Practice shows the look picked in Settings, which isn't put on until the disguise is turned on.
         val look = if (practice) Disguise.practiceLook(intent) else Disguise.look
@@ -144,7 +145,7 @@ class DecoyActivity : ComponentActivity() {
                         practiceHint = if (practice) trigger.hint else null,
                         holdGetsIn = trigger == DisguiseTrigger.HOLD_CLOSE,
                         onInput = ::feed,
-                        onHeld = { stage.value = Stage.SECRET },
+                        onHeld = ::toSecret,
                         onClose = ::close,
                     )
                     Stage.SECRET -> SecretScreen(
@@ -159,7 +160,16 @@ class DecoyActivity : ComponentActivity() {
     }
 
     private fun feed(input: DecoyInput) {
-        if (stage.value == Stage.CRASH && detector.feed(input, SystemClock.uptimeMillis())) stage.value = Stage.SECRET
+        if (stage.value == Stage.CRASH && detector.feed(input, SystemClock.uptimeMillis())) toSecret()
+    }
+
+    /** On to the PIN, on the phone's own light or dark background (and its status bar icons to match). */
+    private fun toSecret() {
+        stage.value = Stage.SECRET
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+        )
     }
 
     /** The volume move. The keys still change the volume, as they would anywhere else. */
