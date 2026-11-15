@@ -97,7 +97,11 @@ internal fun DisguiseSection() {
         }
     }
 
-    Card("Icon", note = "What your home screen shows instead of Hush. Blank leaves an empty spot, with no name, that still opens.") {
+    Card(
+        "Icon",
+        note = "What your home screen shows instead of Hush. Pick one your phone doesn't already have, or its app list " +
+            "will show two. Blank leaves an empty spot, with no name, that still opens.",
+    ) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             for (look in Look.DISGUISES) {
                 LookTile(look, selected = look == picked) {

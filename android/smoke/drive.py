@@ -489,6 +489,7 @@ def main() -> int:
         tap("Save PIN")
         if not visible("PIN set", timeout=30):
             raise Missing("PIN set")
+        shot("disguise-settings")
         scroll_to("Turn on disguise")
         tap("Turn on disguise")
         tap("Turn on", timeout=10)
@@ -510,6 +511,7 @@ def main() -> int:
         shell(f"am force-stop {PKG}")
         time.sleep(2)
         crash_screen()
+        shot("disguise-the-crash-screen")
         tap("Close app")
         time.sleep(2)
         if find(lambda n: n["pkg"] == PKG, timeout=3):
@@ -527,11 +529,13 @@ def main() -> int:
         else:
             raise Missing("the PIN pad after tapping the message 4 times")
         if wrong_first:
+            shot("disguise-the-pin-pad")
             for digit in "1357":
                 tap(digit)
             tap("Unlock")
             if not visible("Wrong PIN", timeout=20):
                 raise Missing("Wrong PIN")
+            shot("disguise-a-wrong-pin")
         for digit in PIN:
             tap(digit)
         tap("Unlock")
