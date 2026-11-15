@@ -92,9 +92,9 @@ class HushActivity : FragmentActivity() {
     private val navigator = Navigator()
     private val unlocked = MutableStateFlow(false)
 
-    /** Lock again whenever the app goes to the background. */
+    /** Lock again whenever the app goes to the background (a disguised Hush closes instead: see Disguise). */
     private val lockOnLeaving = LifecycleEventObserver { _, event ->
-        if (event == Lifecycle.Event.ON_STOP && Graph.prefs.appLock.value) unlocked.value = false
+        if (event == Lifecycle.Event.ON_STOP && Graph.prefs.appLock.value && !Disguise.isOn) unlocked.value = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

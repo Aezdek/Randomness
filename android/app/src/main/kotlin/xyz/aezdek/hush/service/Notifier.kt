@@ -223,6 +223,9 @@ class Notifier(private val context: Context) {
 
     fun cancel(id: Int) = NotificationManagerCompat.from(context).cancel(id)
 
+    /** Every notification Hush shows, but a running service's own (Android keeps that one while the service runs). */
+    fun cancelAll() = NotificationManagerCompat.from(context).cancelAll()
+
     fun cancelChat(threadId: String) = cancel(threadId.hashCode())
 
     fun post(id: Int, notification: Notification) {

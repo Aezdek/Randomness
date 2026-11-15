@@ -97,6 +97,8 @@ object Disguise {
     fun lock() {
         lockPending = false
         _revealed.value = false
+        // With notifications off, what showed while Hush was open goes with it.
+        if (isOn && !Graph.prefs.disguiseNotify.value) runCatching { Graph.notifier.cancelAll() }
     }
 
     @Volatile
@@ -180,6 +182,8 @@ object Disguise {
         require(to != Look.HUSH)
         check(Graph.prefs.disguiseSecret.value.isNotEmpty()) { "Set a PIN first" }
         Graph.prefs.setDisguiseLook(to.id)
+        // Whatever Hush already showed in the notification shade said Hush; the connection's own is redone below.
+        runCatching { Graph.notifier.cancelAll() }
         refreshService(activity)
         showIcon(activity, to)
         activity.finishAndRemoveTask()

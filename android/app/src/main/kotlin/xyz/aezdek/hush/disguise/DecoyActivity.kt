@@ -114,7 +114,8 @@ class DecoyActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        practice = Disguise.isPractice(intent)
+        // A practice run's token works once; turning the phone mid-run keeps it a practice run.
+        practice = savedInstanceState?.getBoolean(STATE_PRACTICE) ?: Disguise.isPractice(intent)
         // Where to go once in: a place inside Hush, as a notification names it. Hush only ever navigates with it.
         open = intent?.getStringExtra(HushActivity.EXTRA_OPEN)
         if (!practice && !Disguise.locked()) {
@@ -192,10 +193,19 @@ class DecoyActivity : ComponentActivity() {
         if (practice) finish() else finishAndRemoveTask()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_PRACTICE, practice)
+    }
+
     override fun onStop() {
         super.onStop()
         // Left for anything else (home, another app, the screen going off): gone, like the app that "crashed".
         if (!isChangingConfigurations && !isFinishing) close()
+    }
+
+    private companion object {
+        const val STATE_PRACTICE = "practice"
     }
 }
 
