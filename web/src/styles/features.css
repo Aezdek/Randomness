@@ -3235,6 +3235,7 @@ input[type='range'] {
   transform: translateX(-50%);
   z-index: 3;
   display: flex;
+  max-width: calc(100vw - 16px);
   gap: 14px;
   padding: 12px 16px;
   border-radius: var(--r-full);
@@ -5653,4 +5654,26 @@ button.thread-row {
 }
 .round.on {
   background: var(--link);
+}
+
+/* Six buttons on a narrow screen: they give up some size and space rather than run off the edge. */
+@media (max-width: 480px) {
+  .call-controls {
+    gap: 8px;
+    padding: 10px 10px;
+  }
+  .call-controls .round {
+    width: 50px;
+    height: 50px;
+    flex: none;
+  }
+}
+/* Names stay above the call's control bar: a full-screen tile lifts its label, a grid leaves the bar its own space. */
+.call-grid.solo .call-tile-name,
+.call-grid.live .call-tile-name {
+  bottom: calc(124px + var(--safe-b));
+}
+.call-grid.quad,
+.call-grid.nine {
+  padding-bottom: calc(116px + var(--safe-b));
 }

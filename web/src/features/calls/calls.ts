@@ -703,9 +703,11 @@ class CallManager {
     this.sendState();
   }
 
-  /** Whether this browser can share its screen (desktop browsers; not phones). */
+  /** Whether this browser can share its screen: desktop browsers, not phones or touch-first tablets. */
   get canShareScreen() {
-    return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad/.test(navigator.userAgent);
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) return false;
+    if (/Android|iPhone|iPad/.test(navigator.userAgent)) return false;
+    return !matchMedia('(pointer: coarse)').matches;
   }
 
   /** The camera track put aside while the screen is shared, to come back to afterwards. */
