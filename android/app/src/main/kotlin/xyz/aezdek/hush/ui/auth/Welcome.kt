@@ -91,6 +91,8 @@ internal fun parseInviteLink(text: String): Pair<String, String>? {
 
 /** Scans an invite QR code with the phone's scanner and hands back what it holds (or says why not). */
 private fun scanInvite(context: android.content.Context, onInvite: (server: String, code: String) -> Unit) {
+    // The scanner is another app's screen that Hush expects back: a disguised Hush stays open meanwhile.
+    xyz.aezdek.hush.disguise.Disguise.expectReturn()
     com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(context).startScan()
         .addOnSuccessListener { barcode ->
             val invite = barcode.rawValue?.let(::parseInviteLink)

@@ -121,6 +121,8 @@ fun Verify(userId: String) {
             QrCode(SafetyNumber.qrPayload(me.id, keys.signPk), Modifier.size(200.dp))
             Text("Your code", fontSize = 12.sp, color = Aez.colors.text3)
             AezButton("Scan their code", {
+                // Another app's screen that Hush expects back: a disguised Hush stays open meanwhile.
+                xyz.aezdek.hush.disguise.Disguise.expectReturn()
                 GmsBarcodeScanning.getClient(context).startScan()
                     .addOnSuccessListener { barcode -> barcode.rawValue?.let(::onScanned) }
                     .addOnFailureListener { Graph.toast("The scanner isn't available on this phone", error = true) }

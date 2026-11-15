@@ -43,15 +43,105 @@
         tools:targetApi="34">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".HushActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- The home screen icon, as an alias so Hush can wear another one instead (below). It keeps the activity's
+             old name, so icons people already placed on their home screens keep working. -->
+        <activity-alias
+            android:name=".MainActivity"
+            android:exported="true"
+            android:targetActivity=".HushActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- The disguise (see disguise/Disguise.kt). Its icons open the "keeps stopping" screen, which is see-through
+             and has a task of its own that stays out of the recent apps list. Exported only so its aliases can be;
+             it trusts nothing a caller puts in its intent but where to go once you are in. -->
+        <activity
+            android:name=".disguise.DecoyActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=":decoy"
+            android:theme="@style/Theme.Hush.Decoy"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity-alias
+            android:name=".DisguiseVideos"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_disguise_videos"
+            android:roundIcon="@mipmap/ic_disguise_videos"
+            android:label="Videos"
+            android:targetActivity=".disguise.DecoyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".DisguiseCalculator"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_disguise_calculator"
+            android:roundIcon="@mipmap/ic_disguise_calculator"
+            android:label="Calculator"
+            android:targetActivity=".disguise.DecoyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".DisguiseWeather"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_disguise_weather"
+            android:roundIcon="@mipmap/ic_disguise_weather"
+            android:label="Weather"
+            android:targetActivity=".disguise.DecoyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".DisguiseNotes"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_disguise_notes"
+            android:roundIcon="@mipmap/ic_disguise_notes"
+            android:label="Notes"
+            android:targetActivity=".disguise.DecoyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- No picture and no name: the label is U+2800, a blank that launchers don't trim away to "Hush". -->
+        <activity-alias
+            android:name=".DisguiseBlank"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_disguise_blank"
+            android:roundIcon="@mipmap/ic_disguise_blank"
+            android:label="@string/disguise_blank_label"
+            android:targetActivity=".disguise.DecoyActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".calls.CallActivity"

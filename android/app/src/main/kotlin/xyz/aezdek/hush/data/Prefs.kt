@@ -129,4 +129,56 @@ class Prefs(context: Context) {
     var notifiedUpTo: Long
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()
+
+    // ------------------------------------------------------------------------------------------- disguise (see disguise/)
+
+    /** The look Hush wears on the home screen ("" for its own). Saved at once: the icon changes right after. */
+    private val _disguiseLook = MutableStateFlow(prefs.getString("disguiseLook", "").orEmpty())
+    val disguiseLook: StateFlow<String> = _disguiseLook
+
+    fun setDisguiseLook(id: String) {
+        prefs.edit().putString("disguiseLook", id).commit()
+        _disguiseLook.value = id
+    }
+
+    /** The secret move on the "keeps stopping" screen (a DisguiseTrigger id). */
+    private val _disguiseTrigger = MutableStateFlow(prefs.getString("disguiseTrigger", "").orEmpty())
+    val disguiseTrigger: StateFlow<String> = _disguiseTrigger
+
+    fun setDisguiseTrigger(id: String) {
+        prefs.edit().putString("disguiseTrigger", id).commit()
+        _disguiseTrigger.value = id
+    }
+
+    /** The PIN or password that opens a disguised Hush, as DisguiseSecret keeps it (a hash), and which kind it is. */
+    private val _disguiseSecret = MutableStateFlow(prefs.getString("disguiseSecret", "").orEmpty())
+    val disguiseSecret: StateFlow<String> = _disguiseSecret
+    val disguiseSecretIsPin: Boolean get() = prefs.getBoolean("disguiseSecretIsPin", true)
+
+    fun setDisguiseSecret(kept: String, pin: Boolean) {
+        prefs.edit().putString("disguiseSecret", kept).putBoolean("disguiseSecretIsPin", pin)
+            .putInt("disguiseFails", 0).putLong("disguiseLastFail", 0).commit()
+        _disguiseSecret.value = kept
+    }
+
+    /** Whether notifications still come while disguised (off: nothing shows or rings unless Hush is open). */
+    private val _disguiseNotify = MutableStateFlow(prefs.getBoolean("disguiseNotify", false))
+    val disguiseNotify: StateFlow<Boolean> = _disguiseNotify
+
+    fun setDisguiseNotify(on: Boolean) {
+        prefs.edit().putBoolean("disguiseNotify", on).commit()
+        _disguiseNotify.value = on
+    }
+
+    /** Wrong PINs in a row, and when the last was (wall clock): they decide the wait before the next try. */
+    val disguiseFails: Int get() = prefs.getInt("disguiseFails", 0)
+    val disguiseLastFail: Long get() = prefs.getLong("disguiseLastFail", 0)
+
+    fun disguiseFailed(at: Long) {
+        prefs.edit().putInt("disguiseFails", (disguiseFails + 1).coerceAtMost(1_000)).putLong("disguiseLastFail", at).commit()
+    }
+
+    fun disguiseSucceeded() {
+        if (disguiseFails != 0) prefs.edit().putInt("disguiseFails", 0).putLong("disguiseLastFail", 0).commit()
+    }
 }

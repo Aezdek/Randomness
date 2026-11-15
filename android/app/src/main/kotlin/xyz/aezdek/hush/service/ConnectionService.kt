@@ -41,6 +41,7 @@ class ConnectionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         val notification = Graph.notifier.connection()
         try {
             ServiceCompat.startForeground(
@@ -94,6 +95,7 @@ class ConnectionService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         network?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
         scope?.cancel()
         super.onDestroy()
@@ -224,7 +226,14 @@ class ConnectionService : Service() {
             else -> payload.text ?: "Sent a message"
         }
 
+        /** Whether the service is up (it has its notification showing). */
+        @Volatile
+        var running = false
+            private set
+
         fun start(context: Context) {
+            // Disguised with notifications off, it stays down: its own notification would give Hush away.
+            if (!xyz.aezdek.hush.disguise.Disguise.wantsService()) return
             try {
                 ContextCompat.startForegroundService(context, Intent(context, ConnectionService::class.java))
             } catch (_: Exception) {

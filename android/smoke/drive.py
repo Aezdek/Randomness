@@ -18,7 +18,9 @@ import time
 import xml.etree.ElementTree as ET
 
 PKG = "xyz.aezdek.hush"
+# The home screen icon (an alias, switched off while Hush is disguised), and the activity behind it.
 ACTIVITY = f"{PKG}/.MainActivity"
+APP = f"{PKG}/.HushActivity"
 OUT = os.environ["SMOKE_OUT"]
 SERVER = os.environ["SMOKE_SERVER"].removeprefix("https://").rstrip("/")
 INVITE = os.environ["SMOKE_INVITE"].strip()
@@ -229,8 +231,24 @@ def launch() -> None:
 
 
 def open_screen(target: str) -> None:
-    shell(f"am start -n {ACTIVITY} --es open '{target}'")
+    shell(f"am start -n {APP} --es open '{target}'")
     time.sleep(3)
+
+
+def scroll_to(label: str, tries: int = 8) -> None:
+    """Scrolls the screen up until [label] is on it."""
+    for _ in range(tries):
+        if find(labelled(label), timeout=2):
+            return
+        shell("input swipe 540 1700 540 1000 400")
+        time.sleep(0.8)
+    raise Missing(label)
+
+
+def launcher_entries() -> str:
+    """Which of Hush's icons the home screen offers, as Android answers it."""
+    return shell("cmd package query-activities --components -a android.intent.action.MAIN "
+                 f"-c android.intent.category.LAUNCHER {PKG}").strip()
 
 
 def back() -> None:
@@ -448,11 +466,110 @@ def main() -> int:
         launch()
     step("background and back", background)
     step("chat after coming back", lambda: open_screen(f"chat:{thread}"))
+
+    # ---------------------------------------------------------------------------------------------- disguise
+    PIN = "2468"
+    DECOY = f"{PKG}/.DisguiseCalculator"
+
+    def disguise_on():
+        open_screen("settings:disguise")
+        tap("Calculator", timeout=15)
+        scroll_to("Tap the message 4 times")
+        tap("Tap the message 4 times")
+        scroll_to("Save PIN")
+        boxes = fields()
+        if len(boxes) < 2:
+            raise Missing(f"the two PIN fields (found {len(boxes)})")
+        type_into(boxes[0], PIN, secret=True)
+        type_into(fields()[1], PIN, secret=True)
+        tap("Save PIN")
+        if not visible("PIN set", timeout=30):
+            raise Missing("PIN set")
+        scroll_to("Turn on disguise")
+        tap("Turn on disguise")
+        tap("Turn on", timeout=10)
+        time.sleep(6)
+        entries = launcher_entries()
+        log(f"  the home screen offers: {entries or 'nothing'}")
+        if "DisguiseCalculator" not in entries or "MainActivity" in entries:
+            raise Missing("Calculator in place of Hush on the home screen")
+    step("disguise: turn it on as Calculator", disguise_on)
+
+    def crash_screen() -> dict:
+        shell(f"am start -W -n {DECOY}", timeout=90)
+        hits = find(labelled("Calculator keeps stopping"), timeout=40)
+        if not hits:
+            raise Missing("Calculator keeps stopping")
+        return hits[0]
+
+    def close_app():
+        shell(f"am force-stop {PKG}")
+        time.sleep(2)
+        crash_screen()
+        tap("Close app")
+        time.sleep(2)
+        if find(lambda n: n["pkg"] == PKG, timeout=3):
+            raise Missing("nothing of Hush on screen after Close app")
+    step("disguise: opening it shows a crash, and Close app closes it", close_app)
+
+    def get_in(wrong_first: bool = False):
+        message = crash_screen()
+        # The secret move: four quick taps on the message (one shell command, so the taps come close together).
+        for _ in range(3):
+            shell("; ".join([f"input tap {message['x']} {message['y']}"] * 4))
+            if visible("Enter PIN", timeout=8):
+                break
+            log("  the four taps didn't come quickly enough; again")
+        else:
+            raise Missing("the PIN pad after tapping the message 4 times")
+        if wrong_first:
+            for digit in "1357":
+                tap(digit)
+            tap("Unlock")
+            if not visible("Wrong PIN", timeout=20):
+                raise Missing("Wrong PIN")
+        for digit in PIN:
+            tap(digit)
+        tap("Unlock")
+        if not visible("Home", timeout=60):
+            raise Missing("Home after the right PIN")
+    step("disguise: four taps and the PIN get in, a wrong PIN doesn't", lambda: get_in(wrong_first=True))
+
+    def leaving_closes():
+        shell("input keyevent 3")
+        time.sleep(6)
+        recents = [line for line in shell("dumpsys activity recents").splitlines() if PKG in line and "HushActivity" in line]
+        if recents:
+            log("  " + "\n  ".join(recents[:5]))
+            raise Missing("Hush gone from the recent apps list once left")
+        # Opened any other way meanwhile (a notification, a shortcut): the disguise, not Hush.
+        shell(f"am start -n {APP} --es open inbox")
+        if not visible("Calculator keeps stopping", timeout=30):
+            raise Missing("the disguise in Hush's place after leaving it")
+        tap("Close app")
+    step("disguise: leaving Hush closes it", leaving_closes)
+
+    def disguise_off():
+        get_in()
+        open_screen("settings:disguise")
+        tap("Turn off")
+        tap("Turn off", which=-1, timeout=10)
+        time.sleep(4)
+        entries = launcher_entries()
+        log(f"  the home screen offers: {entries or 'nothing'}")
+        if "MainActivity" not in entries or "Disguise" in entries:
+            raise Missing("Hush back on the home screen")
+        shell(f"am force-stop {PKG}")
+        time.sleep(2)
+        launch()
+        if not visible("Home", timeout=60):
+            raise Missing("Home from Hush's own icon again")
+    step("disguise: turn it off", disguise_off)
     return report()
 
 
 # Steps whose miss fails the run, as a crash does.
-REQUIRED = ("stress test", "screenshots are blocked")
+REQUIRED = ("stress test", "screenshots are blocked", "disguise")
 
 
 def report() -> int:

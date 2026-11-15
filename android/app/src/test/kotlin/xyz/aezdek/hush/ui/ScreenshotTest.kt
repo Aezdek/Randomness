@@ -23,6 +23,8 @@ import org.robolectric.annotation.GraphicsMode
 import xyz.aezdek.hush.client.AezClient
 import xyz.aezdek.hush.client.AppState
 import xyz.aezdek.hush.data.ThemeMode
+import xyz.aezdek.hush.disguise.DecoyPreview
+import xyz.aezdek.hush.disguise.Look
 import xyz.aezdek.hush.protocol.Kind
 import xyz.aezdek.hush.ui.auth.Welcome
 import xyz.aezdek.hush.ui.create.CreateNote
@@ -122,6 +124,15 @@ class ScreenshotTest {
 
     @Test
     fun admin() = shot("14-admin") { AdminScreen() }
+
+    @Test
+    fun disguiseSettings() = shot("17-disguise-settings") { Settings("disguise") }
+
+    @Test
+    fun disguiseCrash() = shot("18-disguise-crash") { DecoyPreview(Look.CALCULATOR, secret = false) }
+
+    @Test
+    fun disguisePin() = shot("19-disguise-pin") { DecoyPreview(Look.CALCULATOR, secret = true) }
 
     @Test
     fun adminLight() = shot("14-admin-light", mode = ThemeMode.LIGHT) { AdminScreen() }

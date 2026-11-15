@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- No icon of its own: Android then shows the icon of whatever was tapped, Hush's or its disguise's. -->
+    <style name="Theme.Hush.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@null</item>
+        <item name="postSplashScreenTheme">@style/Theme.Hush</item>
+    </style>
+</resources>

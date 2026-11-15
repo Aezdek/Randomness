@@ -165,6 +165,7 @@ class HushApp : Application() {
         CrashLog.install(this)
         Graph.init(this)
         Graph.notifier.createChannels()
+        xyz.aezdek.hush.disguise.Disguise.init(this)
         androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_START -> {

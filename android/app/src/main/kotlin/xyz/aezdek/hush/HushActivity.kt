@@ -1,9 +1,12 @@
 package xyz.aezdek.hush
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.IntentSender
+import android.view.WindowManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -61,8 +64,14 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import xyz.aezdek.hush.disguise.DecoyActivity
+import xyz.aezdek.hush.disguise.Disguise
+import xyz.aezdek.hush.disguise.Look
 import xyz.aezdek.hush.service.ConnectionService
+import xyz.aezdek.hush.service.SecurityWatch
 import xyz.aezdek.hush.ui.CreateKind
 import xyz.aezdek.hush.ui.LocalNav
 import xyz.aezdek.hush.ui.Navigator
@@ -74,20 +83,41 @@ import xyz.aezdek.hush.ui.shell.Shell
 import xyz.aezdek.hush.ui.theme.Aez
 import xyz.aezdek.hush.ui.theme.AezTheme
 
-/** The one activity for the app (calls have their own, so they can show over the lock screen). */
-class MainActivity : FragmentActivity() {
+/**
+ * The one activity for the app (calls have their own, so they can show over the lock screen). The home screen opens it
+ * through the `.MainActivity` alias, or, while Hush is disguised, through the disguise's "keeps stopping" screen
+ * ([DecoyActivity]), which lets it show only once the PIN was given.
+ */
+class HushActivity : FragmentActivity() {
     private val navigator = Navigator()
     private val unlocked = MutableStateFlow(false)
+
+    /** Lock again whenever the app goes to the background. */
+    private val lockOnLeaving = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_STOP && Graph.prefs.appLock.value) unlocked.value = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { !Graph.booted.value }
         super.onCreate(savedInstanceState)
+        // Disguised and not let in (a notification, the recent apps list, an old shortcut): the disguise, not Hush.
+        if (Disguise.locked()) {
+            toDecoy(intent)
+            return
+        }
+        // Let in with the disguise's PIN: the fingerprint would be a second lock on the same door.
+        if (Disguise.isOn) unlocked.value = true
         enableEdgeToEdge()
         handle(intent)
-        // Lock again whenever the app goes to the background.
-        ProcessLifecycleOwner.get().lifecycle.addObserver(LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && Graph.prefs.appLock.value) unlocked.value = false
-        })
+        ProcessLifecycleOwner.get().lifecycle.addObserver(lockOnLeaving)
+        lifecycleScope.launch {
+            // Hush left the screen while disguised: it closes, out of the recent apps list too. Brought back some other
+            // way meanwhile, onStart puts the disguise in its place.
+            Disguise.revealed.collect { revealed ->
+                if (!revealed && Disguise.isOn && !isFinishing) finishAndRemoveTask()
+            }
+        }
+        lifecycleScope.launch { Graph.prefs.disguiseLook.collect { dressForRecents() } }
         setContent {
             val theme by Graph.prefs.theme.collectAsState()
             AezTheme(theme) {
@@ -100,7 +130,70 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (Disguise.locked()) {
+            toDecoy(intent)
+            return
+        }
         handle(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (Disguise.locked()) toDecoy(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Disguise.returned()
+    }
+
+    override fun onDestroy() {
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(lockOnLeaving)
+        super.onDestroy()
+    }
+
+    /** The disguise's "keeps stopping" screen in Hush's place, keeping where [intent] wanted to go for after the PIN. */
+    private fun toDecoy(intent: Intent?) {
+        startActivity(Disguise.decoyIntent(this, intent?.getStringExtra(EXTRA_OPEN)))
+        finishAndRemoveTask()
+    }
+
+    /**
+     * What the recent apps list shows for Hush. Disguised: the disguise's name and icon, and no picture of the screen
+     * (before Android 13 only a secure window keeps it out, which blocks screenshots too).
+     */
+    private fun dressForRecents() {
+        val look = Disguise.look
+        val on = Disguise.isOn
+        if (Build.VERSION.SDK_INT >= 33) {
+            setRecentsScreenshotEnabled(!on)
+            setTaskDescription(
+                if (on) ActivityManager.TaskDescription.Builder().setLabel(look.label).setIcon(look.icon).build()
+                else ActivityManager.TaskDescription.Builder().build(),
+            )
+        } else {
+            if (on) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            @Suppress("DEPRECATION")
+            setTaskDescription(if (on) ActivityManager.TaskDescription(look.label, look.icon) else ActivityManager.TaskDescription())
+        }
+    }
+
+    // A disguised Hush closes when it leaves the screen, except for a picker, the camera or the like that it opened
+    // and expects back: the Activity Result API starts all of those through these two.
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        Disguise.expectReturn()
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun startIntentSenderForResult(
+        intent: IntentSender, requestCode: Int, fillInIntent: Intent?, flagsMask: Int, flagsValues: Int, extraFlags: Int, options: Bundle?,
+    ) {
+        Disguise.expectReturn()
+        super.startIntentSenderForResult(intent, requestCode, fillInIntent, flagsMask, flagsValues, extraFlags, options)
     }
 
     /** Notification taps carry where to go (CI's smoke test opens every screen this way too). Only ever navigates. */
@@ -138,9 +231,13 @@ class MainActivity : FragmentActivity() {
         val appLock by Graph.prefs.appLock.collectAsState()
         val isUnlocked by unlocked.collectAsState()
         val weakPassword by Graph.prefs.weakPassword.collectAsState()
+        val revealed by Disguise.revealed.collectAsState()
+        val look by Graph.prefs.disguiseLook.collectAsState()
         Box(Modifier.fillMaxSize().background(Aez.colors.bg)) {
             when {
                 !booted -> Unit
+                // On its way to the disguise (see onCreate): nothing of Hush in the meantime.
+                Look.of(look) != Look.HUSH && !revealed -> Unit
                 state.me == null -> Welcome()
                 appLock && !isUnlocked -> LockScreen { authenticate() }
                 else -> {
@@ -224,9 +321,11 @@ class MainActivity : FragmentActivity() {
     private fun SignedIn() {
         val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
         LaunchedEffect(Unit) {
-            ConnectionService.start(this@MainActivity)
+            ConnectionService.start(this@HushActivity)
+            // Without the background connection (disguised, notifications off), new sign-ins are looked for now.
+            if (!Disguise.wantsService()) Graph.scope.launch { runCatching { SecurityWatch.checkSignIns() } }
             if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ContextCompat.checkSelfPermission(this@HushActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
             ) {
                 notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             }

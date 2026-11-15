@@ -14,12 +14,16 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.R
+import xyz.aezdek.hush.disguise.Disguise
 import xyz.aezdek.hush.service.Notifier
 
 /** The ringing notification: CallStyle with a full-screen intent, so it takes over the lock screen like a phone call. */
 object CallNotifications {
     fun showIncoming(context: Context, username: String, video: Boolean) {
-        val person = Person.Builder().setName("@$username").setImportant(true).build()
+        // Disguised: it still rings (notifications were left on), but says nothing about who.
+        val disguised = Disguise.isOn
+        val name = if (disguised) "Incoming call" else "@$username"
+        val person = Person.Builder().setName(name).setImportant(true).build()
         val screen = PendingIntent.getActivity(
             context, 10, Intent(context, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -33,8 +37,8 @@ object CallNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, Notifier.CALLS)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("@$username")
+            .setSmallIcon(if (disguised) Disguise.look.small else R.drawable.ic_notification)
+            .setContentTitle(name)
             .setContentText(if (video) "Incoming video call" else "Incoming audio call")
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer).setIsVideo(video))
             .setFullScreenIntent(screen, true)
@@ -64,9 +68,15 @@ class CallService : Service() {
         )
         val state = Graph.calls.state.value
         val name = state.peers.keys.firstOrNull()?.let { Graph.client.state.value.users[it]?.username } ?: "Hush"
+        val disguised = Disguise.isOn
+        val who = when {
+            disguised -> "Call"
+            state.live != null -> "Live"
+            else -> "@$name"
+        }
         val notification = NotificationCompat.Builder(this, Notifier.ONGOING_CALL)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setStyle(NotificationCompat.CallStyle.forOngoingCall(Person.Builder().setName(if (state.live != null) "Live" else "@$name").build(), hangup))
+            .setSmallIcon(if (disguised) Disguise.look.small else R.drawable.ic_notification)
+            .setStyle(NotificationCompat.CallStyle.forOngoingCall(Person.Builder().setName(who).build(), hangup))
             .setContentIntent(open)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setOngoing(true)

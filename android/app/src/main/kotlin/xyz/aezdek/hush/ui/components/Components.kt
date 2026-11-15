@@ -262,7 +262,8 @@ fun AezField(
         singleLine = singleLine,
         minLines = minLines,
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboardType),
+        // A password field types digits only if asked to (a PIN); otherwise it gets the password keyboard.
+        keyboardOptions = KeyboardOptions(keyboardType = if (password && keyboardType != KeyboardType.NumberPassword) KeyboardType.Password else keyboardType),
         shape = RoundedCornerShape(14.dp),
         supportingText = supporting?.let { { Text(it) } },
         colors = OutlinedTextFieldDefaults.colors(

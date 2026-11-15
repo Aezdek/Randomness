@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hush</string>
+    <!-- The blank disguise's name: U+2800, which shows as nothing and which launchers don't trim away. -->
+    <string name="disguise_blank_label" translatable="false">\u2800</string>
 </resources>

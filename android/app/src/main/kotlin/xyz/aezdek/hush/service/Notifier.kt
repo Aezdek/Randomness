@@ -12,8 +12,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
-import xyz.aezdek.hush.MainActivity
+import xyz.aezdek.hush.HushActivity
 import xyz.aezdek.hush.R
+import xyz.aezdek.hush.disguise.Disguise
 import xyz.aezdek.hush.protocol.NotifyPreview
 
 /**
@@ -60,24 +61,38 @@ class Notifier(private val context: Context) {
         manager.createNotificationChannels(channels)
     }
 
+    /** Opens Hush at [target]; while disguised, the disguise first (which goes there once the PIN is given). */
     fun openIntent(target: String, requestCode: Int): PendingIntent =
         PendingIntent.getActivity(
             context,
             requestCode,
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN, target)
+            (if (Disguise.isOn) Disguise.decoyIntent(context, target) else Intent(context, HushActivity::class.java).putExtra(HushActivity.EXTRA_OPEN, target))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    fun connection(): Notification =
-        NotificationCompat.Builder(context, CONNECTION)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Hush is connected")
-            .setContentText("So calls and messages reach you right away")
+    fun connection(): Notification {
+        val builder = NotificationCompat.Builder(context, CONNECTION)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setContentIntent(openIntent("readiness", 1))
-            .build()
+        if (Disguise.isOn) {
+            val look = Disguise.look
+            builder.setSmallIcon(look.small).setContentTitle(look.notificationTitle).setContentText("Running").setContentIntent(openIntent("home", 1))
+        } else {
+            builder.setSmallIcon(R.drawable.ic_notification).setContentTitle("Hush is connected")
+                .setContentText("So calls and messages reach you right away").setContentIntent(openIntent("readiness", 1))
+        }
+        return builder.build()
+    }
+
+    /** The background connection's notification, again: after the disguise changed. */
+    fun refreshConnection() {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        try {
+            NotificationManagerCompat.from(context).notify(ID_CONNECTION, connection())
+        } catch (_: SecurityException) {
+        }
+    }
 
     /**
      * One conversation-style notification per chat, with every unread message in it. [preview] is the person's choice
@@ -212,14 +227,33 @@ class Notifier(private val context: Context) {
 
     fun post(id: Int, notification: Notification) {
         if (!canPost()) return
+        val shown = if (Disguise.isOn && notification.channelId !in UNDISGUISED) disguised(notification) else notification
         try {
-            NotificationManagerCompat.from(context).notify(id, notification)
+            NotificationManagerCompat.from(context).notify(id, shown)
         } catch (_: SecurityException) {
             // Notifications were turned off between the check and the post.
         }
     }
 
-    fun canPost(): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    /**
+     * What shows instead while Hush is disguised: the disguise's name and icon, and nothing about who or what. A tap
+     * still goes where the real one would, through the disguise. (Android adds the app's real name at the top of every
+     * notification, which no app can change: Settings says so.)
+     */
+    private fun disguised(original: Notification): Notification {
+        val look = Disguise.look
+        return NotificationCompat.Builder(context, original.channelId ?: MESSAGES)
+            .setSmallIcon(look.small)
+            .setContentTitle(look.notificationTitle)
+            .setContentText("New notification")
+            .setContentIntent(original.contentIntent)
+            .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+    }
+
+    /** Disguised with notifications off, nothing shows unless Hush is open on screen. */
+    fun canPost(): Boolean = NotificationManagerCompat.from(context).areNotificationsEnabled() && Disguise.allowsNotifications()
 
     /** Android 14+: a sideloaded app needs this granted by hand for calls to ring over the lock screen. */
     fun canUseFullScreen(): Boolean = Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent()
@@ -232,6 +266,8 @@ class Notifier(private val context: Context) {
         const val CONNECTION = "connection"
         const val UPDATES = "updates"
         const val SECURITY = "security"
+        /** Channels whose notifications are made disguised where they are built: calls and the connection. */
+        private val UNDISGUISED = setOf(CALLS, ONGOING_CALL, CONNECTION)
         const val ID_CONNECTION = 1
         const val ID_CALL = 2
         const val ID_ONGOING_CALL = 3

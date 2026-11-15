@@ -55,6 +55,7 @@ import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -85,6 +86,7 @@ import xyz.aezdek.hush.client.PasswordRules
 import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.crypto.SafetyNumber
 import xyz.aezdek.hush.data.ThemeMode
+import xyz.aezdek.hush.disguise.Look
 import xyz.aezdek.hush.protocol.AdminStatus
 import xyz.aezdek.hush.protocol.FollowState
 import xyz.aezdek.hush.protocol.IdList
@@ -123,6 +125,7 @@ private val SECTIONS = listOf(
     Section("security", "Security and encryption", Icons.Outlined.Shield),
     Section("account", "Password and account", Icons.Outlined.Key),
     Section("appearance", "Appearance and app lock", Icons.Outlined.Palette),
+    Section("disguise", "Disguise", Icons.Outlined.VisibilityOff),
     Section("updates", "App updates", Icons.Outlined.SystemUpdate),
     Section("admin", "Admin", Icons.Outlined.Dns),
 )
@@ -146,6 +149,7 @@ fun Settings(section: String?) {
                 "security" -> SecuritySection()
                 "account" -> AccountSection()
                 "appearance" -> AppearanceSection()
+                "disguise" -> DisguiseSection()
                 "updates" -> UpdatesSection()
                 "admin" -> AdminPanel()
             }
@@ -162,6 +166,7 @@ private fun SettingsHome() {
     val me = state.me ?: return
     val ready = rememberReadiness()
     var signingOut by remember { mutableStateOf(false) }
+    val disguise by Graph.prefs.disguiseLook.collectAsState()
     fun open(id: String) = nav.go(Screen.Settings(id))
     Column(Modifier.fillMaxSize()) {
         TopBar("Settings and activity")
@@ -194,6 +199,7 @@ private fun SettingsHome() {
             }
             Group("This phone") {
                 NavRow(Icons.Outlined.Palette, "Appearance and app lock") { open("appearance") }
+                NavRow(Icons.Outlined.VisibilityOff, "Disguise", Look.of(disguise).takeIf { it != Look.HUSH }?.title ?: "Off") { open("disguise") }
                 NavRow(Icons.Outlined.SystemUpdate, "App updates", BuildConfig.VERSION_NAME) { open("updates") }
             }
             if (me.isAdmin) {
@@ -651,7 +657,7 @@ internal fun shareInvite(context: Context, code: String) {
 
 /** Two options side by side, the chosen one raised (like the sign-in screen's switch). */
 @Composable
-private fun Choice(second: Boolean, firstLabel: String, secondLabel: String, onChange: (Boolean) -> Unit) {
+internal fun Choice(second: Boolean, firstLabel: String, secondLabel: String, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Aez.colors.elev2).padding(4.dp)) {
         for ((value, label) in listOf(false to firstLabel, true to secondLabel)) {
             val selected = value == second

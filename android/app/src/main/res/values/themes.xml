@@ -6,9 +6,22 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
+    <!-- The window Android shows while Hush starts. It carries no mark of Hush's own: on Android 12 and later Android
+         puts in the icon that was tapped (values-v31), and before that it is a plain background, so a disguised Hush
+         never flashes its real logo (see disguise/Disguise.kt). -->
     <style name="Theme.Hush.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
         <item name="postSplashScreenTheme">@style/Theme.Hush</item>
+    </style>
+
+    <!-- The disguise's "keeps stopping" screen: see-through, so it sits over the home screen as a real one would. -->
+    <style name="Theme.Hush.Decoy" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
     </style>
 </resources>

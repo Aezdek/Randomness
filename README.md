@@ -24,6 +24,7 @@ with screen sharing from the web app, and go directly between the people in them
 Around that there is search, an activity page, On this day, private accounts with follow requests, blocking, an app
 lock, a way to check that you are really talking to who you think you are, and an admin panel for whoever runs the
 server, with invites as QR codes and alerts on the admin's phone when backups, disk space or updates need a look.
+On Android, Hush can also wear a disguise: see Security.
 
 ## Run your own
 
@@ -123,6 +124,14 @@ What Hush does about the usual weak spots:
 - **Taking access away.** When you remove a follower, block someone, take someone out of a group or remove a member,
   their app deletes what it had of yours (posts, stories, chats and the decrypted photos and videos it kept), and the
   server stops sending them anything more. A removed member is signed out everywhere and their device is wiped.
+- **Someone picking up your phone (Android).** Settings → Disguise makes Hush look like another app on the home
+  screen: Videos, Calculator, Weather, Notes, or a blank spot with no name. Opening it shows that app "keeps
+  stopping", drawn over the home screen like Android's own message, and App info, Close app and Back all close it. A
+  secret move you choose (four taps on the message, holding Close app for three seconds, three taps in the top right
+  corner, or volume down, down, up) brings up a PIN or password prompt instead, and the right one opens Hush. The PIN
+  is only for the disguise, is kept on the phone as an Argon2id hash, and after five wrong tries each one makes you
+  wait longer. Hush closes whenever it leaves the screen, shows the disguise's name and icon and no picture in the
+  recent apps list, and stays silent unless you let notifications through, which then say only "New notification".
 
 Some things to know before you rely on it:
 
@@ -148,6 +157,12 @@ Some things to know before you rely on it:
   is open.
 - **Deleted things linger in backups.** Disappearing, deleted and unsent messages can remain in the server's
   encrypted backups for up to thirty days.
+- **What a disguise can't hide.** Android shows an app's real name in Settings → Apps and at the top of every
+  notification, and no app can change that, so a disguised Hush only notifies if you turn that on. The icons copy no
+  particular app, so they won't fool someone who knows what the phone's own Calculator looks like. A forgotten PIN
+  can't be recovered: clear Hush's storage in Android's settings, or reinstall it, and sign in again; everything is
+  on the server. Before Android 13 the only way to keep a screen out of the recent apps list also blocks
+  screenshots, so a disguised Hush can't be screenshotted there.
 - **The admin panel's server controls ask for the server password**, which is checked on the server, so it travels
   (over HTTPS) to the server when you unlock them.
 

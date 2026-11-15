@@ -49,6 +49,23 @@ object PasswordKeys {
     }
 
     /**
+     * Argon2id of [password] alone, with no split: for a secret that never leaves the device and only has to be
+     * checked there (the Android app's disguise PIN).
+     */
+    fun stretch(password: String, salt: ByteArray, params: KdfParams, size: Int = 32): ByteArray {
+        require(salt.size == SALT_BYTES) { "salt must be $SALT_BYTES bytes" }
+        Sodium.init()
+        return PasswordHash.pwhash(
+            outputLength = size,
+            password = argonInput(password),
+            salt = salt.asUByteArray(),
+            opsLimit = params.opsLimit.toULong(),
+            memLimit = params.memLimitBytes,
+            algorithm = ARGON2ID13,
+        ).asByteArray()
+    }
+
+    /**
      * The exact string handed to Argon2id: lowercase hex of the NFKC-normalised password's UTF-8 bytes.
      *
      * Hex keeps the input ASCII. The JVM/Android binding passes `String.length` (UTF-16 units) as the byte count, so a

@@ -211,7 +211,8 @@ fun Chat(threadId: String, focus: String? = null) {
             }.also { runCatching { activity.registerScreenCaptureCallback(activity.mainExecutor, it) } }
         } else null
         onDispose {
-            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            // Unless the disguise keeps the window secure anyway (before Android 13: see Disguise.wantsSecureWindow).
+            if (!xyz.aezdek.hush.disguise.Disguise.wantsSecureWindow()) window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             if (android.os.Build.VERSION.SDK_INT >= 34 && callback != null) runCatching { activity.unregisterScreenCaptureCallback(callback) }
         }
     }
