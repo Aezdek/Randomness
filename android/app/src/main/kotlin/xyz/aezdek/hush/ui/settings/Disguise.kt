@@ -129,6 +129,8 @@ internal fun DisguiseSection() {
     }
 
     SecretCard(ready)
+    if (ready) DuressCard()
+    HiddenChatsCard()
 
     Card {
         ToggleRow(
@@ -196,6 +198,84 @@ internal fun DisguiseSection() {
     }
 }
 
+/** A second PIN for when someone makes you open Hush: it opens, with your account already off this phone. */
+@Composable
+private fun DuressCard() {
+    val scope = rememberCoroutineScope()
+    val kept by Graph.prefs.disguiseDuress.collectAsState()
+    val pin = Graph.prefs.disguiseSecretIsPin
+    var value by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val word = if (pin) "PIN" else "password"
+    Card(
+        "Duress $word",
+        note = "For when someone makes you open Hush. Enter this one instead and Hush opens signed out, with your messages, photos and keys " +
+            "already gone from this phone. Signing in again later brings everything back from your server.",
+    ) {
+        if (kept.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.CheckCircle, null, tint = Aez.colors.text, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Duress $word set", fontSize = 15.sp, color = Aez.colors.text, modifier = Modifier.weight(1f))
+                AezButton("Remove", { Graph.prefs.setDisguiseDuress("") }, style = ButtonStyle.SECONDARY, small = true)
+            }
+            return@Card
+        }
+        val problem = DisguiseSecret.problem(value, pin)
+        AezField(
+            value, { value = it.take(if (pin) DisguiseSecret.MAX_PIN else DisguiseSecret.MAX_PASSWORD) }, "Duress $word", password = true,
+            keyboardType = if (pin) KeyboardType.NumberPassword else KeyboardType.Password, supporting = problem.takeIf { value.isNotEmpty() },
+        )
+        AezButton("Save duress $word", {
+            busy = true
+            val chosen = value
+            scope.launch {
+                val same = withContext(Dispatchers.Default) { Disguise.check(chosen) == Disguise.Entered.RIGHT }
+                if (same) Graph.toast("It has to be different from your real $word", error = true)
+                else {
+                    Graph.prefs.setDisguiseDuress(withContext(Dispatchers.Default) { Disguise.keep(chosen) })
+                    value = ""
+                    Graph.toast("Duress $word saved")
+                }
+                busy = false
+            }
+        }, Modifier.fillMaxWidth(), enabled = problem == null, busy = busy)
+    }
+}
+
+/** The code that shows hidden chats when typed into the inbox's search box. */
+@Composable
+private fun HiddenChatsCard() {
+    val hidden by Graph.prefs.hiddenThreads.collectAsState()
+    var has by remember { mutableStateOf(Graph.prefs.hasHiddenCode) }
+    var code by remember { mutableStateOf("") }
+    Card(
+        "Hidden chats",
+        note = "Chats you hide (hold a chat in your inbox) leave the inbox and stop notifying on this phone. They show again when you type " +
+            "your code into the inbox's search box.",
+    ) {
+        if (has) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.CheckCircle, null, tint = Aez.colors.text, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(if (hidden.isEmpty()) "Code set" else "Code set · ${hidden.size} hidden", fontSize = 15.sp, color = Aez.colors.text, modifier = Modifier.weight(1f))
+                AezButton("Remove", {
+                    Graph.prefs.setHiddenCode("")
+                    has = false
+                    Graph.toast("Hidden chats are back in your inbox")
+                }, style = ButtonStyle.SECONDARY, small = true)
+            }
+            return@Card
+        }
+        AezField(code, { code = it.take(40) }, "Code (4 characters or more)", password = true)
+        AezButton("Save code", {
+            Graph.prefs.setHiddenCode(code)
+            code = ""
+            has = true
+        }, Modifier.fillMaxWidth(), enabled = code.trim().length >= 4)
+    }
+}
+
 /** The PIN or password: set it, or change it. Kept as a hash on this phone only. */
 @Composable
 private fun SecretCard(isSet: Boolean) {
@@ -245,8 +325,10 @@ private fun SecretCard(isSet: Boolean) {
                     val chosen = first
                     val isPin = pin
                     scope.launch {
-                        val kept = withContext(Dispatchers.Default) { DisguiseSecret.hash(chosen) }
+                        val kept = withContext(Dispatchers.Default) { Disguise.keep(chosen) }
                         Graph.prefs.setDisguiseSecret(kept, isPin)
+                        // A new PIN of another kind leaves the duress PIN behind: it is typed on the same screen.
+                        Graph.prefs.setDisguiseDuress("")
                         busy = false
                         editing = false
                         first = ""

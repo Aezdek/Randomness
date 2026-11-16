@@ -367,6 +367,13 @@ private fun BlockedSection() {
 }
 
 @Composable
+private fun KeysOnThisPhone() {
+    val where = remember { xyz.aezdek.hush.data.Tee.whereIs(xyz.aezdek.hush.data.Tee.SESSION_KEY) }
+    Card("On this phone", note = "Your keys are stored sealed under a key that " + (where?.let { "lives in $it" } ?: "Android keeps for Hush") +
+        ". It can be used on this phone only and can't be copied off it, so Hush's files are useless anywhere else.") {}
+}
+
+@Composable
 private fun SecuritySection() {
     val nav = LocalNav.current
     val state by Graph.client.state.collectAsState()
@@ -443,6 +450,7 @@ private fun SecuritySection() {
     if (signIns.isNotEmpty()) {
         // Every sign-in in the last 30 days, including devices that have signed out again: one you don't recognise
         // means someone has your password.
+        KeysOnThisPhone()
         Card("Recent sign-ins", note = "Each sign-in to your account in the last 30 days, even if that device has signed out again. One you don't recognise means someone knows your password: change it, and your keys with it.") {
             signIns.take(12).forEach { entry ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {

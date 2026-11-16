@@ -234,6 +234,31 @@ object Disguise {
             if (open != null) putExtra(HushActivity.EXTRA_OPEN, open)
         }
 
+    // ------------------------------------------------------------------------------------------------------ the PIN
+
+    enum class Entered { RIGHT, DURESS, WRONG }
+
+    /**
+     * What is kept of a PIN or password: a slow hash of it mixed with a key in the phone's secure hardware (see Tee),
+     * so guesses can only be made on this phone. If the hardware can't be used, the slow hash alone.
+     */
+    fun keep(secret: String): String =
+        runCatching { "tee:" + xyz.aezdek.hush.client.DisguiseSecret.hash(xyz.aezdek.hush.data.Tee.bind(secret)) }
+            .getOrElse { xyz.aezdek.hush.client.DisguiseSecret.hash(secret) }
+
+    private fun matches(secret: String, kept: String): Boolean = when {
+        kept.isEmpty() -> false
+        kept.startsWith("tee:") -> runCatching { xyz.aezdek.hush.client.DisguiseSecret.verify(xyz.aezdek.hush.data.Tee.bind(secret), kept.removePrefix("tee:")) }.getOrDefault(false)
+        else -> xyz.aezdek.hush.client.DisguiseSecret.verify(secret, kept)
+    }
+
+    /** Whether [secret] is the PIN, the duress PIN, or neither. Slow on purpose: call it off the main thread. */
+    fun check(secret: String): Entered = when {
+        matches(secret, Graph.prefs.disguiseSecret.value) -> Entered.RIGHT
+        matches(secret, Graph.prefs.disguiseDuress.value) -> Entered.DURESS
+        else -> Entered.WRONG
+    }
+
     private const val EXTRA_PRACTICE = "practice"
     private const val EXTRA_LOOK = "look"
 

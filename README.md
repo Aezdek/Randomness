@@ -121,6 +121,12 @@ What Hush does about the usual weak spots:
   down with it. CI checks this on every build by sending the Android app about fifty such messages.
 - **Screenshots.** On Android, chats in vanish mode, chats with disappearing messages and view-once photos can't be
   screenshotted or screen-recorded. On Android 14 and later, if a screenshot gets through anyway, the chat is told.
+- **Files and what else a chat holds.** Any file up to 250 MB is sent encrypted like a photo and never opened by the
+  app: names are cleaned of folders and invisible direction marks before they are shown or saved, and the web app
+  hands a download over as plain bytes, so a file that claims to be a page is never treated as one of the site's.
+  A message sent later is sealed when it is written; the server holds it unread and posts it at its time through the
+  same checks as any other. Answers to the question of the day are hidden by the apps until everyone has answered
+  (they are delivered sealed like any message, so a modified app could look early).
 - **Taking access away.** When you remove a follower, block someone, take someone out of a group or remove a member,
   their app deletes what it had of yours (posts, stories, chats and the decrypted photos and videos it kept), and the
   server stops sending them anything more. A removed member is signed out everywhere and their device is wiped.
@@ -157,6 +163,12 @@ Some things to know before you rely on it:
   is open.
 - **Deleted things linger in backups.** Disappearing, deleted and unsent messages can remain in the server's
   encrypted backups for up to thirty days.
+- **Being made to open it (Android).** A duress PIN opens a disguised Hush signed out, with the account, keys and
+  everything decrypted already gone from the phone; a "Quick clear" tile in quick settings does the same in one tap.
+  Chats can be hidden from the inbox on a phone and shown again by typing a code into its search box. The disguise's
+  PINs are tied to a key in the phone's secure hardware (Knox Vault or another secure chip where there is one, else
+  the TEE), so a copy of Hush's files can't be used to guess them anywhere else. None of this changes anything on the
+  server: signing in again brings everything back, which also means someone who knows your password still can.
 - **What a disguise can't hide.** Android shows an app's real name in Settings → Apps and at the top of every
   notification, and no app can change that, so a disguised Hush only notifies if you turn that on. The icons copy no
   particular app, so they won't fool someone who knows what the phone's own Calculator looks like. A forgotten PIN

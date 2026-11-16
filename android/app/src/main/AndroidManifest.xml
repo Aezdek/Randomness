@@ -173,6 +173,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- A quick settings tile that takes the account off this phone at once (see Wipe.kt). Its name says nothing
+             about Hush; it is only there for people who add it. -->
+        <service
+            android:name=".service.PanicTile"
+            android:exported="true"
+            android:icon="@drawable/disguise_blank_small"
+            android:label="Quick clear"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".calls.CallActionReceiver"
             android:exported="false" />

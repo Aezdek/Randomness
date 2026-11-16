@@ -156,7 +156,7 @@ class ConnectionService : Service() {
         val byThread = fresh.filter(::notifies).groupBy { it.dto.threadId }
         for ((threadId, _) in byThread) {
             threadId ?: continue
-            if (threadId in settings.mutedThreads || foregroundOn(threadId)) continue
+            if (threadId in settings.mutedThreads || threadId in Graph.prefs.hiddenThreads.value || foregroundOn(threadId)) continue
             val thread = state.threads[threadId] ?: continue
             val mine = thread.members.firstOrNull { it.userId == me }
             val unread = index.messages[threadId].orEmpty().filter { it.dto.authorId != me && it.dto.receivedAt > (mine?.lastReadAt ?: 0) && notifies(it) }

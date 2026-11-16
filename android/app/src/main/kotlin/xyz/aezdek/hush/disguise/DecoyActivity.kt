@@ -332,6 +332,7 @@ private fun CloseAction(holdGetsIn: Boolean, onHeld: () -> Unit, onClose: () -> 
 private fun SecretScreen(pin: Boolean, practice: Boolean, onRight: () -> Unit, onCancel: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var entered by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(if (practice) "Now your ${if (pin) "PIN" else "password"}" else null) }
     var busy by remember { mutableStateOf(false) }
@@ -350,9 +351,16 @@ private fun SecretScreen(pin: Boolean, practice: Boolean, onRight: () -> Unit, o
         busy = true
         val attempt = entered
         scope.launch {
-            val right = withContext(Dispatchers.Default) { DisguiseSecret.verify(attempt, Graph.prefs.disguiseSecret.value) }
+            val result = withContext(Dispatchers.Default) { Disguise.check(attempt) }
+            // The duress PIN: Hush opens, but only after its account is off this phone. (Practising, it is a wrong PIN.)
+            if (result == Disguise.Entered.DURESS && !practice) {
+                xyz.aezdek.hush.Wipe.now(context.applicationContext)
+                Graph.prefs.disguiseSucceeded()
+                onRight()
+                return@launch
+            }
             busy = false
-            if (right) {
+            if (result == Disguise.Entered.RIGHT) {
                 if (!practice) Graph.prefs.disguiseSucceeded()
                 onRight()
                 return@launch

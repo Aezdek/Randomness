@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -123,8 +124,16 @@ fun Inbox() {
     var menuFor by remember { mutableStateOf<ThreadDto?>(null) }
     var query by remember { mutableStateOf("") }
     // Searching looks inside every chat too, here on the phone (the server only holds ciphertext).
-    val found = remember(index, query) { if (query.trim().length >= 2) index.searchMessages(query, 30) else emptyList() }
-    val shownThreads = if (query.isBlank()) threads else threads.filter { index.threadTitle(it, state.users, me.id).contains(query.trim(), ignoreCase = true) }
+    val foundAll = remember(index, query) { if (query.trim().length >= 2) index.searchMessages(query, 30) else emptyList() }
+    // Hidden chats stay out of the list and out of search, until their code is typed here; then only they show.
+    val hidden by Graph.prefs.hiddenThreads.collectAsState()
+    val showHidden = remember(query) { Graph.prefs.isHiddenCode(query.trim()) }
+    val found = if (showHidden) emptyList() else foundAll.filter { it.dto.threadId !in hidden }
+    val shownThreads = when {
+        showHidden -> threads.filter { it.id in hidden }
+        query.isBlank() -> threads.filter { it.id !in hidden }
+        else -> threads.filter { it.id !in hidden && index.threadTitle(it, state.users, me.id).contains(query.trim(), ignoreCase = true) }
+    }
     val hasNotes = index.notesToSelf(state) != null
     Column(Modifier.fillMaxSize()) {
         TopBar(me.username, actions = { IconAction(Icons.Outlined.Edit, "New message", { nav.go(Screen.NewChat) }) })
@@ -217,6 +226,15 @@ fun Inbox() {
                     Graph.client.composer.saveSettings { s ->
                         s.copy(pinnedThreads = if (pinned) s.pinnedThreads - thread.id else (s.pinnedThreads + thread.id).distinct())
                     }
+                }
+            }
+            val isHidden = thread.id in hidden
+            SheetItem(if (isHidden) "Unhide chat" else "Hide chat", Icons.Outlined.VisibilityOff) {
+                menuFor = null
+                if (!isHidden && !Graph.prefs.hasHiddenCode) Graph.toast("Set a code first: Settings → Disguise → Hidden chats", error = true)
+                else {
+                    Graph.prefs.setHidden(thread.id, !isHidden)
+                    Graph.toast(if (isHidden) "Back in your inbox" else "Hidden. Type your code into search to see it.")
                 }
             }
             SheetItem(if (muted) "Unmute" else "Mute messages", Icons.Outlined.NotificationsOff) {

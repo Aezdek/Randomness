@@ -189,6 +189,55 @@ class Prefs(context: Context) {
         _disguiseSecret.value = kept
     }
 
+    /**
+     * A second PIN that opens Hush emptied: entering it takes the account off this phone first (see Wipe). Kept like
+     * the real one, as a hash. Blank if there is none.
+     */
+    private val _disguiseDuress = MutableStateFlow(prefs.getString("disguiseDuress", "").orEmpty())
+    val disguiseDuress: StateFlow<String> = _disguiseDuress
+
+    fun setDisguiseDuress(kept: String) {
+        prefs.edit().putString("disguiseDuress", kept).commit()
+        _disguiseDuress.value = kept
+    }
+
+    // ---------------------------------------------------------------------------------------------- hidden chats
+
+    /** Chats kept out of the inbox on this phone; they show when the code is typed into its search box. */
+    private val _hiddenThreads = MutableStateFlow(prefs.getStringSet("hiddenThreads", emptySet()).orEmpty().toSet())
+    val hiddenThreads: StateFlow<Set<String>> = _hiddenThreads
+
+    fun setHidden(threadId: String, hidden: Boolean) {
+        val next = if (hidden) _hiddenThreads.value + threadId else _hiddenThreads.value - threadId
+        prefs.edit().putStringSet("hiddenThreads", next).commit()
+        _hiddenThreads.value = next
+    }
+
+    private fun codeHash(code: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest("hush hidden chats:$code".toByteArray()).joinToString("") { "%02x".format(it) }
+
+    val hasHiddenCode: Boolean get() = !prefs.getString("hiddenCode", "").isNullOrEmpty()
+
+    /** The code that shows hidden chats (at least 4 characters); blank takes it away and unhides everything. */
+    fun setHiddenCode(code: String) {
+        if (code.isBlank()) {
+            prefs.edit().remove("hiddenCode").remove("hiddenThreads").commit()
+            _hiddenThreads.value = emptySet()
+        } else prefs.edit().putString("hiddenCode", codeHash(code.trim())).commit()
+    }
+
+    fun isHiddenCode(typed: String): Boolean = typed.length >= 4 && prefs.getString("hiddenCode", "") == codeHash(typed.trim())
+
+    /** Forgets what would say something about the account once it is wiped from this phone. */
+    fun forgetPrivate() {
+        val editor = prefs.edit()
+        for (key in prefs.all.keys) {
+            if (key == "hiddenThreads" || key == "places" || key == "arrivals" || key.startsWith("later.") || key.startsWith("vanish.") || key.startsWith("signInsSeen.")) editor.remove(key)
+        }
+        editor.remove("notifiedUpTo").remove("activitySeen").commit()
+        _hiddenThreads.value = emptySet()
+    }
+
     /** Whether notifications still come while disguised (off: nothing shows or rings unless Hush is open). */
     private val _disguiseNotify = MutableStateFlow(prefs.getBoolean("disguiseNotify", false))
     val disguiseNotify: StateFlow<Boolean> = _disguiseNotify
