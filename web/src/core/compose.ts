@@ -457,6 +457,29 @@ export async function sendMessage(threadId: string, payload: MessagePayload, opt
   throw new Error('Could not send');
 }
 
+export interface ScheduledDto { id: string; threadId: string; releaseAt: number; failed?: string | null }
+export const MAX_LATER_TEXT = 4_000;
+
+/**
+ * A message to arrive at [releaseAt]: sealed and signed now, dated for then, and kept unread by the server until its
+ * time. Words only. If the chat's members change before then it isn't delivered, and the list says so.
+ */
+export async function sendLater(threadId: string, text: string, releaseAt: number): Promise<ScheduledDto> {
+  const clean = text.trim().slice(0, MAX_LATER_TEXT);
+  if (!clean) throw new Error('Write a message');
+  if (!Number.isFinite(releaseAt) || releaseAt < Date.now() + 60_000) throw new Error('Pick a time at least a minute from now');
+  const lasts = chatCustom(index().messages[threadId]).disappearAfter;
+  const epoch = await epochForSending(threadId);
+  const { upload } = seal(
+    { kind: Kind.MESSAGE, audience: Audience.THREAD, payload: { type: MessageType.TEXT, text: clean }, threadId, parentId: epoch.dto.id, expiresAt: lasts > 0 ? releaseAt + lasts : undefined },
+    1,
+    releaseAt,
+  );
+  return api.post<ScheduledDto>('/scheduled', { releaseAt, upload });
+}
+export const scheduledMessages = () => api.get<ScheduledDto[]>('/scheduled');
+export const cancelScheduled = (id: string) => api.delete<void>(`/scheduled/${id}`);
+
 /** Changes the chat's theme, a nickname, the quick reaction or a pin: an encrypted message every member applies.
  *  Always sent as a normal message, never in vanish mode, so the change stays. */
 export async function sendChatEvent(threadId: string, event: ChatEvent) {

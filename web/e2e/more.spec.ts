@@ -173,6 +173,18 @@ test('files, lists, the question of the day, countdowns and nudges', async ({ br
   await expect(gus.page.getByText('Give it a moment before nudging again')).toBeVisible();
   await shot(fay.page, 'countdown-and-nudge');
 
+  // -------------------------------------------------------------------------------------------- send later
+  // (That it arrives at its time, and not before, is tested against the server's clock in SendLaterTest.)
+  await more(fay, /Send later/);
+  await fay.page.getByLabel('Message to send later').fill(`see you soon ${MARK}`);
+  await fay.page.getByRole('button', { name: 'Send then' }).click();
+  const waiting = fay.page.getByRole('list', { name: 'Waiting to be sent' });
+  await expect(waiting).toContainText('see you soon', { timeout: 20_000 });
+  await expect(gus.page.locator('.msg', { hasText: 'see you soon' })).toHaveCount(0);
+  await waiting.getByRole('button', { name: 'Cancel' }).click();
+  await expect(waiting).toHaveCount(0);
+  await fay.page.keyboard.press('Escape');
+
   // ------------------------------------------------------------------------------ nothing readable on disk
   await fay.page.waitForTimeout(1500);
   expect(scanForPlaintext(DATA_DIR, MARK)).toEqual([]);

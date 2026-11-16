@@ -1,6 +1,6 @@
 // Plans and live location inside a chat: the cards in the conversation, the sheets that make them, and the sharer that
 // keeps your own live location up to date while this tab is open.
-import { CalendarClock, CalendarDays, Check, Hand, HelpCircle, ListChecks, ListTodo, MapPin, MessageCircleQuestion, Navigation, Paperclip, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, Check, Clock, Hand, HelpCircle, ListChecks, ListTodo, MapPin, MessageCircleQuestion, Navigation, Paperclip, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   answerPlan,
@@ -338,7 +338,7 @@ function distance(lat1: number, lng1: number, lat2: number, lng2: number) {
 
 // -------------------------------------------------------------------------------------------------------- the menu
 
-export type ChatExtra = 'plan' | 'location' | 'poll' | 'file' | 'list' | 'daily' | 'countdown' | 'nudge';
+export type ChatExtra = 'plan' | 'location' | 'poll' | 'file' | 'list' | 'daily' | 'countdown' | 'nudge' | 'later';
 
 /** The composer's "+": plans, live location and (in groups) polls. */
 export function ExtrasSheet({ open, onClose, onPick, group }: { open: boolean; onClose: () => void; onPick: (what: ChatExtra) => void; group: boolean }) {
@@ -350,6 +350,7 @@ export function ExtrasSheet({ open, onClose, onPick, group }: { open: boolean; o
     { id: 'daily', label: 'Question of the day', sub: 'Answers show once everyone has answered', icon: MessageCircleQuestion },
     { id: 'countdown', label: 'Countdown', sub: 'Days to a date, at the top of the chat', icon: CalendarClock },
     { id: 'nudge', label: 'Nudge', sub: 'No words: their phone just buzzes', icon: Hand },
+    { id: 'later', label: 'Send later', sub: 'A message that arrives at a time you pick', icon: Clock },
     ...(group ? [{ id: 'poll' as const, label: 'Create poll', sub: 'Let everyone vote', icon: ListChecks }] : []),
   ];
   return (

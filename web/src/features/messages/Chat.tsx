@@ -24,7 +24,7 @@ import { Guard } from '../../ui/Guard';
 import { displayText, foldText, heartOf, MAX_MEDIA, previewText, safePoll, safeText, shownDuration } from '../../core/safe';
 import { AlbumGallery } from './Album';
 import { ExtrasSheet, LocationCard, LocationSheet, PlanCard, PlanSheet, type ChatExtra } from './Circle';
-import { CountdownBar, CountdownSheet, DailyCard, DailySheet, FileCard, ListCard, ListSheet } from './More';
+import { CountdownBar, CountdownSheet, DailyCard, DailySheet, FileCard, LaterSheet, ListCard, ListSheet } from './More';
 import { placeName, safeFileName } from '../../core/extras';
 import { sendFile, sendNudge } from '../../core/more';
 import { isAlbum, sendPlan } from '../../core/circle';
@@ -1129,17 +1129,6 @@ export function Chat() {
                 </>
               )}
               <input ref={file} type="file" accept="image/*,video/*,.heic,.heif" multiple hidden onChange={(e) => e.target.files && attach(e.target.files)} />
-              <input
-                ref={anyFile}
-                type="file"
-                hidden
-                aria-label="Send a file"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (f) attachFile(f);
-                }}
-              />
             </form>
           )}
         </div>
@@ -1156,6 +1145,19 @@ export function Chat() {
           else setExtra(what);
         }}
       />
+      {/* Outside the composer, whose own file input is the photo and video one. */}
+      <input
+        ref={anyFile}
+        type="file"
+        hidden
+        aria-label="Send a file"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) attachFile(f);
+        }}
+      />
+      <LaterSheet open={extra === 'later'} onClose={() => setExtra(null)} threadId={threadId} />
       <ListSheet open={extra === 'list'} onClose={() => setExtra(null)} threadId={threadId} />
       <DailySheet open={extra === 'daily'} onClose={() => setExtra(null)} thread={thread} />
       <CountdownSheet open={extra === 'countdown'} onClose={() => setExtra(null)} threadId={threadId} custom={custom} />

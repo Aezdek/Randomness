@@ -46,6 +46,9 @@ class UserFacingException(message: String) : Exception(message)
  * Creates, edits and deletes objects: picks the content key, seals and signs the payload, wraps the key for exactly the
  * people who may read it, and keeps the local state in step. Mirrors web/src/core/compose.ts.
  */
+/** The longest message that can be sent later. */
+const val MAX_LATER_TEXT = 4_000
+
 class Composer(
     private val api: Api,
     private val state: MutableStateFlow<AppState>,
@@ -432,6 +435,30 @@ class Composer(
             }
         }
         throw UserFacingException("Could not send")
+    }
+
+    /**
+     * A message to arrive at [releaseAt]: sealed and signed now, dated for then, and kept unread by the server until
+     * its time. Words only. If the chat's members change before then it isn't delivered, and the list says so.
+     */
+    suspend fun sendLater(threadId: String, text: String, releaseAt: Long): xyz.aezdek.hush.protocol.ScheduledDto {
+        val clean = text.trim().take(MAX_LATER_TEXT)
+        if (clean.isEmpty()) throw UserFacingException("Write a message")
+        if (releaseAt < System.currentTimeMillis() + 60_000) throw UserFacingException("Pick a time at least a minute from now")
+        val lasts = index().chatCustom(threadId).disappearAfter
+        val epoch = epochForSending(threadId)
+        val sealed = seal(
+            Draft(Kind.MESSAGE, Audience.THREAD, MessagePayload(xyz.aezdek.hush.protocol.MessageType.TEXT, text = clean), parentId = epoch.id, threadId = threadId,
+                expiresAt = lasts.takeIf { it > 0 }?.let { releaseAt + it }),
+            createdAt = releaseAt,
+        )
+        return api.post("/scheduled", xyz.aezdek.hush.protocol.ScheduleRequest(releaseAt, sealed.upload))
+    }
+
+    suspend fun scheduled(): List<xyz.aezdek.hush.protocol.ScheduledDto> = api.get("/scheduled")
+
+    suspend fun cancelScheduled(id: String) {
+        api.delete<Unit>("/scheduled/$id")
     }
 
     suspend fun react(message: Entity, emoji: String) {

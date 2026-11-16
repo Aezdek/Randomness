@@ -130,6 +130,34 @@ class Prefs(context: Context) {
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()
 
+    // ------------------------------------------------------------------------------- send later, places, arrivals
+
+    /** What a message waiting to be sent later says, kept on the phone that wrote it (the server holds it sealed). */
+    fun laterText(id: String): String? = prefs.getString("later.$id", null)
+
+    fun setLaterText(id: String, text: String?) = prefs.edit().apply { if (text == null) remove("later.$id") else putString("later.$id", text.take(200)) }.apply()
+
+    /** Places saved on this phone to arrive at, as name to (latitude, longitude). They never leave it. */
+    var places: Map<String, Pair<Double, Double>>
+        get() = prefs.getStringSet("places", emptySet()).orEmpty().mapNotNull { row ->
+            val parts = row.split('|')
+            val lat = parts.getOrNull(1)?.toDoubleOrNull() ?: return@mapNotNull null
+            val lng = parts.getOrNull(2)?.toDoubleOrNull() ?: return@mapNotNull null
+            parts[0] to (lat to lng)
+        }.toMap()
+        set(value) = prefs.edit().putStringSet("places", value.entries.take(10).map { "${it.key.replace('|', ' ')}|${it.value.first}|${it.value.second}" }.toSet()).apply()
+
+    /** "Say when I arrive", by chat: the place to reach, until the location share ends. */
+    data class Arrival(val threadId: String, val until: Long, val place: String, val lat: Double, val lng: Double)
+
+    var arrivals: List<Arrival>
+        get() = prefs.getStringSet("arrivals", emptySet()).orEmpty().mapNotNull { row ->
+            val p = row.split('|')
+            if (p.size != 5) return@mapNotNull null
+            Arrival(p[0], p[1].toLongOrNull() ?: return@mapNotNull null, p[2], p[3].toDoubleOrNull() ?: return@mapNotNull null, p[4].toDoubleOrNull() ?: return@mapNotNull null)
+        }.filter { it.until > System.currentTimeMillis() }
+        set(value) = prefs.edit().putStringSet("arrivals", value.map { "${it.threadId}|${it.until}|${it.place.replace('|', ' ')}|${it.lat}|${it.lng}" }.toSet()).apply()
+
     // ------------------------------------------------------------------------------------------- disguise (see disguise/)
 
     /** The look Hush wears on the home screen ("" for its own). Saved at once: the icon changes right after. */

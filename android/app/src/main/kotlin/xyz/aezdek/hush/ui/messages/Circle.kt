@@ -43,6 +43,8 @@ import androidx.compose.material.icons.outlined.QuestionAnswer
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WavingHand
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import xyz.aezdek.hush.client.sendArrived
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
@@ -368,6 +370,9 @@ internal fun LocationSheet(threadId: String, onDismiss: () -> Unit) {
     var choice by remember { mutableIntStateOf(1) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var places by remember { mutableStateOf(Graph.prefs.places) }
+    var arriveAt by remember { mutableStateOf<String?>(null) }
+    var newPlace by remember { mutableStateOf("") }
     fun share() {
         busy = true
         scope.launch {
@@ -378,6 +383,11 @@ internal fun LocationSheet(threadId: String, onDismiss: () -> Unit) {
                 Graph.attempt {
                     Graph.client.composer.shareLocation(threadId, location.latitude, location.longitude,
                         if (location.hasAccuracy()) location.accuracy else null, LOCATION_CHOICES[choice].second)
+                    // "Say when I arrive": remembered on this phone until the share ends.
+                    val others = Graph.prefs.arrivals.filter { it.threadId != threadId }
+                    val spot = arriveAt?.let { name -> places[name]?.let { name to it } }
+                    Graph.prefs.arrivals = if (spot == null) others
+                        else others + xyz.aezdek.hush.data.Prefs.Arrival(threadId, System.currentTimeMillis() + LOCATION_CHOICES[choice].second, spot.first, spot.second.first, spot.second.second)
                     onDismiss()
                 }
             }
@@ -407,6 +417,28 @@ internal fun LocationSheet(threadId: String, onDismiss: () -> Unit) {
                         contentAlignment = Alignment.Center,
                     ) { Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = if (on) Aez.colors.bg else Aez.colors.text) }
                 }
+            }
+            Text("Say when I arrive at", fontSize = 13.sp, color = Aez.colors.text2)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (name in listOf<String?>(null) + places.keys) {
+                    xyz.aezdek.hush.ui.components.Chip(name ?: "Nowhere", selected = arriveAt == name) { arriveAt = name }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { AezField(newPlace, { newPlace = it.take(40) }, "Save where I am now as… (Home)") }
+                AezButton("Save", {
+                    val name = newPlace.trim()
+                    scope.launch {
+                        val here = if (hasLocation(context)) currentLocation(context) else null
+                        if (here == null) Graph.toast("Couldn't find where you are. Allow location, then try again.", error = true)
+                        else {
+                            Graph.prefs.places = Graph.prefs.places + (name to (here.latitude to here.longitude))
+                            places = Graph.prefs.places
+                            arriveAt = name
+                            newPlace = ""
+                        }
+                    }
+                }, small = true, enabled = newPlace.isNotBlank())
             }
             AezButton(if (busy) "Finding you…" else "Share", {
                 if (hasLocation(context)) share()
@@ -446,6 +478,13 @@ fun LocationSharer() {
         var last: Location? = null
         var lastAt = 0L
         val listener = LocationListener { location ->
+            // "Say when I arrive": the chat is told once, the first time this phone is within reach of the place.
+            val watches = Graph.prefs.arrivals
+            val reached = watches.filter { xyz.aezdek.hush.client.Places.distance(location.latitude, location.longitude, it.lat, it.lng) <= xyz.aezdek.hush.client.Places.ARRIVED_WITHIN }
+            if (reached.isNotEmpty()) {
+                Graph.prefs.arrivals = watches - reached.toSet()
+                for (arrival in reached) Graph.launch { Graph.client.composer.sendArrived(arrival.threadId, arrival.place) }
+            }
             val moved = last?.let { distanceMetres(it.latitude, it.longitude, location.latitude, location.longitude) } ?: Double.MAX_VALUE
             val since = System.currentTimeMillis() - lastAt
             if (last != null && since < 20_000 && moved < 25.0) return@LocationListener
@@ -466,7 +505,7 @@ fun LocationSharer() {
 
 // --------------------------------------------------------------------------------------------------------- the menu
 
-internal enum class ChatExtra { FILE, PLAN, LOCATION, LIST, DAILY, COUNTDOWN, NUDGE, POLL }
+internal enum class ChatExtra { FILE, PLAN, LOCATION, LIST, DAILY, COUNTDOWN, NUDGE, LATER, POLL }
 
 /** The composer's "+": a plan, live location, and in groups a poll. */
 @Composable
@@ -479,6 +518,7 @@ internal fun ExtrasSheet(group: Boolean, onDismiss: () -> Unit, onPick: (ChatExt
         add(Triple(ChatExtra.DAILY, "Question of the day" to "Answers show once everyone has answered", Icons.Outlined.QuestionAnswer))
         add(Triple(ChatExtra.COUNTDOWN, "Countdown" to "Days to a date, at the top of the chat", Icons.Outlined.Schedule))
         add(Triple(ChatExtra.NUDGE, "Nudge" to "No words: their phone just buzzes", Icons.Outlined.WavingHand))
+        add(Triple(ChatExtra.LATER, "Send later" to "A message that arrives at a time you pick", Icons.Outlined.Schedule))
         if (group) add(Triple(ChatExtra.POLL, "Poll" to "Let everyone vote", Icons.Outlined.Poll))
     }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {

@@ -520,6 +520,7 @@ fun Chat(threadId: String, focus: String? = null) {
         ChatExtra.PLAN -> PlanSheet({ extra = null }) { plan -> Graph.launch { Graph.client.composer.sendPlan(threadId, plan) } }
         ChatExtra.LOCATION -> LocationSheet(threadId) { extra = null }
         ChatExtra.LIST -> ListSheet(threadId) { extra = null }
+        ChatExtra.LATER -> LaterSheet(threadId) { extra = null }
         ChatExtra.DAILY -> DailySheet(thread, index, state) { extra = null }
         ChatExtra.COUNTDOWN -> CountdownSheet(threadId, custom) { extra = null }
         else -> {}

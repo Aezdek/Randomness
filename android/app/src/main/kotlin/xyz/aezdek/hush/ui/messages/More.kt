@@ -360,3 +360,93 @@ internal fun CountdownSheet(threadId: String, custom: ChatCustom, onDismiss: () 
         ) { DatePicker(picker) }
     }
 }
+
+// ------------------------------------------------------------------------------------------------------- send later
+
+/** A message that arrives at a time you pick: the server keeps it sealed until then. Also lists what is waiting. */
+@Composable
+internal fun LaterSheet(threadId: String, onDismiss: () -> Unit) {
+    val zone = ZoneId.systemDefault()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var text by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(LocalDate.now(zone)) }
+    var time by remember { mutableStateOf(java.time.LocalTime.now(zone).plusHours(1).withSecond(0).withNano(0)) }
+    var pickingDate by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
+    var waiting by remember { mutableStateOf(emptyList<xyz.aezdek.hush.protocol.ScheduledDto>()) }
+    suspend fun refresh() {
+        waiting = runCatching { Graph.client.composer.scheduled().filter { it.threadId == threadId } }.getOrDefault(waiting)
+    }
+    androidx.compose.runtime.LaunchedEffect(threadId) { refresh() }
+    val at = date.atTime(time).atZone(zone).toInstant().toEpochMilli()
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
+        Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Send later", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Aez.colors.text)
+            AezField(text, { text = it.take(xyz.aezdek.hush.client.MAX_LATER_TEXT) }, "Message", singleLine = false, minLines = 2)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AezButton(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at)), { pickingDate = true }, Modifier.weight(1f), style = ButtonStyle.SECONDARY, icon = Icons.Outlined.CalendarMonth)
+                AezButton(DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at)), { pickingTime = true }, Modifier.weight(1f), style = ButtonStyle.SECONDARY, icon = Icons.Outlined.Schedule)
+            }
+            AezButton("Send then", {
+                val words = text.trim()
+                scope.launch {
+                    Graph.attempt {
+                        val kept = Graph.client.composer.sendLater(threadId, words, at)
+                        Graph.prefs.setLaterText(kept.id, words)
+                        text = ""
+                        Graph.toast("It will arrive then")
+                    }
+                    refresh()
+                }
+            }, Modifier.fillMaxWidth(), enabled = text.isNotBlank())
+            for (message in waiting) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(Graph.prefs.laterText(message.id) ?: "A message", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            message.failed?.let { "Not sent: $it" } ?: DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(message.releaseAt)),
+                            fontSize = 12.sp, color = if (message.failed != null) Aez.colors.danger else Aez.colors.text2,
+                        )
+                    }
+                    AezButton(if (message.failed != null) "Clear" else "Cancel", {
+                        scope.launch {
+                            Graph.attempt { Graph.client.composer.cancelScheduled(message.id) }
+                            Graph.prefs.setLaterText(message.id, null)
+                            refresh()
+                        }
+                    }, style = ButtonStyle.SECONDARY, small = true)
+                }
+            }
+            Text("Your server keeps it sealed and delivers it at that time, even if this phone is off. Words only, up to 60 days ahead.", fontSize = 12.sp, color = Aez.colors.text3)
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+    if (pickingDate) {
+        val picker = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+        DatePickerDialog(
+            onDismissRequest = { pickingDate = false },
+            confirmButton = {
+                TextButton({
+                    picker.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                    pickingDate = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton({ pickingDate = false }) { Text("Cancel") } },
+        ) { DatePicker(picker) }
+    }
+    if (pickingTime) {
+        val picker = androidx.compose.material3.rememberTimePickerState(time.hour, time.minute, android.text.format.DateFormat.is24HourFormat(context))
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pickingTime = false },
+            confirmButton = {
+                TextButton({
+                    time = java.time.LocalTime.of(picker.hour, picker.minute)
+                    pickingTime = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton({ pickingTime = false }) { Text("Cancel") } },
+            text = { androidx.compose.material3.TimePicker(picker) },
+        )
+    }
+}

@@ -573,6 +573,7 @@ class Accounts(private val db: Db, private val clock: Clock, private val presenc
             exec("DELETE FROM push_subscriptions WHERE user_id = ?", userId)
             exec("DELETE FROM passkeys WHERE user_id = ?", userId)
             exec("DELETE FROM sign_ins WHERE user_id = ?", userId)
+            exec("DELETE FROM scheduled WHERE user_id = ?", userId)
             exec("DELETE FROM push_prefs WHERE user_id = ?", userId)
             val sessions = strings("SELECT id FROM sessions WHERE user_id = ?", userId)
             exec("DELETE FROM sessions WHERE user_id = ?", userId)

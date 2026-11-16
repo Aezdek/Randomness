@@ -1,7 +1,8 @@
 // The smaller things a chat can hold: a file, a shared list, the day's question and a countdown. Their rules are in
 // core/extras.ts; what they send is in core/more.ts.
-import { CalendarClock, Check, Download, FileText, ListTodo, MessageCircleQuestion, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { CalendarClock, Check, Clock, Download, FileText, ListTodo, MessageCircleQuestion, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { cancelScheduled, MAX_LATER_TEXT, scheduledMessages, sendLater, type ScheduledDto } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { countdownLabel, dayOf, isDay, MAX_ANSWER, MAX_COUNTDOWN_TITLE, MAX_LIST_ITEM, MAX_LIST_ITEMS, MAX_LIST_TITLE, safeFile, sizeLabel } from '../../core/extras';
 import { answerDaily, changeList, clearCountdown, daily, listState, saveFile, sendList, setCountdown } from '../../core/more';
@@ -225,6 +226,81 @@ export function CountdownSheet({ open, onClose, threadId, custom }: { open: bool
           </button>
         )}
         <p className="faint small">Shows at the top of the chat for everyone: days to go, or days since a date in the past.</p>
+      </form>
+    </Sheet>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------------ send later
+
+const LATER = 'hush.later';
+/** What each waiting message says, kept on the device that wrote it: the server only holds it sealed. */
+function laterTexts(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(LATER) ?? '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+function rememberLater(id: string, text: string | null) {
+  const all = laterTexts();
+  if (text === null) delete all[id];
+  else all[id] = text.slice(0, 200);
+  try {
+    localStorage.setItem(LATER, JSON.stringify(all));
+  } catch {
+    // Without storage the list just says "A message".
+  }
+}
+
+const localInput = (at: number) => new Date(at - new Date(at).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+
+export function LaterSheet({ open, onClose, threadId }: { open: boolean; onClose: () => void; threadId: string }) {
+  const [text, setText] = useState('');
+  const [when, setWhen] = useState(() => localInput(Date.now() + 60 * 60_000));
+  const [waiting, setWaiting] = useState<ScheduledDto[]>([]);
+  const refresh = () => void scheduledMessages().then((all) => setWaiting(all.filter((m) => m.threadId === threadId))).catch(() => undefined);
+  useEffect(() => {
+    if (open) refresh();
+  }, [open, threadId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const at = new Date(when).getTime();
+  const texts = laterTexts();
+  return (
+    <Sheet open={open} onClose={onClose} title="Send later" bottom>
+      <form
+        className="chat-poll-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void sendLater(threadId, text, at)
+            .then((m) => (rememberLater(m.id, text.trim()), setText(''), refresh(), toast('It will arrive then')))
+            .catch(fail);
+        }}
+      >
+        <textarea className="input" rows={3} placeholder="Message" value={text} maxLength={MAX_LATER_TEXT} onChange={(e) => setText(e.target.value)} autoFocus aria-label="Message to send later" />
+        <label className="field">
+          <span>When</span>
+          <input className="input" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />
+        </label>
+        <button className="btn btn-primary btn-block" disabled={!text.trim() || !Number.isFinite(at)}>
+          <Clock size={16} /> Send then
+        </button>
+        {waiting.length > 0 && (
+          <ul className="later-list" aria-label="Waiting to be sent">
+            {waiting.map((m) => (
+              <li key={m.id}>
+                <span className="list-text">
+                  <b>{texts[m.id] ?? 'A message'}</b>
+                  <span className="faint small">{m.failed ? `Not sent: ${m.failed}` : new Date(m.releaseAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void cancelScheduled(m.id).then(() => (rememberLater(m.id, null), refresh())).catch(fail)}>
+                  {m.failed ? 'Clear' : 'Cancel'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="faint small">Your server keeps it sealed and delivers it at that time, even if this device is off. Words only, up to 60 days ahead.</p>
       </form>
     </Sheet>
   );

@@ -68,7 +68,8 @@ class Services(val config: ServerConfig, val clock: Clock, app: Application) {
     val releases = Releases(config.releaseUrl, clock)
     val startedAt = clock.now()
     val realtime = Realtime(db, presence, push, app, clock)
-    val jobs = Jobs(config, db, objects, blobs, realtime, accounts)
+    val scheduled = Scheduled(db, clock, objects)
+    val jobs = Jobs(config, db, objects, blobs, realtime, accounts, scheduled)
     val limiter = RateLimiter(clock)
 
     private val announced = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()

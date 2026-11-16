@@ -24,6 +24,7 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.protocol.PasskeyLoginRequest
+import xyz.aezdek.hush.protocol.ScheduleRequest
 import xyz.aezdek.hush.protocol.AdminAlertKind
 import xyz.aezdek.hush.protocol.AdminAlertDto
 import xyz.aezdek.hush.protocol.AddPasskeyRequest
@@ -400,6 +401,21 @@ fun Route.api(s: Services) = route("/api/v1") {
     get("/objects/{id}") {
         val session = call.session(s)
         call.respond(blocking { s.objects.get(session.userId, call.param("id")) })
+    }
+    // Messages to deliver later: kept sealed, posted when their time comes (see Scheduled).
+    post("/scheduled") {
+        val session = call.poster(s)
+        val req = call.receive<ScheduleRequest>()
+        call.respond(HttpStatusCode.Created, blocking { s.scheduled.add(session.userId, req) })
+    }
+    get("/scheduled") {
+        val session = call.session(s)
+        call.respond(blocking { s.scheduled.list(session.userId) })
+    }
+    delete("/scheduled/{id}") {
+        val session = call.session(s)
+        blocking { s.scheduled.cancel(session.userId, call.param("id")) }
+        call.respond(HttpStatusCode.NoContent)
     }
     put("/objects/{id}") {
         val session = call.poster(s)

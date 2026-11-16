@@ -5886,3 +5886,20 @@ button.thread-row {
   flex-direction: column;
   gap: 8px;
 }
+.later-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.later-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.later-list .list-text {
+  display: flex;
+  flex-direction: column;
+}

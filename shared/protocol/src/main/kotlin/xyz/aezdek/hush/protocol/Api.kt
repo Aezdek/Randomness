@@ -366,6 +366,17 @@ object PushType {
  * copies what they want and leaves within seconds is still on record for the account's owner to see.
  * [active] says whether that device is still signed in ([sessionId] ends it); [current] marks the asking device's own.
  */
+/**
+ * A message to deliver later. [upload] is the finished message, sealed and signed like any other and dated
+ * [releaseAt]; the server keeps it unread and posts it then, as if its author had just sent it.
+ */
+@Serializable
+data class ScheduleRequest(val releaseAt: Long, val upload: ObjectUpload)
+
+/** A message waiting to be delivered, as its author sees it. [failed] says why it couldn't be, if it couldn't. */
+@Serializable
+data class ScheduledDto(val id: String, val threadId: String, val releaseAt: Long, val failed: String? = null)
+
 @Serializable
 data class SignInDto(val id: String, val deviceName: String, val platform: String, val at: Long, val sessionId: String, val active: Boolean, val current: Boolean)
 

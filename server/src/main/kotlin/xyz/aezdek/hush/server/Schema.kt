@@ -214,6 +214,20 @@ object Schema {
         );
         CREATE INDEX sign_ins_user ON sign_ins(user_id, at);
         """.trimIndent(),
+        // 8: messages to deliver later: the finished, sealed upload, kept unread until its time.
+        """
+        CREATE TABLE scheduled (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            release_at INTEGER NOT NULL,
+            upload TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            failed TEXT
+        );
+        CREATE INDEX scheduled_due ON scheduled(release_at);
+        CREATE INDEX scheduled_user ON scheduled(user_id);
+        """.trimIndent(),
     )
 
     fun migrate(db: Db) {

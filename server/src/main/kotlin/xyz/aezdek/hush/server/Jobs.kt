@@ -18,6 +18,7 @@ class Jobs(
     private val blobs: Blobs,
     private val realtime: Realtime,
     private val accounts: Accounts? = null,
+    private val scheduled: Scheduled? = null,
 ) {
     private val log = LoggerFactory.getLogger(Jobs::class.java)
 
@@ -26,6 +27,7 @@ class Jobs(
             var minutes = 0L
             while (isActive) {
                 runCatching { expireNow() }.onFailure { log.error("expiry failed", it) }
+                runCatching { releaseNow() }.onFailure { log.error("scheduled messages failed", it) }
                 if (minutes % 60 == 30L) runCatching { blobs.gc() }.onFailure { log.error("media GC failed", it) }
                 if (minutes % 60 == 45L) {
                     runCatching { accounts?.expireIdleSessions()?.takeIf { it > 0 }?.let { log.info("Signed out {} idle device(s)", it) } }
@@ -41,6 +43,13 @@ class Jobs(
     fun expireNow() {
         val fx = Effects()
         objects.expire(fx)
+        realtime.apply(fx)
+    }
+
+    /** Posts the messages whose time has come. */
+    fun releaseNow() {
+        val fx = Effects()
+        scheduled?.releaseDue(fx)
         realtime.apply(fx)
     }
 
