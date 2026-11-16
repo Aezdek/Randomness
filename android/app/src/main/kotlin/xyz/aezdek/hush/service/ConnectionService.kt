@@ -151,7 +151,8 @@ class ConnectionService : Service() {
         val settings = index.settings
         if (!settings.notifyMessages) return
         // A theme or nickname change shows in the chat but doesn't buzz anyone's phone.
-        fun notifies(e: Entity) = e.dto.kind == Kind.MESSAGE && e.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM
+        // Nor does ticking an item off a list.
+        fun notifies(e: Entity) = e.dto.kind == Kind.MESSAGE && e.payloadAs<MessagePayload>()?.type !in setOf(MessageType.SYSTEM, MessageType.LIST_CHANGE)
         val byThread = fresh.filter(::notifies).groupBy { it.dto.threadId }
         for ((threadId, _) in byThread) {
             threadId ?: continue
@@ -223,6 +224,11 @@ class ConnectionService : Service() {
             MessageType.POLL -> "Poll: ${payload.poll?.question ?: payload.text.orEmpty()}"
             MessageType.PLAN -> "Plan: ${payload.plan?.title ?: payload.text.orEmpty()}"
             MessageType.LOCATION -> "Shared their live location"
+            MessageType.FILE -> "Sent a file"
+            MessageType.NUDGE -> "Nudged you 👋"
+            MessageType.LIST -> "List: ${payload.text.orEmpty()}"
+            MessageType.DAILY -> "Answered the question of the day"
+            MessageType.ARRIVED -> "Arrived at ${xyz.aezdek.hush.client.Places.name(payload.text)}"
             else -> payload.text ?: "Sent a message"
         }
 

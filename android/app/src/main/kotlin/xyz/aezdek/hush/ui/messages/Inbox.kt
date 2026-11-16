@@ -95,6 +95,12 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.HEART -> prefix + (p.text ?: "❤️")
         MessageType.POLL -> (if (mine) "You created a poll: " else "Poll: ") + (p.poll?.question ?: p.text.orEmpty())
         MessageType.PLAN -> (if (mine) "You made a plan: " else "Plan: ") + (p.plan?.title ?: p.text.orEmpty())
+        MessageType.FILE -> if (mine) "You sent a file" else "Sent a file"
+        MessageType.NUDGE -> if (mine) "You sent a nudge" else "Nudged you 👋"
+        MessageType.LIST -> (if (mine) "You made a list: " else "List: ") + p.text.orEmpty()
+        MessageType.LIST_CHANGE -> if (mine) "You changed a list" else "Changed a list"
+        MessageType.DAILY -> if (mine) "You answered the question of the day" else "Answered the question of the day"
+        MessageType.ARRIVED -> (if (mine) "You arrived at " else "Arrived at ") + xyz.aezdek.hush.client.Places.name(p.text)
         MessageType.LOCATION -> if (mine) "You're sharing your live location" else "Shared their live location"
         else -> prefix + (p.text ?: "")
     }

@@ -37,6 +37,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.WavingHand
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -459,18 +466,23 @@ fun LocationSharer() {
 
 // --------------------------------------------------------------------------------------------------------- the menu
 
-internal enum class ChatExtra { PLAN, LOCATION, POLL }
+internal enum class ChatExtra { FILE, PLAN, LOCATION, LIST, DAILY, COUNTDOWN, NUDGE, POLL }
 
 /** The composer's "+": a plan, live location, and in groups a poll. */
 @Composable
 internal fun ExtrasSheet(group: Boolean, onDismiss: () -> Unit, onPick: (ChatExtra) -> Unit) {
     val items = buildList {
+        add(Triple(ChatExtra.FILE, "File" to "Any file, up to 250 MB, sent as it is", Icons.Outlined.AttachFile))
         add(Triple(ChatExtra.PLAN, "Plan" to "A time and place, and who's going", Icons.Outlined.CalendarMonth))
         add(Triple(ChatExtra.LOCATION, "Live location" to "Where you are, for a set time", Icons.Outlined.Navigation))
+        add(Triple(ChatExtra.LIST, "Shared list" to "Everyone adds items and ticks them off", Icons.Outlined.Checklist))
+        add(Triple(ChatExtra.DAILY, "Question of the day" to "Answers show once everyone has answered", Icons.Outlined.QuestionAnswer))
+        add(Triple(ChatExtra.COUNTDOWN, "Countdown" to "Days to a date, at the top of the chat", Icons.Outlined.Schedule))
+        add(Triple(ChatExtra.NUDGE, "Nudge" to "No words: their phone just buzzes", Icons.Outlined.WavingHand))
         if (group) add(Triple(ChatExtra.POLL, "Poll" to "Let everyone vote", Icons.Outlined.Poll))
     }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Aez.colors.elev1) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(bottom = 12.dp)) {
             for ((extra, words, icon) in items) {
                 Row(
                     Modifier.fillMaxWidth().clickable { onDismiss(); onPick(extra) }.padding(horizontal = 20.dp, vertical = 12.dp),

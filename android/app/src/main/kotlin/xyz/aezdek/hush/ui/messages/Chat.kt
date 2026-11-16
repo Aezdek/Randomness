@@ -115,6 +115,7 @@ import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
 import xyz.aezdek.hush.client.AppState
 import xyz.aezdek.hush.client.ChatCustom
+import xyz.aezdek.hush.client.sendNudge
 import xyz.aezdek.hush.client.Display
 import xyz.aezdek.hush.client.ChatThemes
 import xyz.aezdek.hush.client.Entity
@@ -265,6 +266,11 @@ fun Chat(threadId: String, focus: String? = null) {
         }
     }
 
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) scope.launch { sendPickedFile(context, threadId, uri) { sending = it } }
+    }
+    var lastNudge by remember(threadId) { mutableLongStateOf(0L) }
+
     val title = index.threadTitle(thread, state.users, me.id)
     val typing = state.typing[threadId].orEmpty().filter { (u, until) -> u != me.id && until > System.currentTimeMillis() }.keys
     val online = others.any { state.presence[it] == true }
@@ -330,6 +336,7 @@ fun Chat(threadId: String, focus: String? = null) {
             Text("New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(custom.disappearAfter)}", color = Aez.colors.text2,
                 fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().background(Aez.colors.elev1).padding(6.dp))
         }
+        CountdownBar(custom)
         val listState = rememberLazyListState()
         val reversed = messages.asReversed()
         // The list is drawn bottom up (newest first), with the typing bubble as its first item while someone types.
@@ -390,7 +397,7 @@ fun Chat(threadId: String, focus: String? = null) {
         }
         val reveal = remember { TimeReveal() }
         val theirRead = thread.members.filter { it.userId != me.id }.minOfOrNull { it.lastReadAt } ?: 0L
-        val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type != MessageType.SYSTEM }
+        val lastMine = messages.lastOrNull { it.dto.authorId == me.id && it.payloadAs<MessagePayload>()?.type !in xyz.aezdek.hush.client.LINE_TYPES }
         if (album && gallery) {
             AlbumGallery(threadId, index, state, onAdd = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                 modifier = Modifier.weight(1f).fillMaxWidth())
@@ -413,7 +420,7 @@ fun Chat(threadId: String, focus: String? = null) {
                         Text(dayLabel(message.dto.receivedAt), fontSize = 12.sp, color = Aez.colors.text3,
                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
                     }
-                    fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type == MessageType.SYSTEM
+                    fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type in xyz.aezdek.hush.client.LINE_TYPES
                     Bubble(
                         message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]), mineText = Color(theme.mineText),
                         firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || gap || isEvent(prev),
@@ -493,11 +500,28 @@ fun Chat(threadId: String, focus: String? = null) {
         PollSheet({ polling = false }) { poll -> send(MessagePayload(MessageType.POLL, text = poll.question, poll = poll), Audience.THREAD) }
     }
     if (extras) {
-        ExtrasSheet(thread.isGroup, { extras = false }) { picked -> if (picked == ChatExtra.POLL) polling = true else extra = picked }
+        ExtrasSheet(thread.isGroup, { extras = false }) { picked ->
+            when (picked) {
+                ChatExtra.POLL -> polling = true
+                ChatExtra.FILE -> filePicker.launch("*/*")
+                ChatExtra.NUDGE -> {
+                    // No words, and not over and over: one every half minute.
+                    if (System.currentTimeMillis() - lastNudge < 30_000) Graph.toast("Give it a moment before nudging again", error = true)
+                    else {
+                        lastNudge = System.currentTimeMillis()
+                        Graph.launch { Graph.client.composer.sendNudge(threadId) }
+                    }
+                }
+                else -> extra = picked
+            }
+        }
     }
     when (extra) {
         ChatExtra.PLAN -> PlanSheet({ extra = null }) { plan -> Graph.launch { Graph.client.composer.sendPlan(threadId, plan) } }
         ChatExtra.LOCATION -> LocationSheet(threadId) { extra = null }
+        ChatExtra.LIST -> ListSheet(threadId) { extra = null }
+        ChatExtra.DAILY -> DailySheet(thread, index, state) { extra = null }
+        ChatExtra.COUNTDOWN -> CountdownSheet(threadId, custom) { extra = null }
         else -> {}
     }
     menu?.let { message ->
@@ -691,6 +715,14 @@ private fun Bubble(
     val nav = LocalNav.current
     val me = state.me ?: return
     val p = message.payloadAs<MessagePayload>() ?: return
+    // A change to a list shows on the list itself.
+    if (p.type == MessageType.LIST_CHANGE) return
+    if (p.type == MessageType.NUDGE || p.type == MessageType.ARRIVED) {
+        val mine = message.dto.authorId == me.id
+        Text(xyz.aezdek.hush.client.lineOf(p, mine, index.nameIn(message.dto.threadId, message.dto.authorId, state.users)), fontSize = 12.sp, color = Aez.colors.text2,
+            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 10.dp))
+        return
+    }
     if (p.type == MessageType.SYSTEM) {
         // "Ana changed the theme to Ocean": a line in the conversation, not a bubble.
         p.event?.let {
@@ -810,6 +842,10 @@ private fun Bubble(
                 p.type == MessageType.POLL && p.poll != null -> PollCard(message, p.poll!!, index, state, themeColor, clickModifier)
                 p.type == MessageType.PLAN && p.plan != null -> PlanCard(message, p.plan!!, index, state, themeColor, clickModifier)
                 p.type == MessageType.LOCATION && p.location != null -> LocationCard(message, p.location!!, mine, clickModifier)
+                p.type == MessageType.FILE -> FileCard(p.file, clickModifier)
+                p.type == MessageType.LIST -> ListCard(message, index, clickModifier)
+                p.type == MessageType.DAILY && p.daily != null && state.threads[message.dto.threadId] != null ->
+                    DailyCard(message, p.daily!!, state.threads[message.dto.threadId]!!, index, me.id, clickModifier)
                 p.type == MessageType.CALL -> CallBubble(p, mine, clickModifier.clip(shape).background(Aez.colors.bubbleOther)) {
                     message.dto.threadId?.let { Graph.calls.start(it, p.call?.video ?: true) }
                 }

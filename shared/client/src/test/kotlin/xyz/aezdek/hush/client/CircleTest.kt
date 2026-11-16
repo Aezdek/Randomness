@@ -179,4 +179,57 @@ class CircleTest {
         assertEquals(2, ana.newSignIns(before).size)
         assertTrue(ana.newSignIns(before).none { it.active })
     }
+
+    @Test
+    fun filesListsTheDailyQuestionAndCountdowns() = runBlocking {
+        val (ana, bo) = two()
+        val boId = bo.state.value.me!!.id
+        val anaId = ana.state.value.me!!.id
+        val chat = ana.composer.openDirect(boId)
+
+        // A file: sent in pieces, saved byte for byte, under a cleaned name.
+        val bytes = kotlin.random.Random.nextBytes(300_000)
+        val sent = ana.sendFile(chat, "../../plans\u202Efdp.exe", bytes.inputStream(), bytes.size.toLong())
+        bo.engine.sync()
+        val file = bo.current.messages[chat]!!.single { it.id == sent.id }.payloadAs<MessagePayload>()!!.file!!
+        assertEquals("plansfdp.exe", file.name)
+        val out = java.io.ByteArrayOutputStream()
+        bo.saveFile(file, out)
+        assertTrue(bytes.contentEquals(out.toByteArray()))
+        // Someone outside the chat can't fetch it, even knowing its id.
+        val invite: InviteDto = ana.api.post("/admin/invites")
+        val cy = client().apply { signUp(invite.code, "cy", "velvet anchor pocket") }
+        assertTrue(runCatching { cy.saveFile(file, java.io.ByteArrayOutputStream()) }.isFailure)
+        assertTrue(runCatching { ana.sendFile(chat, "empty", ByteArray(0).inputStream(), 0) }.isFailure)
+
+        // A list both change.
+        val list = ana.composer.sendList(chat, "Groceries", listOf("Milk", "Eggs"))
+        bo.engine.sync()
+        val theirs = bo.current.messages[chat]!!.single { it.id == list.id }
+        bo.composer.changeList(theirs, xyz.aezdek.hush.protocol.ListChange(add = "Bread"))
+        bo.composer.changeList(theirs, xyz.aezdek.hush.protocol.ListChange(done = "0"))
+        ana.engine.sync()
+        val state = ana.current.listState(ana.current.messages[chat]!!.single { it.id == list.id })
+        assertEquals(listOf("Milk" to true, "Eggs" to false, "Bread" to false), state.items.map { it.text to it.done })
+
+        // The day's question: hidden until both have answered, one answer each.
+        val thread = ana.state.value.threads[chat]!!
+        ana.composer.answerDaily(ana.current, thread, anaId, "Tea")
+        bo.engine.sync()
+        assertFalse(bo.current.daily(thread).revealed)
+        assertTrue(runCatching { ana.composer.answerDaily(ana.current, thread, anaId, "Again") }.isFailure)
+        bo.composer.answerDaily(bo.current, thread, boId, "Coffee")
+        ana.engine.sync()
+        val daily = ana.current.daily(thread)
+        assertTrue(daily.revealed)
+        assertEquals(mapOf(anaId to "Tea", boId to "Coffee"), daily.answers)
+
+        // A countdown, set by one and seen by the other.
+        ana.composer.setCountdown(chat, "Trip", System.currentTimeMillis() + 12 * 86_400_000L)
+        bo.engine.sync()
+        assertEquals("12 days until Trip", bo.current.chatCustom(chat).let { Countdowns.label(it.countdownTitle, it.countdownAt) })
+        bo.composer.clearCountdown(chat)
+        ana.engine.sync()
+        assertEquals("", ana.current.chatCustom(chat).countdownTitle)
+    }
 }
