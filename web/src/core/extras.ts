@@ -34,6 +34,10 @@ export function safeFileName(name: unknown): string {
   return clean;
 }
 
+/** Kinds of file that can run or act when opened: the card says to open them only from people you trust. */
+const RISKY = new Set(['apk', 'exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'ps1', 'vbs', 'js', 'jar', 'sh', 'app', 'dmg', 'pkg', 'lnk', 'html', 'htm', 'svg', 'docm', 'xlsm']);
+export const riskyFile = (name: string) => name.includes('.') && RISKY.has(name.slice(name.lastIndexOf('.') + 1).toLowerCase());
+
 export interface SafeFile { name: string; blobId: string; key: string; size: number }
 export function safeFile(raw: unknown): SafeFile | null {
   if (!raw || typeof raw !== 'object') return null;

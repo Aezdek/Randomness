@@ -38,6 +38,11 @@ object Files {
         return clean
     }
 
+    private val RISKY = setOf("apk", "exe", "msi", "bat", "cmd", "com", "scr", "ps1", "vbs", "js", "jar", "sh", "app", "dmg", "pkg", "lnk", "html", "htm", "svg", "docm", "xlsm")
+
+    /** Whether a file of this name can run or act when opened: its card says to open it only from people you trust. */
+    fun risky(name: String): Boolean = name.substringAfterLast('.', "").lowercase() in RISKY
+
     /** Whether [file] could be a real file to fetch. */
     fun plausible(file: SharedFile?): Boolean = file != null && BLOB_ID.matches(file.blobId) && file.size in 0..MAX_BYTES && file.key.length in 1..200
 

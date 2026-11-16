@@ -68,7 +68,21 @@ internal object Hostile {
         """{"type":"text","text":"${"‮".repeat(50)}reversed${"\\n".repeat(400)}tall"}""",
         """{"type":"text","text":"${"W".repeat(200_000)}"}""",
         """{"type":"heart","text":"${"❤️".repeat(2_000)}"}""",
-    )
+        // Files, lists, the day's question, countdowns, nudges and arrivals.
+        """{"type":"file","file":{"name":"../../etc/passwd","blobId":"../../etc/passwd","key":"AAAA","size":1}}""",
+        """{"type":"file","file":{"name":"${"n".repeat(5_000)}\u202Egpj.exe","blobId":"$blob","key":"AAAA","size":${Long.MAX_VALUE}}}""",
+        """{"type":"file","file":{"name":"","blobId":"$blob","key":"AAAA","size":-1}}""",
+        """{"type":"file"}""",
+        """{"type":"list","text":"big","list":{"title":"${"T".repeat(5_000)}","items":[${(1..1_500).joinToString(",") { "\"item $it ${"x".repeat(300)}\"" }}]}}""",
+        """{"type":"list","list":{"title":""}}""",
+        """{"type":"list_change","replyTo":"no-such-list","listChange":{"add":"${"y".repeat(50_000)}","done":"0","undone":"0","remove":"0"}}""",
+        """{"type":"list_change"}""",
+        """{"type":"daily","daily":{"day":"the day after never","question":"${"Q".repeat(5_000)}","answer":"${"A".repeat(50_000)}"}}""",
+        """{"type":"daily","daily":{"day":"9999-99-99","question":"","answer":""}}""",
+        """{"type":"system","event":{"countdownTitle":"${"C".repeat(3_000)}","countdownAt":${Long.MAX_VALUE}}}""",
+        """{"type":"system","event":{"countdownTitle":"Trip","countdownAt":${Long.MIN_VALUE}}}""",
+        """{"type":"arrived","text":"${"somewhere ".repeat(2_000)}"}""",
+    ) + List(40) { """{"type":"nudge"}""" }
 
     /** Sends [json] as the payload of a message in [threadId], exactly as given. Returns whether the server took it. */
     suspend fun send(client: AezClient, threadId: String, json: String, expiresAt: Long? = null): Boolean {

@@ -176,6 +176,7 @@ internal fun FileCard(file: SharedFile?, modifier: Modifier) {
         Column(Modifier.weight(1f)) {
             Text(name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Aez.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (busy) "Decrypting…" else Files.sizeLabel(file.size), fontSize = 12.sp, color = Aez.colors.text2)
+            if (Files.risky(name)) Text("This kind of file can run. Open it only if you trust who sent it.", fontSize = 11.sp, color = Aez.colors.danger, lineHeight = 14.sp)
         }
         Spacer(Modifier.width(8.dp))
         Icon(Icons.Outlined.Download, null, tint = Aez.colors.text2, modifier = Modifier.size(20.dp))

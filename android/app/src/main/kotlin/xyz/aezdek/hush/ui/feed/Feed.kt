@@ -126,7 +126,9 @@ fun Home() {
         !e.dto.archived && e.dto.authorId !in muted && state.users[e.dto.authorId]?.blockedByMe != true &&
             (e.dto.authorId == me.id || state.users[e.dto.authorId]?.followState == "following")
     }
-    val unreadChats = state.threads.values.count { index.unreadCount(it, me.id) > 0 }
+    // Hidden chats don't show here either: a count would give them away.
+    val hiddenChats by Graph.prefs.hiddenThreads.collectAsState()
+    val unreadChats = state.threads.values.count { it.id !in hiddenChats && index.unreadCount(it, me.id) > 0 }
     val activitySeen = Graph.prefs.lastActivitySeen
     val newActivity = state.followRequests.size + index.activity.count { it.dto.receivedAt > activitySeen }
 

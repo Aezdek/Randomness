@@ -107,6 +107,14 @@ export async function signOut(tellServer = true) {
   await clearSession();
   if (me) await LocalDb.destroy(me.id).catch(() => undefined);
   setWeakPassword(false);
+  // What this browser remembered on the side: previews of messages waiting to be sent, saved places, arrivals.
+  for (const key of ['hush.later', 'hush.places', 'hush.arrivals']) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // No storage, nothing kept.
+    }
+  }
   resetApp('signedOut');
 }
 

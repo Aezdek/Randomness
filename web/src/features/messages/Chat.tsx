@@ -941,7 +941,7 @@ export function Chat() {
                 {(newDay || gap) && <div className="day">{chatStamp(m.dto.receivedAt)}</div>}
                 {payload.type === MessageType.SYSTEM ? (
                   payload.event && <div className="chat-event" id={`msg-${m.dto.id}`}>{eventText(payload.event, m.dto.authorId, me.id, users, nameOf)}</div>
-                ) : payload.type === MessageType.LIST_CHANGE ? null : payload.type === MessageType.NUDGE || payload.type === MessageType.ARRIVED ? (
+                ) : payload.type === MessageType.LIST_CHANGE || (payload.type === MessageType.NUDGE && sameNudger(prev, m)) ? null : payload.type === MessageType.NUDGE || payload.type === MessageType.ARRIVED ? (
                   <div className="chat-event" id={`msg-${m.dto.id}`}>{lineOf(payload, m.dto.authorId === me.id, nameOf(m.dto.authorId))}</div>
                 ) : (
                   <Guard key={m.dto.id} fallback={<div className="chat-event">A message that couldn’t be shown</div>}>
@@ -1170,6 +1170,10 @@ export function Chat() {
 
 /** Messages drawn as a line in the middle of the chat (or, for list changes, not at all) rather than as a bubble. */
 const LINES: string[] = [MessageType.SYSTEM, MessageType.NUDGE, MessageType.ARRIVED, MessageType.LIST_CHANGE];
+
+/** A nudge straight after another from the same person: a hundred of them are still one line in the chat. */
+const sameNudger = (prev: Entity | undefined, m: Entity) =>
+  !!prev && prev.dto.authorId === m.dto.authorId && (prev.payload as MessagePayload).type === MessageType.NUDGE;
 
 function lineOf(payload: MessagePayload, mine: boolean, name: string): string {
   if (payload.type === MessageType.ARRIVED) return `${mine ? 'You' : name} arrived at ${placeName(payload.text)}`;

@@ -3,6 +3,7 @@ import { chunkCount, cipherLength, DEFAULT_CHUNK, decryptMedia, newFileKey, newH
 import { b64, concat, unb64 } from '../crypto/sodium';
 import { api, fetchBlob, getToken } from './api';
 import { isBlobId, safeMediaType } from './safe';
+import { MAX_FILE_BYTES } from './extras';
 import { ApiError } from './errors';
 import { toast } from './store';
 import type { InputAudioTrack } from 'mediabunny';
@@ -395,6 +396,12 @@ export function mediaUrl(ref: MediaRef): Promise<string> {
 /** A file's decrypted bytes, as plain data: never given a type a browser would open as a page. */
 export async function downloadBytes(blobId: string, key: string): Promise<Blob> {
   if (!isBlobId(blobId)) throw new Error('That file can’t be opened');
+  // The size a message claims is the sender's word. The file's own first bytes say how big it really is: looked at
+  // before the rest is fetched, so a message can't make this page pull gigabytes into memory.
+  const head = await fetchBlob(blobId, [0, 32]);
+  const view = new DataView(head.buffer, head.byteOffset, head.byteLength);
+  const magic = new TextDecoder().decode(head.subarray(0, 8));
+  if (head.length < 32 || magic !== 'AezCrypt' || view.getBigUint64(12) > BigInt(MAX_FILE_BYTES)) throw new Error('That file can’t be opened');
   return new Blob([decryptMedia(await fetchBlob(blobId), unb64(key)) as BlobPart], { type: 'application/octet-stream' });
 }
 

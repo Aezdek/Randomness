@@ -152,4 +152,25 @@ class SendLaterTest {
         refused { ana.composer.sendLater(chat, "one too many", now + 3 * hour) }
         assertNull(ana.composer.scheduled().firstOrNull { it.failed != null })
     }
+
+    @Test
+    fun someoneTakenOutOfAGroupBeforeTheTimeDeliversNothing() = runBlocking {
+        val (ana, bo) = two()
+        val boId = bo.state.value.me!!.id
+        val invite: InviteDto = ana.api.post("/admin/invites")
+        val cy = client().apply { signUp(invite.code, "cy", "velvet anchor pocket") }
+        ana.engine.sync()
+        val group = ana.composer.createThread(listOf(boId, cy.state.value.me!!.id), true, xyz.aezdek.hush.protocol.ThreadPayload(name = "Trip"))
+        bo.engine.sync()
+        // Bo writes something for later, then is taken out of the group.
+        bo.composer.sendLater(group, "sealed for the people who were here then", System.currentTimeMillis() + 2 * hour)
+        ana.composer.leaveThread(group, boId)
+        ahead = 2 * hour + 1_000
+        services.jobs.releaseNow()
+        ana.engine.sync()
+        cy.engine.sync()
+        assertTrue(ana.texts(group).none { it.startsWith("sealed for") })
+        assertTrue(cy.texts(group).none { it.startsWith("sealed for") })
+        assertNotNull(bo.composer.scheduled().single().failed)
+    }
 }

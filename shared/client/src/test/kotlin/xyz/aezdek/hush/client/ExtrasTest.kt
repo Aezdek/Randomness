@@ -39,6 +39,8 @@ class ExtrasTest {
         assertFalse(Files.plausible(null))
         assertEquals("1.5 MB", Files.sizeLabel(1_572_864))
         assertEquals("12 KB", Files.sizeLabel(12_800))
+        assertTrue(Files.risky("game.APK") && Files.risky("page.html") && Files.risky("a.tar.sh"))
+        assertFalse(Files.risky("photo.jpg") || Files.risky("notes") || Files.risky("apk"))
     }
 
     @Test
@@ -133,5 +135,31 @@ class ExtrasTest {
         assertEquals(111_195.0, Places.distance(0.0, 0.0, 1.0, 0.0), 100.0)
         assertTrue(Places.distance(52.52, 13.405, 52.5205, 13.4055) < Places.ARRIVED_WITHIN)
         assertEquals("their destination", Places.name("  "))
+    }
+
+    @Test
+    fun `what a member with a modified app sends is refused or cut down, never trusted`() {
+        // The same payloads CI sends the Android app on the emulator (see Hostile): here, what each turns into.
+        val decoded = Hostile.extreme(System.currentTimeMillis()).mapNotNull {
+            Payloads.decodeOrNull(xyz.aezdek.hush.protocol.Kind.MESSAGE, it) as? xyz.aezdek.hush.protocol.MessagePayload
+        }
+        val files = decoded.filter { it.type == "file" }
+        assertTrue(files.isNotEmpty())
+        // None of the hostile files would be fetched, and the names that would be shown are short and plain.
+        assertTrue(files.none { Files.plausible(it.file) })
+        assertTrue(files.all { Files.safeName(it.file?.name).let { n -> n.length <= Files.MAX_NAME && '/' !in n && '\u202E' !in n } })
+        for (list in decoded.mapNotNull { it.list }) {
+            val state = Lists.fold(list, "mallory", decoded.mapNotNull { it.listChange }.mapIndexed { i, c -> ListEdit("e$i", "mallory", c) })
+            assertTrue(state.items.size <= Lists.MAX_ITEMS && state.title.length <= Lists.MAX_TITLE && state.items.all { it.text.length <= Lists.MAX_ITEM + 1 })
+        }
+        val answers = decoded.mapNotNull { it.daily }.map { "mallory" to it }
+        val today = Daily.state("t", "2026-11-15", listOf("ana", "mallory"), answers)
+        assertFalse(today.revealed)
+        assertTrue(today.question.length <= Daily.MAX_QUESTION)
+        var custom = ChatCustom()
+        for (event in decoded.mapNotNull { it.event }) custom = custom.apply(event)
+        assertTrue(custom.countdownTitle.length <= Countdowns.MAX_TITLE)
+        assertTrue(Countdowns.label(custom.countdownTitle, custom.countdownAt) == null || Display.plausibleTime(custom.countdownAt))
+        assertTrue(decoded.filter { it.type == "arrived" }.all { lineOf(it, false, "mallory").length < 80 })
     }
 }

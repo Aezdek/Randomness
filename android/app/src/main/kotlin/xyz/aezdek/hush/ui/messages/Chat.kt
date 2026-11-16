@@ -421,7 +421,10 @@ fun Chat(threadId: String, focus: String? = null) {
                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
                     }
                     fun isEvent(e: Entity?) = e?.payloadAs<MessagePayload>()?.type in xyz.aezdek.hush.client.LINE_TYPES
-                    Bubble(
+                    // A nudge straight after another from the same person: a hundred of them are still one line.
+                    val repeatedNudge = message.payloadAs<MessagePayload>()?.type == MessageType.NUDGE &&
+                        prev?.dto?.authorId == message.dto.authorId && prev.payloadAs<MessagePayload>()?.type == MessageType.NUDGE
+                    if (!repeatedNudge) Bubble(
                         message, index, state, isGroup = thread.isGroup, themeBrush = themeBrush, themeColor = Color(theme.colors[0]), mineText = Color(theme.mineText),
                         firstOfGroup = prev?.dto?.authorId != message.dto.authorId || newDay || gap || isEvent(prev),
                         lastOfGroup = next?.dto?.authorId != message.dto.authorId || isEvent(next),

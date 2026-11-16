@@ -4,7 +4,7 @@ import { CalendarClock, Check, Clock, Download, FileText, ListTodo, MessageCircl
 import { useEffect, useState } from 'react';
 import { cancelScheduled, MAX_LATER_TEXT, scheduledMessages, sendLater, type ScheduledDto } from '../../core/compose';
 import { messageOf } from '../../core/errors';
-import { countdownLabel, dayOf, isDay, MAX_ANSWER, MAX_COUNTDOWN_TITLE, MAX_LIST_ITEM, MAX_LIST_ITEMS, MAX_LIST_TITLE, safeFile, sizeLabel } from '../../core/extras';
+import { countdownLabel, dayOf, isDay, MAX_ANSWER, MAX_COUNTDOWN_TITLE, MAX_LIST_ITEM, MAX_LIST_ITEMS, MAX_LIST_TITLE, riskyFile, safeFile, sizeLabel } from '../../core/extras';
 import { answerDaily, changeList, clearCountdown, daily, listState, saveFile, sendList, setCountdown } from '../../core/more';
 import type { ChatCustom } from '../../core/chat';
 import type { MessagePayload } from '../../core/payloads';
@@ -40,6 +40,7 @@ export function FileCard({ message }: { message: Entity<MessagePayload> }) {
       <span className="file-text">
         <b>{file.name}</b>
         <span className="faint">{busy ? 'Decrypting…' : sizeLabel(file.size)}</span>
+        {riskyFile(file.name) && <span className="file-warn">This kind of file can run. Open it only if you trust who sent it.</span>}
       </span>
       <Download size={18} className="file-get" />
     </button>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyEvent, chatCustom } from './chat';
 import {
   ARRIVED_WITHIN, countdownLabel, dailyState, distance, foldList, isDay, MAX_COUNTDOWN_TITLE, MAX_FILE_BYTES, MAX_FILE_NAME, MAX_LIST_ITEM,
-  MAX_LIST_ITEMS, MAX_LIST_TITLE, placeName, questionFor, QUESTIONS, safeFile, safeFileName, sizeLabel,
+  MAX_LIST_ITEMS, MAX_LIST_TITLE, placeName, questionFor, QUESTIONS, riskyFile, safeFile, safeFileName, sizeLabel,
 } from './extras';
 import { shapeOf } from './shape';
 import { Kind } from './payloads';
@@ -32,6 +32,8 @@ describe('files', () => {
     expect(safeFile(null)).toBeNull();
     expect(sizeLabel(1_572_864)).toBe('1.5 MB');
     expect(sizeLabel(12_800)).toBe('12 KB');
+    expect(riskyFile('game.APK') && riskyFile('page.html') && riskyFile('a.tar.sh')).toBe(true);
+    expect(riskyFile('photo.jpg') || riskyFile('notes') || riskyFile('apk')).toBe(false);
   });
 
   it('drops file, list and daily messages of the wrong shape as they arrive', () => {
