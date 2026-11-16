@@ -24,7 +24,11 @@ with screen sharing from the web app, and go directly between the people in them
 Around that there is search, an activity page, On this day, private accounts with follow requests, blocking, an app
 lock, a way to check that you are really talking to who you think you are, and an admin panel for whoever runs the
 server, with invites as QR codes and alerts on the admin's phone when backups, disk space or updates need a look.
-On Android, Hush can also wear a disguise: see Security.
+
+Chats also carry files of any kind (up to 250 MB), shared lists everyone can tick off, a question of the day whose
+answers show once everyone has answered, a countdown to a date, nudges, and messages written now to arrive later. On
+Android there is a home screen widget with the newest photo someone sent you, and Hush can wear a disguise: see
+Security.
 
 ## Run your own
 

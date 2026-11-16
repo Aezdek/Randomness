@@ -16,5 +16,6 @@ object Wipe {
         runCatching { context.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
         runCatching { Graph.notifier.cancelAll() }
         Graph.prefs.forgetPrivate()
+        runCatching { xyz.aezdek.hush.widget.PhotoWidget.refresh(context) }
     }
 }

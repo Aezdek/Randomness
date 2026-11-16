@@ -112,6 +112,7 @@ class ConnectionService : Service() {
             .collect { (index, state) ->
                 // A notification that can't be made is skipped; the ones after it still come.
                 runCatching { notifyAbout(index, state) }.onFailure { android.util.Log.w("Hush", "Notification failed", it) }
+                xyz.aezdek.hush.widget.PhotoWidget.refresh(this@ConnectionService)
             }
     }
 

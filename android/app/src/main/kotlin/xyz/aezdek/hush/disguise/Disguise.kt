@@ -184,6 +184,8 @@ object Disguise {
         Graph.prefs.setDisguiseLook(to.id)
         // Whatever Hush already showed in the notification shade said Hush; the connection's own is redone below.
         runCatching { Graph.notifier.cancelAll() }
+        // The photo widget, if there is one, goes blank.
+        xyz.aezdek.hush.widget.PhotoWidget.refresh(activity)
         refreshService(activity)
         showIcon(activity, to)
         activity.finishAndRemoveTask()
@@ -195,6 +197,7 @@ object Disguise {
         Graph.prefs.setDisguiseLook(Look.HUSH.id)
         showIcon(context, Look.HUSH)
         refreshService(context)
+        xyz.aezdek.hush.widget.PhotoWidget.refresh(context)
     }
 
     // ----------------------------------------------------------------------------------------------- notifications

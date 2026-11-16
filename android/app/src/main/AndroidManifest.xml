@@ -186,6 +186,19 @@
             </intent-filter>
         </service>
 
+        <!-- The home screen widget with the newest photo someone sent (blank while Hush is disguised). -->
+        <receiver
+            android:name=".widget.PhotoWidget"
+            android:exported="true"
+            android:label="Latest photo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_photo" />
+        </receiver>
+
         <receiver
             android:name=".calls.CallActionReceiver"
             android:exported="false" />
