@@ -77,6 +77,7 @@ export interface CallSummary { callId: string; video: boolean; durationMs: numbe
 export const MessageType = {
   TEXT: 'text', MEDIA: 'media', VOICE: 'voice', SHARE: 'share', STORY_REPLY: 'story_reply', STORY_REACTION: 'story_reaction',
   CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply', POLL: 'poll', PLAN: 'plan', LOCATION: 'location',
+  FILE: 'file', NUDGE: 'nudge', LIST: 'list', LIST_CHANGE: 'list_change', DAILY: 'daily', ARRIVED: 'arrived',
 } as const;
 
 export interface MessagePayload {
@@ -94,7 +95,21 @@ export interface MessagePayload {
   plan?: Plan | null;
   /** For LOCATION: where the sender is, kept up to date by editing this one message until it expires. */
   location?: LiveLocation | null;
+  /** For FILE: any file, sent as it is (encrypted like a photo, never opened by the app). */
+  file?: SharedFile | null;
+  /** For LIST: a list the whole chat keeps; changes are LIST_CHANGE replies to it. */
+  list?: SharedList | null;
+  /** For LIST_CHANGE: one change to the list in replyTo. */
+  listChange?: ListChange | null;
+  /** For DAILY: an answer to the day's question. */
+  daily?: DailyAnswer | null;
 }
+
+/** See the same types in Payloads.kt. */
+export interface SharedFile { name: string; blobId: string; key: string; size: number; mime?: string }
+export interface SharedList { title: string; items?: string[] }
+export interface ListChange { add?: string | null; done?: string | null; undone?: string | null; remove?: string | null }
+export interface DailyAnswer { day: string; question: string; answer: string }
 
 export interface Poll { question: string; options: string[] }
 
@@ -113,6 +128,9 @@ export interface ChatEvent {
   disappearAfter?: number | null;
   /** Someone's phone saw a screenshot of this chat while it was protected (see ChatEvent in Payloads.kt). */
   screenshot?: boolean | null;
+  /** A date the chat counts down to or up from, shown at the top; a blank title takes it away. */
+  countdownTitle?: string | null;
+  countdownAt?: number | null;
 }
 
 const DAY = 24 * 60 * 60 * 1000;

@@ -23,7 +23,7 @@ describe('event lines from a modified app say what the chat does, not what was s
 
 describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
   it('has the defaults without events', () => {
-    expect(chatCustom([message('ana', { type: MessageType.TEXT, text: 'hi' })])).toEqual({ theme: 'default', nicknames: {}, quickReaction: '❤️', pinned: [], disappearAfter: 0 });
+    expect(chatCustom([message('ana', { type: MessageType.TEXT, text: 'hi' })])).toEqual({ theme: 'default', nicknames: {}, quickReaction: '❤️', pinned: [], disappearAfter: 0, countdownTitle: '', countdownAt: 0 });
   });
 
   it('lets later events win, each changing only its own setting', () => {
@@ -36,7 +36,7 @@ describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
       event('bo', { theme: 'love' }),
       event('ana', { pin: text.dto.id }),
     ]);
-    expect(c).toEqual({ theme: 'love', nicknames: { ana: 'Captain' }, quickReaction: '🔥', pinned: [text.dto.id], disappearAfter: 0 });
+    expect(c).toEqual({ theme: 'love', nicknames: { ana: 'Captain' }, quickReaction: '🔥', pinned: [text.dto.id], disappearAfter: 0, countdownTitle: '', countdownAt: 0 });
     // A row of emoji from a modified app becomes its first one; a family emoji stays whole.
     expect(chatCustom([event('bo', { quickReaction: '🔥'.repeat(500) })]).quickReaction).toBe('🔥');
     expect(chatCustom([event('bo', { quickReaction: '👩‍👩‍👧‍👦👩‍👩‍👧‍👦' })]).quickReaction).toBe('👩‍👩‍👧‍👦');
@@ -53,13 +53,13 @@ describe('chatCustom (mirrors ChatCustomTest.kt)', () => {
       event('bo', { unpin: text.dto.id }),
       event('bo', { theme: 'from-a-newer-app' }),
     ]);
-    expect(c).toEqual({ theme: 'default', nicknames: {}, quickReaction: '❤️', pinned: [], disappearAfter: 0 });
+    expect(c).toEqual({ theme: 'default', nicknames: {}, quickReaction: '❤️', pinned: [], disappearAfter: 0, countdownTitle: '', countdownAt: 0 });
   });
 
   it('keeps the disappearing-messages timer to the choices on offer', () => {
     const day = 24 * 60 * 60 * 1000;
     expect(chatCustom([event('ana', { disappearAfter: 7 * day })]).disappearAfter).toBe(7 * day);
-    expect(chatCustom([event('ana', { disappearAfter: 7 * day }), event('bo', { disappearAfter: 0 })]).disappearAfter).toBe(0);
+    expect(chatCustom([event('ana', { disappearAfter: 7 * day }), event('bo', { disappearAfter: 0, countdownTitle: '', countdownAt: 0 })]).disappearAfter).toBe(0);
     expect(chatCustom([event('ana', { disappearAfter: 123 })]).disappearAfter).toBe(0);
     expect(eventText({ disappearAfter: day }, 'ana', 'ana', {}, () => 'Ana')).toBe('You turned on disappearing messages. New messages disappear after 24 hours.');
   });

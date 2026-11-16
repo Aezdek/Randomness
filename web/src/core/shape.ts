@@ -71,7 +71,10 @@ const sticker = obj(
   { scale: num, rotation: num, text: str, userId: str, options: list(str), correct: num, emoji: str, endsAt: num, url: str, color: str },
 );
 
-const chatEvent = obj({}, { theme: str, nicknameFor: str, nickname: str, quickReaction: str, pin: str, unpin: str, disappearAfter: num, screenshot: bool });
+const chatEvent = obj({}, {
+  theme: str, nicknameFor: str, nickname: str, quickReaction: str, pin: str, unpin: str, disappearAfter: num, screenshot: bool,
+  countdownTitle: str, countdownAt: num,
+});
 
 const SHAPES: Record<string, Check> = {
   [Kind.PROFILE]: obj({}, { displayName: str, bio: str, link: str, pronouns: str, avatar: media, pinned: list(str) }),
@@ -106,6 +109,10 @@ const SHAPES: Record<string, Check> = {
     poll: obj({ question: str, options: list(str) }),
     plan: obj({ title: str, at: num }, { place: str }),
     location: obj({ lat: num, lng: num, until: num, updatedAt: num }, { accuracy: num }),
+    file: obj({ name: str, blobId, key: str, size: num }, { mime: str }),
+    list: obj({ title: str }, { items: list(str) }),
+    listChange: obj({}, { add: str, done: str, undone: str, remove: str }),
+    daily: obj({ day: str, question: str, answer: str }),
   }),
   [Kind.REACTION]: obj({ emoji: str }),
   [Kind.LIVE]: obj({ startedAt: num }, { title: str, callId: str }),

@@ -15,6 +15,9 @@ data class ChatCustom(
     val pinned: List<String> = emptyList(),
     /** Disappearing messages: how long new messages last, in milliseconds; 0 if they stay. */
     val disappearAfter: Long = 0,
+    /** A date the chat counts down to or up from; no title means none. */
+    val countdownTitle: String = "",
+    val countdownAt: Long = 0,
 ) {
     fun apply(event: ChatEvent): ChatCustom {
         var next = this
@@ -28,6 +31,11 @@ data class ChatCustom(
         event.pin?.let { id -> next = next.copy(pinned = next.pinned.filter { it != id } + id) }
         event.unpin?.let { id -> next = next.copy(pinned = next.pinned - id) }
         event.disappearAfter?.let { after -> next = next.copy(disappearAfter = after.takeIf { it in Disappearing.CHOICES } ?: 0) }
+        event.countdownTitle?.let { raw ->
+            val title = Countdowns.title(raw)
+            val at = event.countdownAt ?: 0
+            next = if (title.isEmpty() || !Display.plausibleTime(at)) next.copy(countdownTitle = "", countdownAt = 0) else next.copy(countdownTitle = title, countdownAt = at)
+        }
         return next
     }
 

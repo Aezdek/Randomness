@@ -24,6 +24,9 @@ import { Guard } from '../../ui/Guard';
 import { displayText, foldText, heartOf, MAX_MEDIA, previewText, safePoll, safeText, shownDuration } from '../../core/safe';
 import { AlbumGallery } from './Album';
 import { ExtrasSheet, LocationCard, LocationSheet, PlanCard, PlanSheet, type ChatExtra } from './Circle';
+import { CountdownBar, CountdownSheet, DailyCard, DailySheet, FileCard, ListCard, ListSheet } from './More';
+import { placeName, safeFileName } from '../../core/extras';
+import { sendFile, sendNudge } from '../../core/more';
 import { isAlbum, sendPlan } from '../../core/circle';
 
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
@@ -289,6 +292,7 @@ function Bubble({
   const big = p.type === MessageType.HEART || (p.type === MessageType.TEXT && (p.text ?? '').length <= 32 && /^\p{Extended_Pictographic}{1,3}$/u.test(p.text ?? ''));
   const story = p.storyId ? (entities[p.storyId] as Entity<StoryPayload> | undefined) : undefined;
   const threadId = message.dto.threadId ?? null;
+  const thread = useApp((s) => (threadId ? s.threads[threadId] : undefined));
   const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, index, users));
   const pinned = custom.pinned.includes(message.dto.id);
   const forwardable =
@@ -327,11 +331,17 @@ function Bubble({
     content = <PlanCard message={message} />;
   } else if (p.type === MessageType.LOCATION && p.location) {
     content = <LocationCard message={message} mine={mine} />;
+  } else if (p.type === MessageType.FILE) {
+    content = <FileCard message={message} />;
+  } else if (p.type === MessageType.LIST) {
+    content = <ListCard message={message} />;
+  } else if (p.type === MessageType.DAILY && thread) {
+    content = <DailyCard message={message} thread={thread} />;
   } else {
     content = big ? <span className="big-emoji">{p.type === MessageType.HEART ? heartOf(p.text, DEFAULT_REACTION) : p.text}</span> : <LongText text={displayText(p.text)} />;
   }
 
-  const plainBubble = big || p.type === MessageType.SHARE || p.type === MessageType.POLL || p.type === MessageType.PLAN || p.type === MessageType.LOCATION || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
+  const plainBubble = big || ([MessageType.SHARE, MessageType.POLL, MessageType.PLAN, MessageType.LOCATION, MessageType.FILE, MessageType.LIST, MessageType.DAILY] as string[]).includes(p.type) || (p.type === MessageType.MEDIA && !(once && !mine && !opened));
   return (
     <div className={`msg ${mine ? 'mine' : 'theirs'}`} id={`msg-${message.dto.id}`}>
       {!mine && <span className="msg-avatar">{showAvatar && <Avatar userId={message.dto.authorId} size={28} />}</span>}
@@ -614,6 +624,7 @@ export function Chat() {
   const [gallery, setGallery] = useState<boolean | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
+  const anyFile = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const lastTyping = useRef(0);
@@ -789,6 +800,12 @@ export function Chat() {
     );
   };
 
+  const attachFile = (f: File) => {
+    dispatch({ id: crypto.randomUUID(), label: safeFileName(f.name), preview: null, phase: 'sending', progress: 0 }, async (progress) => {
+      await sendFile(threadId, f, (p) => progress('sending', p));
+    });
+  };
+
   const voice = (blob: Blob, ms: number) => {
     setRecording(false);
     dispatch({ id: crypto.randomUUID(), label: 'Voice message', preview: null, phase: 'converting', progress: 0 }, async (progress) => {
@@ -814,7 +831,7 @@ export function Chat() {
   const nameOf = (id: string) => nameIn(threadId, id, index, users);
 
   // Seen receipts: under my newest message, who has read up to it.
-  const lastMine = [...messages].reverse().find((m) => m.dto.authorId === me.id && (m.payload as MessagePayload).type !== MessageType.SYSTEM);
+  const lastMine = [...messages].reverse().find((m) => m.dto.authorId === me.id && !LINES.includes((m.payload as MessagePayload).type));
   const seenBy = lastMine ? thread.members.filter((m) => m.userId !== me.id && m.lastReadAt >= lastMine.dto.receivedAt).map((m) => m.userId) : [];
 
   return (
@@ -877,6 +894,7 @@ export function Chat() {
           </button>
         </header>
 
+        <CountdownBar custom={custom} />
         {pinnedMessage && (
           <button className="pinned-bar" onClick={() => jump(pinnedMessage.dto.id)}>
             <Pin size={15} />
@@ -915,7 +933,7 @@ export function Chat() {
             const newDay = !prev || new Date(prev.dto.receivedAt).toDateString() !== new Date(m.dto.receivedAt).toDateString();
             const gap = prev && m.dto.receivedAt - prev.dto.receivedAt > 30 * 60_000;
             const payload = m.payload as MessagePayload;
-            const isEvent = (x: Entity | undefined) => (x?.payload as MessagePayload | undefined)?.type === MessageType.SYSTEM;
+            const isEvent = (x: Entity | undefined) => LINES.includes((x?.payload as MessagePayload | undefined)?.type ?? '');
             const showAvatar = !nextMsg || nextMsg.dto.authorId !== m.dto.authorId || isEvent(nextMsg);
             const showName = thread.isGroup && (!prev || prev.dto.authorId !== m.dto.authorId || isEvent(prev) || newDay || !!gap);
             return (
@@ -923,6 +941,8 @@ export function Chat() {
                 {(newDay || gap) && <div className="day">{chatStamp(m.dto.receivedAt)}</div>}
                 {payload.type === MessageType.SYSTEM ? (
                   payload.event && <div className="chat-event" id={`msg-${m.dto.id}`}>{eventText(payload.event, m.dto.authorId, me.id, users, nameOf)}</div>
+                ) : payload.type === MessageType.LIST_CHANGE ? null : payload.type === MessageType.NUDGE || payload.type === MessageType.ARRIVED ? (
+                  <div className="chat-event" id={`msg-${m.dto.id}`}>{lineOf(payload, m.dto.authorId === me.id, nameOf(m.dto.authorId))}</div>
                 ) : (
                   <Guard key={m.dto.id} fallback={<div className="chat-event">A message that couldn’t be shown</div>}>
                   <Bubble
@@ -1109,17 +1129,49 @@ export function Chat() {
                 </>
               )}
               <input ref={file} type="file" accept="image/*,video/*,.heic,.heif" multiple hidden onChange={(e) => e.target.files && attach(e.target.files)} />
+              <input
+                ref={anyFile}
+                type="file"
+                hidden
+                aria-label="Send a file"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) attachFile(f);
+                }}
+              />
             </form>
           )}
         </div>
       </section>
       <PollSheet open={polling} onClose={() => setPolling(false)} onSend={(poll) => void send({ type: MessageType.POLL, text: poll.question, poll }, { audience: Audience.THREAD })} />
-      <ExtrasSheet open={extras} onClose={() => setExtras(false)} group={thread.isGroup} onPick={(what) => (what === 'poll' ? setPolling(true) : setExtra(what))} />
+      <ExtrasSheet
+        open={extras}
+        onClose={() => setExtras(false)}
+        group={thread.isGroup}
+        onPick={(what) => {
+          if (what === 'poll') setPolling(true);
+          else if (what === 'file') anyFile.current?.click();
+          else if (what === 'nudge') void sendNudge(threadId).catch((e) => toast(messageOf(e), 'error'));
+          else setExtra(what);
+        }}
+      />
+      <ListSheet open={extra === 'list'} onClose={() => setExtra(null)} threadId={threadId} />
+      <DailySheet open={extra === 'daily'} onClose={() => setExtra(null)} thread={thread} />
+      <CountdownSheet open={extra === 'countdown'} onClose={() => setExtra(null)} threadId={threadId} custom={custom} />
       <PlanSheet open={extra === 'plan'} onClose={() => setExtra(null)} onSend={(plan) => void sendPlan(threadId, plan).catch((e) => toast(messageOf(e), 'error'))} />
       <LocationSheet open={extra === 'location'} onClose={() => setExtra(null)} threadId={threadId} />
       {info && <ThreadInfo thread={thread} onClose={() => setInfo(false)} vanish={vanish} setVanish={setVanish} onJump={jump} />}
     </div>
   );
+}
+
+/** Messages drawn as a line in the middle of the chat (or, for list changes, not at all) rather than as a bubble. */
+const LINES: string[] = [MessageType.SYSTEM, MessageType.NUDGE, MessageType.ARRIVED, MessageType.LIST_CHANGE];
+
+function lineOf(payload: MessagePayload, mine: boolean, name: string): string {
+  if (payload.type === MessageType.ARRIVED) return `${mine ? 'You' : name} arrived at ${placeName(payload.text)}`;
+  return mine ? 'You sent a nudge 👋' : `${name} nudged you 👋`;
 }
 
 function activeLabel(at: number) {

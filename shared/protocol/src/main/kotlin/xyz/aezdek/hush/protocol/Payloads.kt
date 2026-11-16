@@ -196,7 +196,34 @@ data class MessagePayload(
     val plan: Plan? = null,
     /** For [MessageType.LOCATION]: where the sender is, kept up to date by editing this one message until it expires. */
     val location: LiveLocation? = null,
+    /** For [MessageType.FILE]: any file, sent as it is (encrypted like a photo, never opened by the app). */
+    val file: SharedFile? = null,
+    /** For [MessageType.LIST]: a list the whole chat keeps. Changes are [MessageType.LIST_CHANGE] replies to it. */
+    val list: SharedList? = null,
+    /** For [MessageType.LIST_CHANGE]: one change to the list in [replyTo]. */
+    val listChange: ListChange? = null,
+    /** For [MessageType.DAILY]: an answer to the day's question. */
+    val daily: DailyAnswer? = null,
 )
+
+/** A file sent in a chat. [name] is whatever the sender's device called it: apps clean it before showing or saving it. */
+@Serializable
+data class SharedFile(val name: String, val blobId: String, val key: String, val size: Long, val mime: String = "application/octet-stream")
+
+/** A list a chat keeps together (groceries, films to watch). The first items come with it; the rest are changes. */
+@Serializable
+data class SharedList(val title: String, val items: List<String> = emptyList())
+
+/**
+ * One change to a [SharedList], by anyone in the chat: a new item, or an item ticked, unticked or taken off. Items are
+ * named by id: the first ones by their place ("0", "1", …), added ones by the id of the message that added them.
+ */
+@Serializable
+data class ListChange(val add: String? = null, val done: String? = null, val undone: String? = null, val remove: String? = null)
+
+/** An answer to the question of [day] ("2026-11-15"). Apps keep answers out of sight until everyone has answered. */
+@Serializable
+data class DailyAnswer(val day: String, val question: String, val answer: String)
 
 /** A plan in a chat: "Dinner, Saturday 19:30, at Leo's". Everyone in the chat sees who is coming. */
 @Serializable
@@ -256,6 +283,12 @@ data class ChatEvent(
      * view-once photo). Android blocks screenshots there; this tells the chat when one got through anyway.
      */
     val screenshot: Boolean? = null,
+    /**
+     * A date the chat counts down to, or up from ("Trip", "Together since"), shown at the top of the chat. A blank
+     * [countdownTitle] takes it away.
+     */
+    val countdownTitle: String? = null,
+    val countdownAt: Long? = null,
 )
 
 /** How long messages last in a chat with disappearing messages on (see [ChatEvent.disappearAfter]). */
@@ -287,6 +320,14 @@ object MessageType {
     const val POLL = "poll"
     const val PLAN = "plan"
     const val LOCATION = "location"
+    const val FILE = "file"
+    /** "Thinking of you": no words, the other phone just buzzes. */
+    const val NUDGE = "nudge"
+    const val LIST = "list"
+    const val LIST_CHANGE = "list_change"
+    const val DAILY = "daily"
+    /** Sent by itself when someone sharing their location gets to a place they chose ([MessagePayload.text] names it). */
+    const val ARRIVED = "arrived"
 }
 
 @Serializable

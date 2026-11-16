@@ -290,7 +290,7 @@ export async function prepare(file: File | Blob, kind: MediaKind, onProgress?: (
 }
 
 /** Encrypts (AezCrypt) while uploading in resumable pieces; memory stays bounded however large the file is. */
-async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => void): Promise<{ blobId: string; key: Uint8Array }> {
+export async function uploadEncrypted(blob: Blob, onProgress?: (fraction: number) => void): Promise<{ blobId: string; key: Uint8Array }> {
   const key = newFileKey();
   const header = newHeader(blob.size);
   const total = cipherLength(blob.size);
@@ -390,6 +390,12 @@ export function mediaUrl(ref: MediaRef): Promise<string> {
     urls.delete(evict);
   }
   return promise;
+}
+
+/** A file's decrypted bytes, as plain data: never given a type a browser would open as a page. */
+export async function downloadBytes(blobId: string, key: string): Promise<Blob> {
+  if (!isBlobId(blobId)) throw new Error('That file can’t be opened');
+  return new Blob([decryptMedia(await fetchBlob(blobId), unb64(key)) as BlobPart], { type: 'application/octet-stream' });
 }
 
 /** Drops the decrypted copies of these files: blob URLs in this page, and the service worker's keys for streaming. */

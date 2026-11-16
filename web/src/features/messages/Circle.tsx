@@ -1,6 +1,6 @@
 // Plans and live location inside a chat: the cards in the conversation, the sheets that make them, and the sharer that
 // keeps your own live location up to date while this tab is open.
-import { CalendarDays, Check, HelpCircle, ListChecks, MapPin, Navigation, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, Check, Hand, HelpCircle, ListChecks, ListTodo, MapPin, MessageCircleQuestion, Navigation, Paperclip, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   answerPlan,
@@ -13,6 +13,8 @@ import {
   stopLocation,
 } from '../../core/circle';
 import { messageOf } from '../../core/errors';
+import { ARRIVED_WITHIN } from '../../core/extras';
+import { arrivalWatches, dropArrival, removePlace, savedPlaces, savePlace, sendArrived, watchArrival } from '../../core/more';
 import { PlanAnswer, type MessagePayload, type Plan } from '../../core/payloads';
 import { buildIndex, nameIn, useIndex } from '../../core/selectors';
 import { safeLocation, safePlan } from '../../core/safe';
@@ -199,11 +201,27 @@ const DURATION_LABELS = ['15 minutes', '1 hour', '8 hours'];
 export function LocationSheet({ open, onClose, threadId }: { open: boolean; onClose: () => void; threadId: string }) {
   const [choice, setChoice] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [places, setPlaces] = useState(savedPlaces);
+  const [arriveAt, setArriveAt] = useState<string | null>(null);
+  const [newPlace, setNewPlace] = useState('');
+  const saveHere = async () => {
+    try {
+      const pos = await currentPosition();
+      savePlace({ name: newPlace, lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setPlaces(savedPlaces());
+      setNewPlace('');
+    } catch (e) {
+      fail(e);
+    }
+  };
   const share = async () => {
     setBusy(true);
     try {
       const pos = await currentPosition();
       await shareLocation(threadId, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? null, LOCATION_CHOICES[choice]);
+      const place = places.find((p) => p.name === arriveAt);
+      if (place) watchArrival({ threadId, until: Date.now() + LOCATION_CHOICES[choice], place });
+      else dropArrival(threadId);
       onClose();
     } catch (e) {
       fail(e);
@@ -221,6 +239,33 @@ export function LocationSheet({ open, onClose, threadId }: { open: boolean; onCl
               {label}
             </button>
           ))}
+        </div>
+        <div className="arrive">
+          <span className="faint small">Say when I arrive at</span>
+          <div className="duration-choices" role="radiogroup" aria-label="Say when I arrive at">
+            <button role="radio" aria-checked={arriveAt === null} className={`duration-choice ${arriveAt === null ? 'on' : ''}`} onClick={() => setArriveAt(null)}>
+              Nowhere
+            </button>
+            {places.map((p) => (
+              <button
+                key={p.name}
+                role="radio"
+                aria-checked={arriveAt === p.name}
+                className={`duration-choice ${arriveAt === p.name ? 'on' : ''}`}
+                onClick={() => setArriveAt(p.name)}
+                onContextMenu={(e) => (e.preventDefault(), removePlace(p.name), setPlaces(savedPlaces()), setArriveAt(null))}
+                title="Right-click to forget this place"
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+          <form className="list-add" onSubmit={(e) => (e.preventDefault(), void saveHere())}>
+            <input className="input" placeholder="Save where I am now as… (Home)" value={newPlace} maxLength={40} onChange={(e) => setNewPlace(e.target.value)} aria-label="Name for this place" />
+            <button className="btn btn-secondary btn-sm" disabled={!newPlace.trim()}>
+              Save
+            </button>
+          </form>
         </div>
         <button className="btn btn-primary btn-block" disabled={busy} onClick={() => void share()}>
           <Navigation size={16} /> {busy ? 'Finding you…' : 'Share'}
@@ -252,6 +297,12 @@ export function LocationSharer() {
     const watch = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        // "Say when I arrive": the chat is told once, the first time this device is within reach of the place.
+        for (const watch of arrivalWatches()) {
+          if (distance(lat, lng, watch.place.lat, watch.place.lng) > ARRIVED_WITHIN) continue;
+          dropArrival(watch.threadId);
+          void sendArrived(watch.threadId, watch.place.name).catch(() => undefined);
+        }
         const prev = last.current;
         const moved = prev ? distance(prev.lat, prev.lng, lat, lng) : Infinity;
         if (prev && Date.now() - prev.at < 20_000 && moved < 25) return;
@@ -287,13 +338,18 @@ function distance(lat1: number, lng1: number, lat2: number, lng2: number) {
 
 // -------------------------------------------------------------------------------------------------------- the menu
 
-export type ChatExtra = 'plan' | 'location' | 'poll';
+export type ChatExtra = 'plan' | 'location' | 'poll' | 'file' | 'list' | 'daily' | 'countdown' | 'nudge';
 
 /** The composer's "+": plans, live location and (in groups) polls. */
 export function ExtrasSheet({ open, onClose, onPick, group }: { open: boolean; onClose: () => void; onPick: (what: ChatExtra) => void; group: boolean }) {
   const items: { id: ChatExtra; label: string; sub: string; icon: typeof MapPin }[] = [
+    { id: 'file', label: 'File', sub: 'Any file, up to 250 MB, sent as it is', icon: Paperclip },
     { id: 'plan', label: 'Plan', sub: 'A time and place, and who’s going', icon: CalendarDays },
     { id: 'location', label: 'Live location', sub: 'Where you are, for a set time', icon: Navigation },
+    { id: 'list', label: 'Shared list', sub: 'Everyone adds items and ticks them off', icon: ListTodo },
+    { id: 'daily', label: 'Question of the day', sub: 'Answers show once everyone has answered', icon: MessageCircleQuestion },
+    { id: 'countdown', label: 'Countdown', sub: 'Days to a date, at the top of the chat', icon: CalendarClock },
+    { id: 'nudge', label: 'Nudge', sub: 'No words: their phone just buzzes', icon: Hand },
     ...(group ? [{ id: 'poll' as const, label: 'Create poll', sub: 'Let everyone vote', icon: ListChecks }] : []),
   ];
   return (

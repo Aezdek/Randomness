@@ -46,6 +46,18 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
       return `${mine ? 'You made a plan' : 'Plan'}: ${payload.plan?.title ?? ''}`;
     case MessageType.LOCATION:
       return mine ? 'You’re sharing your live location' : 'Shared their live location';
+    case MessageType.FILE:
+      return mine ? 'You sent a file' : 'Sent a file';
+    case MessageType.NUDGE:
+      return mine ? 'You sent a nudge' : 'Nudged you 👋';
+    case MessageType.LIST:
+      return `${mine ? 'You made a list' : 'List'}: ${payload.text ?? ''}`;
+    case MessageType.LIST_CHANGE:
+      return mine ? 'You changed a list' : 'Changed a list';
+    case MessageType.DAILY:
+      return mine ? 'You answered the question of the day' : 'Answered the question of the day';
+    case MessageType.ARRIVED:
+      return `${mine ? 'You arrived' : 'Arrived'} at ${payload.text || 'their destination'}`;
     default:
       return payload.text ?? '';
   }

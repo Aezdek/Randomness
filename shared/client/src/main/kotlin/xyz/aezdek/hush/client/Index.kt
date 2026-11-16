@@ -88,6 +88,9 @@ class Index(
                 "$who turned on disappearing messages. New messages disappear after ${xyz.aezdek.hush.protocol.Disappearing.label(event.disappearAfter!!)}."
             event.disappearAfter != null -> "$who turned off disappearing messages"
             event.screenshot == true -> "$who took a screenshot"
+            event.countdownTitle != null -> Countdowns.title(event.countdownTitle).let { title ->
+                if (title.isEmpty() || !Display.plausibleTime(event.countdownAt ?: 0)) "$who removed the countdown" else "$who set a countdown: $title"
+            }
             else -> "$who changed the chat"
         }
     }

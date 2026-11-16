@@ -1,4 +1,5 @@
 import { DISAPPEARING, disappearingLabel, MessageType, type ChatEvent, type MessagePayload } from './payloads';
+import { countdownTitle, plausibleTime } from './extras';
 import { firstGrapheme } from './safe';
 import type { Entity } from './store';
 import type { UserDto } from './types';
@@ -15,6 +16,9 @@ export interface ChatCustom {
   pinned: string[];
   /** Disappearing messages: how long new messages last, in milliseconds; 0 if they stay. */
   disappearAfter: number;
+  /** A date the chat counts down to or up from; no title means none. */
+  countdownTitle: string;
+  countdownAt: number;
 }
 
 export const DEFAULT_REACTION = '❤️';
@@ -359,7 +363,7 @@ export function themeStyle(t: ChatTheme): Record<string, string> {
   return vars;
 }
 
-const EMPTY: ChatCustom = { theme: 'default', nicknames: {}, quickReaction: DEFAULT_REACTION, pinned: [], disappearAfter: 0 };
+const EMPTY: ChatCustom = { theme: 'default', nicknames: {}, quickReaction: DEFAULT_REACTION, pinned: [], disappearAfter: 0, countdownTitle: '', countdownAt: 0 };
 
 export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
   let next = c;
@@ -377,6 +381,11 @@ export function applyEvent(c: ChatCustom, e: ChatEvent): ChatCustom {
   if (e.unpin != null) next = { ...next, pinned: next.pinned.filter((id) => id !== e.unpin) };
   if (e.disappearAfter != null) {
     next = { ...next, disappearAfter: (DISAPPEARING as readonly number[]).includes(e.disappearAfter) ? e.disappearAfter : 0 };
+  }
+  if (e.countdownTitle != null) {
+    const title = countdownTitle(e.countdownTitle);
+    const at = e.countdownAt ?? 0;
+    next = title && plausibleTime(at) ? { ...next, countdownTitle: title, countdownAt: at } : { ...next, countdownTitle: '', countdownAt: 0 };
   }
   return next;
 }
@@ -427,5 +436,9 @@ export function eventText(e: ChatEvent, authorId: string, me: string, users: Rec
       : `${who} turned off disappearing messages`;
   }
   if (e.screenshot) return `${who} took a screenshot`;
+  if (e.countdownTitle != null) {
+    const title = countdownTitle(e.countdownTitle);
+    return title && plausibleTime(e.countdownAt ?? 0) ? `${who} set a countdown: ${title}` : `${who} removed the countdown`;
+  }
   return `${who} changed the chat`;
 }
