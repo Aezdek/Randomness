@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../core/api';
+import { cachedGet, peekCache } from '../../core/cache';
 import { removeFollower } from '../../core/compose';
 import { displayName, useIndex } from '../../core/selectors';
 import { useApp } from '../../core/store';
@@ -12,14 +12,25 @@ import { Sheet } from '../../ui/Sheet';
 import { FollowButton } from './FollowButton';
 
 export function FollowList({ userId, kind, onClose }: { userId: string; kind: 'followers' | 'following'; onClose: () => void }) {
-  const [ids, setIds] = useState<string[] | null>(null);
+  const path = `/users/${userId}/${kind}`;
+  const [ids, setIds] = useState<string[] | null>(() => peekCache<IdList>(path)?.ids ?? null);
   const [query, setQuery] = useState('');
   const users = useApp((s) => s.users);
   const me = useApp((s) => s.me!);
   const index = useIndex();
+  const relation = useFollowRelation(userId);
+  const seen = useRef(relation);
   useEffect(() => {
-    void api.get<IdList>(`/users/${userId}/${kind}`).then((r) => setIds(r.ids));
-  }, [userId, kind, users]);
+    const changed = seen.current !== relation;
+    seen.current = relation;
+    let alive = true;
+    cachedGet<IdList>(path, changed)
+      .then((r) => alive && setIds(r.ids))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [path, relation]);
   const shown = (ids ?? []).filter((id) => {
     const u = id === me.id ? null : users[id];
     const name = id === me.id ? me.username : u?.username ?? '';
@@ -66,4 +77,23 @@ export function FollowList({ userId, kind, onClose }: { userId: string; kind: 'f
       )}
     </Sheet>
   );
+}
+
+/**
+ * A short summary of what this app knows about [userId]'s follows, which changes when a follow does: our own follows
+ * and followers for our profile, and our relationship to them for anyone else's. Follow lists are asked for again
+ * when it changes, and otherwise come from the cache.
+ */
+export function useFollowRelation(userId: string | undefined): string {
+  return useApp((s) => {
+    if (!userId) return '';
+    if (userId === s.me?.id) {
+      const users = Object.values(s.users);
+      const followers = users.filter((u) => u.followsMe === 'following').map((u) => u.id).sort();
+      const following = users.filter((u) => u.followState === 'following').map((u) => u.id).sort();
+      return `${followers.join(',')}|${following.join(',')}`;
+    }
+    const user = s.users[userId];
+    return user ? `${user.followState}|${user.followsMe}|${user.blockedByMe}|${user.deleted}` : '';
+  });
 }

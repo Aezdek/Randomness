@@ -1,7 +1,7 @@
 import { Bookmark, Clapperboard, Grid3x3, Lock, MoreHorizontal, Settings as SettingsIcon, ShieldCheck, ShieldAlert, SquareUser } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../../core/api';
+import { cachedGet, peekCache } from '../../core/cache';
 import { block, openDirect, removeFollower, unblock } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { Kind, type PostPayload, type ProfilePayload } from '../../core/payloads';
@@ -15,25 +15,36 @@ import { Confirm, Sheet } from '../../ui/Sheet';
 import { useRing } from '../stories/ring';
 import { EditProfile } from './EditProfile';
 import { FollowButton } from './FollowButton';
-import { FollowList } from './FollowList';
+import { FollowList, useFollowRelation } from './FollowList';
 import { Highlights } from './Highlights';
 import { PostGrid } from './PostGrid';
 
 type Tab = 'posts' | 'reels' | 'tagged' | 'saved';
 
+function countsOf(userId: string | undefined) {
+  const a = userId ? peekCache<IdList>(`/users/${userId}/followers`) : undefined;
+  const b = userId ? peekCache<IdList>(`/users/${userId}/following`) : undefined;
+  return a && b ? { followers: a.ids.length, following: b.ids.length } : null;
+}
+
 function useCounts(userId: string | undefined, visible: boolean) {
-  const [counts, setCounts] = useState<{ followers: number; following: number } | null>(null);
-  const users = useApp((s) => s.users);
+  const relation = useFollowRelation(userId);
+  // What we already know shows at once; the server is asked only when that is old or the follows changed.
+  const [counts, setCounts] = useState(() => countsOf(userId));
+  const seen = useRef(relation);
   useEffect(() => {
     if (!userId || !visible) return;
+    setCounts(countsOf(userId));
+    const changed = seen.current !== relation;
+    seen.current = relation;
     let alive = true;
-    Promise.all([api.get<IdList>(`/users/${userId}/followers`), api.get<IdList>(`/users/${userId}/following`)])
+    Promise.all([cachedGet<IdList>(`/users/${userId}/followers`, changed), cachedGet<IdList>(`/users/${userId}/following`, changed)])
       .then(([a, b]) => alive && setCounts({ followers: a.ids.length, following: b.ids.length }))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [userId, visible, users]);
+  }, [userId, visible, relation]);
   return counts;
 }
 
@@ -50,6 +61,8 @@ export function Profile() {
   const keyChanged = useApp((s) => (userId ? !!s.pins[userId]?.changedFrom : false));
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>((tabParam as Tab) || 'posts');
+  // The address can change the tab without the profile being rebuilt (back, or a link to /u/me/saved).
+  useEffect(() => setTab((tabParam as Tab) || 'posts'), [tabParam]);
   const [editing, setEditing] = useState(false);
   const [list, setList] = useState<'followers' | 'following' | null>(null);
   const [menu, setMenu] = useState(false);

@@ -18,6 +18,7 @@ import xyz.aezdek.hush.crypto.KdfParams
 import xyz.aezdek.hush.crypto.ObjectCrypto
 import xyz.aezdek.hush.crypto.PasswordKeys
 import xyz.aezdek.hush.crypto.SignalCrypto
+import xyz.aezdek.hush.protocol.IdList
 import xyz.aezdek.hush.protocol.AuthResponse
 import xyz.aezdek.hush.protocol.CallSignal
 import xyz.aezdek.hush.protocol.ChangePasswordRequest
@@ -53,6 +54,8 @@ class AezClient(
     val engine = SyncEngine(api, state, scope)
     val realtime = Realtime(api, state, scope)
     val media = MediaStore(api)
+    /** Follower and following lists, kept a while so profiles don't ask the server every time they open. */
+    val follows = FollowLists({ path -> api.get<IdList>(path).ids })
 
     /** Rebuilt only when the entities or our account change, like the web client's memoised selectors. */
     val index: StateFlow<Index> = state
@@ -160,6 +163,7 @@ class AezClient(
             tables.clear()
         }
         state.value = AppState()
+        follows.clear()
         leaving = false
         onSignedOut?.invoke()
     }

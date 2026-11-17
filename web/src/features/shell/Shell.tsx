@@ -298,8 +298,8 @@ export function Shell() {
           <Route path="/direct" element={<Inbox />} />
           <Route path="/direct/:threadId" element={<Chat />} />
           <Route path="/activity" element={<Activity />} />
-          <Route path="/u/:username" element={<Profile />} />
-          <Route path="/u/:username/:tab" element={<Profile />} />
+          {/* One route for every tab, so switching tabs keeps the profile (and what it loaded) instead of rebuilding it. */}
+          <Route path="/u/:username/:tab?" element={<Profile />} />
           <Route path="/p/:id" element={<PostPage />} />
           <Route path="/stories/:userId" element={<StoryViewerPage />} />
           <Route path="/settings" element={<Settings />} />

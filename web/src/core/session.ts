@@ -1,4 +1,5 @@
 import { generateAccountKeys, openVault, publicKeysOf, sealVault, type AccountKeys } from '../crypto/account';
+import { clearCache } from './cache';
 import { DEFAULT_KDF, newSalt } from '../crypto/password';
 import { b64, initSodium, unb64 } from '../crypto/sodium';
 import { api, setToken, setUnauthorizedHandler } from './api';
@@ -107,6 +108,7 @@ export async function signOut(tellServer = true) {
   await clearSession();
   if (me) await LocalDb.destroy(me.id).catch(() => undefined);
   setWeakPassword(false);
+  clearCache();
   // What this browser remembered on the side: previews of messages waiting to be sent, saved places, arrivals.
   for (const key of ['hush.later', 'hush.places', 'hush.arrivals']) {
     try {

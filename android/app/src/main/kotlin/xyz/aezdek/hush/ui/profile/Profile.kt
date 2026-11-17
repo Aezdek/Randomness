@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import xyz.aezdek.hush.Graph
+import xyz.aezdek.hush.client.FollowLists
 import xyz.aezdek.hush.client.AppState
 import xyz.aezdek.hush.client.Entity
 import xyz.aezdek.hush.client.Index
@@ -83,7 +84,6 @@ import xyz.aezdek.hush.media.MediaPrep
 import xyz.aezdek.hush.protocol.FollowState
 import xyz.aezdek.hush.protocol.HighlightPayload
 import xyz.aezdek.hush.protocol.HighlightStory
-import xyz.aezdek.hush.protocol.IdList
 import xyz.aezdek.hush.protocol.Kind
 import xyz.aezdek.hush.protocol.MediaRef
 import xyz.aezdek.hush.protocol.ProfilePayload
@@ -163,13 +163,13 @@ fun Profile(userId: String) {
     var tab by rememberSaveable { mutableStateOf(Tab.POSTS) }
     var menu by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
-    val counts by produceState<Pair<Int, Int>?>(null, userId, canSee, user?.followState, state.followRequests) {
+    // What was loaded before shows at once; the server is asked only when that is old or the follows changed.
+    val follows = Graph.client.follows
+    val relation = FollowLists.relation(state, userId)
+    val kept = follows.peek(userId, true)?.let { a -> follows.peek(userId, false)?.let { b -> a.size to b.size } }
+    val counts by produceState(kept, userId, canSee, relation) {
         if (!canSee) return@produceState
-        value = runCatching {
-            val followers: IdList = Graph.client.api.get("/users/$userId/followers")
-            val following: IdList = Graph.client.api.get("/users/$userId/following")
-            followers.ids.size to following.ids.size
-        }.getOrNull()
+        runCatching { follows.get(userId, true, relation).size to follows.get(userId, false, relation).size }.onSuccess { value = it }
     }
     val posts = index.posts.filter { it.dto.authorId == userId && !it.dto.archived }
     // Up to three pinned posts lead the grid, in pin order, as on Instagram.
@@ -499,8 +499,9 @@ fun FollowList(userId: String, followers: Boolean) {
     val nav = LocalNav.current
     val state by Graph.client.state.collectAsState()
     val index by Graph.client.index.collectAsState()
-    val ids by produceState<List<String>?>(null, userId, followers) {
-        value = runCatching { Graph.client.api.get<IdList>("/users/$userId/${if (followers) "followers" else "following"}").ids }.getOrDefault(emptyList())
+    val relation = FollowLists.relation(state, userId)
+    val ids by produceState(Graph.client.follows.peek(userId, followers), userId, followers, relation) {
+        value = runCatching { Graph.client.follows.get(userId, followers, relation) }.getOrDefault(value ?: emptyList())
     }
     Column(Modifier.fillMaxSize()) {
         TopBar(if (followers) "Followers" else "Following")

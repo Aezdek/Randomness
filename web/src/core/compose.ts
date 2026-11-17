@@ -1,6 +1,7 @@
 import { childKey, newContentKey, sealObject, wrapKey } from '../crypto/object';
 import { b64, random, unb64, utf8 } from '../crypto/sodium';
 import { api } from './api';
+import { invalidateCache } from './cache';
 import {
   Audience,
   MessageType,
@@ -338,16 +339,19 @@ async function refreshUser(id: string) {
 
 export async function follow(id: string) {
   await api.post(`/follows/${id}`);
+  invalidateCache('/users/');
   await refreshUser(id);
 }
 
 export async function unfollow(id: string) {
   await api.delete(`/follows/${id}`);
+  invalidateCache('/users/');
   await refreshUser(id);
 }
 
 export async function acceptFollow(id: string) {
   await api.post(`/follows/requests/${id}/accept`);
+  invalidateCache('/users/');
   useApp.setState((s) => ({ followRequests: s.followRequests.filter((r) => r !== id) }));
   await refreshUser(id);
   await engine.processWrapTasks();
@@ -355,11 +359,13 @@ export async function acceptFollow(id: string) {
 
 export async function declineFollow(id: string) {
   await api.post(`/follows/requests/${id}/decline`);
+  invalidateCache('/users/');
   useApp.setState((s) => ({ followRequests: s.followRequests.filter((r) => r !== id) }));
 }
 
 export async function removeFollower(id: string) {
   await api.delete(`/followers/${id}`);
+  invalidateCache('/users/');
   await refreshUser(id);
 }
 
