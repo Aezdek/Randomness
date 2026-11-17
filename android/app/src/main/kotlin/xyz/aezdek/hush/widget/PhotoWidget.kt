@@ -19,7 +19,7 @@ import xyz.aezdek.hush.protocol.MessageType
 
 /**
  * A home screen widget with the newest photo someone sent you in a chat, decrypted on this phone like everything
- * else (the home screen only gets the picture, never a key). View-once and vanish-mode photos never show here, nor
+ * else (the home screen only gets the picture, never a key). View-once, vanish-mode and disappearing photos never show here, nor
  * photos from hidden chats; while Hush is disguised or signed out the widget is empty.
  */
 class PhotoWidget : AppWidgetProvider() {
@@ -37,7 +37,8 @@ class PhotoWidget : AppWidgetProvider() {
             return Graph.client.index.value.messages.asSequence()
                 .filter { (thread, _) -> thread !in hidden }
                 .flatMap { it.value.asSequence() }
-                .filter { it.dto.authorId != me && it.dto.audience == Audience.THREAD }
+                // Disappearing messages are ordinary chat messages with an end date: they stay off the home screen too.
+                .filter { it.dto.authorId != me && it.dto.audience == Audience.THREAD && it.dto.expiresAt == null }
                 .mapNotNull { m ->
                     val p = m.payloadAs<MessagePayload>()?.takeIf { it.type == MessageType.MEDIA } ?: return@mapNotNull null
                     p.media.firstOrNull { it.mime.startsWith("image/") }?.let { m to it }
