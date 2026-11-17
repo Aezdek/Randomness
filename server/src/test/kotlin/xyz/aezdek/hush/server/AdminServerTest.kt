@@ -147,4 +147,32 @@ class AdminServerTest {
         assertEquals(HttpStatusCode.OK, onServer.status)
         assertEquals(HttpStatusCode.OK, admin.get("/api/v1/admin/status").status)
     }
+
+    @Test
+    fun theServerItselfCanSetANewServerPasswordWithoutTheOldOne() = serverTest {
+        setServerPassword()
+        val (admin) = members("admin")
+        val key = File(dataDir, "local.key").readText().trim()
+        val next = "the new server password, also long"
+        admin.post("/api/v1/admin/server/unlock", UnlockRequest(serverPassword))
+
+        suspend fun change(password: String, local: String? = key, forwarded: Boolean = false) = http.post("/api/v1/local/server-password") {
+            contentType(ContentType.Application.Json)
+            if (local != null) header(LocalAccess.HEADER, local)
+            if (forwarded) header("CF-Connecting-IP", "203.0.113.7")
+            setBody(UnlockRequest(password))
+        }.status
+
+        // Only from the server itself, and never a weak one.
+        assertEquals(HttpStatusCode.Forbidden, change(next, local = null))
+        assertEquals(HttpStatusCode.Forbidden, change(next, forwarded = true))
+        assertEquals(HttpStatusCode.BadRequest, change("short"))
+        assertEquals(HttpStatusCode.OK, change(next))
+
+        // The old password no longer unlocks the admin panel, and panels it unlocked are locked again.
+        assertEquals(HttpStatusCode.Forbidden, admin.put("/api/v1/admin/server/settings", ServerSettingsDto(maxMembers = 5, inviteDays = 7, minFreeGb = 5)).status)
+        assertEquals(HttpStatusCode.Forbidden, admin.post("/api/v1/admin/server/unlock", UnlockRequest(serverPassword)).status)
+        assertEquals(HttpStatusCode.OK, admin.post("/api/v1/admin/server/unlock", UnlockRequest(next)).status)
+        assertTrue(Vault(services.config).verify(next))
+    }
 }

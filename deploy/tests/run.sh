@@ -395,6 +395,10 @@ out=$(bash "$HUSH_ROOT/control.sh" invite 2>&1)
 check "an invite made on the server carries the server's key, and its link" bash -c "grep -q 'Invite: LOCAL-INVIT' <<<\"\$1\" && grep -q 'https://hush.example.com/?invite=LOCAL-INVIT' <<<\"\$1\"" _ "$out"
 bash "$HUSH_ROOT/control.sh" web-admin on >/dev/null 2>&1
 check "... and so does turning the web admin back on" grep -q '"enabled":true' "$STUB_STATE/web-admin"
+HUSH_SERVER_PASSWORD="a brand new passphrase" bash "$HUSH_ROOT/control.sh" password >/dev/null 2>&1
+check "a new server password goes to the server with its key, and replaces the old one" \
+  grep -qF '"stub-password":"a brand new passphrase"' "$HUSH_ROOT/data/keyring.json"
+check "a weak one is refused before it's sent" bash -c "! HUSH_SERVER_PASSWORD=password1234 bash '$HUSH_ROOT/control.sh' password >/dev/null 2>&1"
 echo "not the key" >"$HUSH_ROOT/data/local.key"
 check "without the key the server refuses" bash -c "! bash '$HUSH_ROOT/control.sh' invite >/dev/null 2>&1"
 

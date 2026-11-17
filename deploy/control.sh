@@ -9,6 +9,7 @@
 #   sudo ./control.sh                 run the waiting request (systemd does this)
 #   sudo ./control.sh web-admin on    turn the web admin back on after it was turned off (or: off)
 #   sudo ./control.sh invite          make an invite code here, e.g. while the web admin is off
+#   sudo ./control.sh password        choose a new server password (the old one isn't needed: for a forgotten one)
 #   sudo ./control.sh install         set up the systemd units (update.sh and install.sh run this)
 set -euo pipefail
 
@@ -145,6 +146,25 @@ case ${1:-run} in
     host=$(env_get "$ENV_FILE" HUSH_HOSTNAME)
     log "Invite: $code"
     [ -z "$host" ] || note "Link: https://$host/?invite=$code"
+    ;;
+  password)
+    port=$(env_get "$ENV_FILE" HUSH_HOST_PORT)
+    [ -n "$port" ] || die "HUSH_HOST_PORT is not set in $ENV_FILE"
+    [ "$(server_state "$port")" = ready ] || die "Hush isn't running and unlocked; start it with: sudo $ROOT/update.sh"
+    log "Choose a new server password"
+    note "It replaces the old one, which you don't need for this. Hush keeps running; nobody is signed out."
+    note "Keep it in your password manager: it's what opens a backup on new hardware."
+    password=$(ask_password new "It replaces the old one, which you don't need for this. Keep it in your password manager: it's what opens a backup on new hardware.")
+    body=$(json_string "$password") || die "no control characters, please"
+    # On stdin, never on the command line, where anyone on the machine could read it.
+    answer=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -H "X-Hush-Local: $(local_key "$ROOT")" \
+      --data-binary @- "http://127.0.0.1:$port/api/v1/local/server-password" <<<"{\"password\":\"$body\"}") || answer=000
+    unset password body
+    [ "$answer" = 200 ] || die "the server refused it ($answer)"
+    log "Server password changed"
+    note "Admin panels unlocked with the old one are locked again."
+    note "Backups made before today still open with the old password; the next backup carries the new one."
+    [ ! -x "$ROOT/backup.sh" ] || note "To back up now: sudo $ROOT/backup.sh"
     ;;
   install) install_units ;;
   *) die "unknown command $1 (see the top of this script)" ;;

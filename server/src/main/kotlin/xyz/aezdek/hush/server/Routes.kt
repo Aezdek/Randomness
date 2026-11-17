@@ -726,6 +726,16 @@ fun Route.api(s: Services) = route("/api/v1") {
         s.settings.setWebAdmin(call.receive<WebAdminRequest>().enabled)
         call.respond(OkResponse())
     }
+    // A new server password (control.sh password). The old one isn't asked for: this is how a forgotten one is replaced.
+    post("/local/server-password") {
+        s.local.require(call)
+        s.limiter.check("local:server-password", 5, 15 * MINUTE)
+        val request = call.receive<UnlockRequest>()
+        blocking { s.vault.changePassword(requireNotNull(s.config.dbKey), request.password) }
+        // Admin panels unlocked with the old password lock again.
+        s.elevation.revokeAll()
+        call.respond(OkResponse())
+    }
     post("/local/invites") {
         s.local.require(call)
         call.respond(blocking { s.accounts.createInviteOnServer() })

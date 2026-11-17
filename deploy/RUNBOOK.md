@@ -92,6 +92,7 @@ The panel can also turn itself off, for every admin. After that only the server 
 sudo /opt/hush/control.sh web-admin on     # turn the admin panel back on
 sudo /opt/hush/control.sh web-admin off    # or off, from here
 sudo /opt/hush/control.sh invite           # make an invite while it is off
+sudo /opt/hush/control.sh password         # choose a new server password (the old one isn't needed)
 systemctl status hush-control.path         # is the helper listening?
 ```
 
@@ -176,3 +177,17 @@ If the logs say `data/signing is incomplete`, the server has refused to replace 
   (10 GB unless you changed it), and admins see a banner.
 - **Calls fail on mobile data.** There is no relay. See "Calls" above.
 - **The admin panel's buttons are greyed out.** The helper is not installed. Run `sudo /opt/hush/update.sh` once.
+
+## A new server password
+
+The server password can't be looked up: Hush keeps only the database key sealed under it. If it's forgotten, or
+should change, choose a new one on the server itself:
+
+```
+sudo /opt/hush/control.sh password
+```
+
+The old password isn't asked for. Being root on this machine is the proof, and root here could already unseal the
+key with the machine key. Hush keeps running and nobody is signed out; admin panels unlocked with the old password
+lock again. Backups made before the change still open with the old password only, so run `sudo /opt/hush/backup.sh`
+afterwards to put the new keyring in the backup straight away.

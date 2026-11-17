@@ -199,4 +199,28 @@ class VaultTest {
         assertEquals("/api/v1/threads/:id/read", redactIds("/api/v1/threads/AVWHXzLN578GFaWHf4ixlQ/read"))
         assertEquals("/api/v1/sync", redactIds("/api/v1/sync"))
     }
+
+    @Test
+    fun aNewServerPasswordReplacesTheOldOneAndKeepsTheSameKey() = withDirs { data, machineKey ->
+        newMachineKey(machineKey)
+        val config = ServerConfig(dataDir = data, machineKeyFile = machineKey)
+        val key = Vault(config).setup(password)
+        val next = "a different long passphrase"
+
+        // Too short, or not the key this keyring holds: refused, and the old password still works.
+        assertTrue(runCatching { Vault(config).changePassword(key, "short") }.isFailure)
+        assertTrue(runCatching { Vault(config).changePassword(ByteArray(32), next) }.isFailure)
+        assertTrue(Vault(config).verify(password))
+
+        Vault(config).changePassword(key, next)
+        assertFalse(Vault(config).verify(password))
+        assertTrue(Vault(config).verify(next))
+        assertArrayEquals(key, Vault(config).unlock(next))
+        assertNull(Vault(config).unlock(password))
+        // The machine slot is kept: restarts still unlock by themselves.
+        assertArrayEquals(key, Vault(config).unlockWithMachineKey())
+        // Nothing of either password is in the keyring.
+        val ring = File(data, "keyring.json").readText()
+        assertFalse(ring.contains(password) || ring.contains(next))
+    }
 }

@@ -91,6 +91,27 @@ class Vault(private val config: ServerConfig) {
         key
     }
 
+    /**
+     * A new server password, for when the old one is lost or should change: the running server's database [key] sealed
+     * again under [password], with a new salt. Only the server itself can ask (control.sh, see Routes), and whoever
+     * runs things there could unseal the key with the machine key anyway, so the old password isn't needed. The
+     * machine slot stays as it is. Backups made before keep the old keyring, so the old password still opens those.
+     */
+    fun changePassword(key: ByteArray, password: String) = synchronized(lock) {
+        val ring = read() ?: conflict("This server has no keyring yet; set it up with update.sh", "no_keyring")
+        checkPassword(password)
+        // The key must be the one this keyring holds, or the new password would lock away the wrong one.
+        machineKey()?.let { machine ->
+            val slot = ring.machine?.takeIf { it.keyId == keyId(machine) }
+            val held = slot?.let { KeySealing.open(machine, B64u.dec(it.sealed, "keyring"), MACHINE_AD) }
+            if (held != null && !Sodium.constantTimeEquals(held, key)) conflict("The keyring doesn't hold this server's key", "wrong_key")
+        }
+        val salt = PasswordKeys.newSalt()
+        val sealed = KeySealing.seal(KeySealing.passwordKey(password, salt, KDF), key, PASSWORD_AD)
+        write(ring.copy(password = PasswordSlot(B64u.enc(salt), KDF.opsLimit, KDF.memLimitBytes, B64u.enc(sealed))))
+        log.info("Server password changed")
+    }
+
     /** Whether [password] is the server password, with nothing else done (the admin panel's unlock). */
     fun verify(password: String): Boolean = synchronized(lock) {
         val slot = read()?.password ?: return false

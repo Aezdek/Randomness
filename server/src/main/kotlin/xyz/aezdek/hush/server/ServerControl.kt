@@ -139,6 +139,7 @@ class Elevation(private val clock: Clock) {
 
     fun grant(sessionId: String): Long = (clock.now() + UNLOCKED_MS).also { until[sessionId] = it }
     fun revoke(sessionId: String) = until.remove(sessionId)
+    fun revokeAll() = until.clear()
     fun unlockedUntil(sessionId: String): Long? = until[sessionId]?.takeIf { it > clock.now() }
 
     fun require(sessionId: String) {
