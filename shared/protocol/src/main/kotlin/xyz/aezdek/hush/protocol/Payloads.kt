@@ -204,7 +204,22 @@ data class MessagePayload(
     val listChange: ListChange? = null,
     /** For [MessageType.DAILY]: an answer to the day's question. */
     val daily: DailyAnswer? = null,
+    /** For [MessageType.WATCH]: something from the members' own media server to watch together. */
+    val watch: WatchParty? = null,
+    /** For [MessageType.WATCH_STATE]: where the film in [replyTo] is, and whether it is playing. */
+    val watchState: WatchState? = null,
 )
+
+/**
+ * A film or episode to watch together. Only its id on the members' own media server (Jellyfin) and its name travel
+ * in the chat; each person's app plays it from that server with their own sign-in there.
+ */
+@Serializable
+data class WatchParty(val itemId: String, val title: String, val runtimeMs: Long = 0)
+
+/** Play, pause or a jump, by anyone watching: the film was at [positionMs] at the moment [at]. The latest one counts. */
+@Serializable
+data class WatchState(val playing: Boolean, val positionMs: Long, val at: Long)
 
 /** A file sent in a chat. [name] is whatever the sender's device called it: apps clean it before showing or saving it. */
 @Serializable
@@ -328,6 +343,8 @@ object MessageType {
     const val DAILY = "daily"
     /** Sent by itself when someone sharing their location gets to a place they chose ([MessagePayload.text] names it). */
     const val ARRIVED = "arrived"
+    const val WATCH = "watch"
+    const val WATCH_STATE = "watch_state"
 }
 
 @Serializable

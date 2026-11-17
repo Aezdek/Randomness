@@ -130,6 +130,19 @@ class Prefs(context: Context) {
         get() = prefs.getLong("notifiedUpTo", 0)
         set(value) = prefs.edit().putLong("notifiedUpTo", value).apply()
 
+    // ----------------------------------------------------------------------------------------------- movie night
+
+    /** This phone's sign-in to its owner's Jellyfin (the token it gave, never the password); null if there is none. */
+    private val _jellyfin = MutableStateFlow(
+        prefs.getString("jellyfin", null)?.split('|')?.takeIf { it.size == 3 }?.let { xyz.aezdek.hush.client.JellyfinSession(it[0], it[1], it[2]) },
+    )
+    val jellyfin: StateFlow<xyz.aezdek.hush.client.JellyfinSession?> = _jellyfin
+
+    fun setJellyfin(session: xyz.aezdek.hush.client.JellyfinSession?) {
+        prefs.edit().apply { if (session == null) remove("jellyfin") else putString("jellyfin", "${session.base}|${session.token}|${session.userId}") }.commit()
+        _jellyfin.value = session
+    }
+
     // ------------------------------------------------------------------------------- send later, places, arrivals
 
     /** What a message waiting to be sent later says, kept on the phone that wrote it (the server holds it sealed). */
@@ -234,8 +247,9 @@ class Prefs(context: Context) {
         for (key in prefs.all.keys) {
             if (key == "hiddenThreads" || key == "places" || key == "arrivals" || key.startsWith("later.") || key.startsWith("vanish.") || key.startsWith("signInsSeen.")) editor.remove(key)
         }
-        editor.remove("notifiedUpTo").remove("activitySeen").commit()
+        editor.remove("notifiedUpTo").remove("activitySeen").remove("jellyfin").commit()
         _hiddenThreads.value = emptySet()
+        _jellyfin.value = null
     }
 
     /** Whether notifications still come while disguised (off: nothing shows or rings unless Hush is open). */

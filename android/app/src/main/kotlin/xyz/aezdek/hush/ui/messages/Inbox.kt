@@ -96,6 +96,7 @@ fun lastLine(entity: Entity?, me: String, index: Index, users: Map<String, UserD
         MessageType.HEART -> prefix + (p.text ?: "❤️")
         MessageType.POLL -> (if (mine) "You created a poll: " else "Poll: ") + (p.poll?.question ?: p.text.orEmpty())
         MessageType.PLAN -> (if (mine) "You made a plan: " else "Plan: ") + (p.plan?.title ?: p.text.orEmpty())
+        MessageType.WATCH, MessageType.WATCH_STATE -> "Movie night" + (p.text?.let { ": $it" } ?: "")
         MessageType.FILE -> if (mine) "You sent a file" else "Sent a file"
         MessageType.NUDGE -> if (mine) "You sent a nudge" else "Nudged you 👋"
         MessageType.LIST -> (if (mine) "You made a list: " else "List: ") + p.text.orEmpty()

@@ -113,6 +113,8 @@ const SHAPES: Record<string, Check> = {
     list: obj({ title: str }, { items: list(str) }),
     listChange: obj({}, { add: str, done: str, undone: str, remove: str }),
     daily: obj({ day: str, question: str, answer: str }),
+    watch: obj({ itemId: str, title: str }, { runtimeMs: num }),
+    watchState: obj({ playing: bool, positionMs: num, at: num }),
   }),
   [Kind.REACTION]: obj({ emoji: str }),
   [Kind.LIVE]: obj({ startedAt: num }, { title: str, callId: str }),

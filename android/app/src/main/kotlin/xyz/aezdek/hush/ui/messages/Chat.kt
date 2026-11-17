@@ -524,6 +524,7 @@ fun Chat(threadId: String, focus: String? = null) {
         ChatExtra.LOCATION -> LocationSheet(threadId) { extra = null }
         ChatExtra.LIST -> ListSheet(threadId) { extra = null }
         ChatExtra.LATER -> LaterSheet(threadId) { extra = null }
+        ChatExtra.WATCH -> WatchSheet(threadId) { extra = null }
         ChatExtra.DAILY -> DailySheet(thread, index, state) { extra = null }
         ChatExtra.COUNTDOWN -> CountdownSheet(threadId, custom) { extra = null }
         else -> {}
@@ -720,7 +721,7 @@ private fun Bubble(
     val me = state.me ?: return
     val p = message.payloadAs<MessagePayload>() ?: return
     // A change to a list shows on the list itself.
-    if (p.type == MessageType.LIST_CHANGE) return
+    if (p.type == MessageType.LIST_CHANGE || p.type == MessageType.WATCH_STATE) return
     if (p.type == MessageType.NUDGE || p.type == MessageType.ARRIVED) {
         val mine = message.dto.authorId == me.id
         Text(xyz.aezdek.hush.client.lineOf(p, mine, index.nameIn(message.dto.threadId, message.dto.authorId, state.users)), fontSize = 12.sp, color = Aez.colors.text2,
@@ -847,6 +848,7 @@ private fun Bubble(
                 p.type == MessageType.PLAN && p.plan != null -> PlanCard(message, p.plan!!, index, state, themeColor, clickModifier)
                 p.type == MessageType.LOCATION && p.location != null -> LocationCard(message, p.location!!, mine, clickModifier)
                 p.type == MessageType.FILE -> FileCard(p.file, clickModifier)
+                p.type == MessageType.WATCH -> WatchCard(message, p.watch, index, clickModifier)
                 p.type == MessageType.LIST -> ListCard(message, index, clickModifier)
                 p.type == MessageType.DAILY && p.daily != null && state.threads[message.dto.threadId] != null ->
                     DailyCard(message, p.daily!!, state.threads[message.dto.threadId]!!, index, me.id, clickModifier)

@@ -56,6 +56,7 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -126,6 +127,7 @@ private val SECTIONS = listOf(
     Section("account", "Password and account", Icons.Outlined.Key),
     Section("appearance", "Appearance and app lock", Icons.Outlined.Palette),
     Section("disguise", "Disguise", Icons.Outlined.VisibilityOff),
+    Section("movie", "Movie night", Icons.Outlined.Movie),
     Section("updates", "App updates", Icons.Outlined.SystemUpdate),
     Section("admin", "Admin", Icons.Outlined.Dns),
 )
@@ -150,6 +152,7 @@ fun Settings(section: String?) {
                 "account" -> AccountSection()
                 "appearance" -> AppearanceSection()
                 "disguise" -> DisguiseSection()
+                "movie" -> xyz.aezdek.hush.ui.messages.JellyfinCard()
                 "updates" -> UpdatesSection()
                 "admin" -> AdminPanel()
             }
@@ -199,6 +202,7 @@ private fun SettingsHome() {
             }
             Group("This phone") {
                 NavRow(Icons.Outlined.Palette, "Appearance and app lock") { open("appearance") }
+                NavRow(Icons.Outlined.Movie, "Movie night") { open("movie") }
                 NavRow(Icons.Outlined.VisibilityOff, "Disguise", Look.of(disguise).takeIf { it != Look.HUSH }?.title ?: "Off") { open("disguise") }
                 NavRow(Icons.Outlined.SystemUpdate, "App updates", BuildConfig.VERSION_NAME) { open("updates") }
             }

@@ -395,7 +395,7 @@ def main() -> int:
     step("create a post (photo picker)", lambda: (open_screen("create:post"), time.sleep(2), back()))
     step("settings", lambda: open_screen("settings"))
     for section in ("notifications", "archive", "privacy", "close-friends", "blocked", "security", "account",
-                    "appearance", "updates", "admin"):
+                    "appearance", "updates", "admin", "movie"):
         step(f"settings: {section}", lambda s=section: open_screen(f"settings:{s}"))
     def weak_password_refused():
         open_screen("settings:account")

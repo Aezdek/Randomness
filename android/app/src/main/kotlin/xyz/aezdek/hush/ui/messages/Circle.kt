@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.QuestionAnswer
 import androidx.compose.material.icons.outlined.Schedule
@@ -505,7 +506,7 @@ fun LocationSharer() {
 
 // --------------------------------------------------------------------------------------------------------- the menu
 
-internal enum class ChatExtra { FILE, PLAN, LOCATION, LIST, DAILY, COUNTDOWN, NUDGE, LATER, POLL }
+internal enum class ChatExtra { FILE, PLAN, LOCATION, LIST, DAILY, COUNTDOWN, NUDGE, LATER, WATCH, POLL }
 
 /** The composer's "+": a plan, live location, and in groups a poll. */
 @Composable
@@ -518,6 +519,7 @@ internal fun ExtrasSheet(group: Boolean, onDismiss: () -> Unit, onPick: (ChatExt
         add(Triple(ChatExtra.DAILY, "Question of the day" to "Answers show once everyone has answered", Icons.Outlined.QuestionAnswer))
         add(Triple(ChatExtra.COUNTDOWN, "Countdown" to "Days to a date, at the top of the chat", Icons.Outlined.Schedule))
         add(Triple(ChatExtra.NUDGE, "Nudge" to "No words: their phone just buzzes", Icons.Outlined.WavingHand))
+        add(Triple(ChatExtra.WATCH, "Movie night" to "Watch something from your Jellyfin together", Icons.Outlined.Movie))
         add(Triple(ChatExtra.LATER, "Send later" to "A message that arrives at a time you pick", Icons.Outlined.Schedule))
         if (group) add(Triple(ChatExtra.POLL, "Poll" to "Let everyone vote", Icons.Outlined.Poll))
     }

@@ -108,4 +108,26 @@ fun lineOf(payload: MessagePayload, mine: Boolean, name: String): String = when 
 }
 
 /** Messages drawn as a line in the middle of the chat (or, for list changes, not at all) rather than as a bubble. */
-val LINE_TYPES = setOf(MessageType.SYSTEM, MessageType.NUDGE, MessageType.ARRIVED, MessageType.LIST_CHANGE)
+val LINE_TYPES = setOf(MessageType.SYSTEM, MessageType.NUDGE, MessageType.ARRIVED, MessageType.LIST_CHANGE, MessageType.WATCH_STATE)
+
+// --------------------------------------------------------------------------------------------------- watching together
+
+suspend fun Composer.startWatching(threadId: String, itemId: String, title: String, runtimeMs: Long): Entity {
+    val party = xyz.aezdek.hush.protocol.WatchParty(itemId, Watching.title(title), runtimeMs.coerceIn(0, Watching.MAX_RUNTIME_MS))
+    if (!Watching.valid(party)) throw UserFacingException("That can't be watched together")
+    return sendMessage(threadId, MessagePayload(MessageType.WATCH, text = party.title, watch = party))
+}
+
+/** Tells the chat the film was played, paused or moved. */
+suspend fun Composer.sendWatchState(watch: Entity, playing: Boolean, positionMs: Long): Entity? =
+    sendMessage(watch.dto.threadId ?: return null, MessagePayload(MessageType.WATCH_STATE, replyTo = watch.id,
+        watchState = xyz.aezdek.hush.protocol.WatchState(playing, positionMs.coerceAtLeast(0), System.currentTimeMillis())))
+
+/** Where the film in [watch] should be right now, from everyone's plays, pauses and jumps. */
+fun Index.watching(watch: Entity, now: Long = System.currentTimeMillis()): Watching.Now {
+    val states = messages[watch.dto.threadId].orEmpty().mapNotNull { m ->
+        val p = m.payloadAs<MessagePayload>() ?: return@mapNotNull null
+        if (p.type == MessageType.WATCH_STATE && p.replyTo == watch.id) p.watchState else null
+    }
+    return Watching.now(states, watch.payloadAs<MessagePayload>()?.watch?.runtimeMs ?: 0, now)
+}

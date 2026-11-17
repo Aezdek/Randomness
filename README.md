@@ -27,7 +27,8 @@ server, with invites as QR codes and alerts on the admin's phone when backups, d
 
 Chats also carry files of any kind (up to 250 MB), shared lists everyone can tick off, a question of the day whose
 answers show once everyone has answered, a countdown to a date, nudges, and messages written now to arrive later. On
-Android there is a home screen widget with the newest photo someone sent you, and Hush can wear a disguise: see
+Android a chat can watch a film together from your own Jellyfin (each phone plays it straight from Jellyfin with
+its owner's sign-in there; Hush only carries which film and where it is), there is a home screen widget with the newest photo someone sent you, and Hush can wear a disguise: see
 Security.
 
 ## Run your own

@@ -78,6 +78,7 @@ export const MessageType = {
   TEXT: 'text', MEDIA: 'media', VOICE: 'voice', SHARE: 'share', STORY_REPLY: 'story_reply', STORY_REACTION: 'story_reaction',
   CALL: 'call', HEART: 'heart', SYSTEM: 'system', NOTE_REPLY: 'note_reply', POLL: 'poll', PLAN: 'plan', LOCATION: 'location',
   FILE: 'file', NUDGE: 'nudge', LIST: 'list', LIST_CHANGE: 'list_change', DAILY: 'daily', ARRIVED: 'arrived',
+  WATCH: 'watch', WATCH_STATE: 'watch_state',
 } as const;
 
 export interface MessagePayload {
@@ -103,6 +104,10 @@ export interface MessagePayload {
   listChange?: ListChange | null;
   /** For DAILY: an answer to the day's question. */
   daily?: DailyAnswer | null;
+  /** For WATCH: a film from the members' own media server to watch together (played in the Android app). */
+  watch?: { itemId: string; title: string; runtimeMs?: number } | null;
+  /** For WATCH_STATE: where the film in replyTo is, and whether it is playing. */
+  watchState?: { playing: boolean; positionMs: number; at: number } | null;
 }
 
 /** See the same types in Payloads.kt. */

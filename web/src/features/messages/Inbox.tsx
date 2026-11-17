@@ -56,6 +56,10 @@ export function previewOf(payload: MessagePayload, mine: boolean): string {
       return mine ? 'You changed a list' : 'Changed a list';
     case MessageType.DAILY:
       return mine ? 'You answered the question of the day' : 'Answered the question of the day';
+    case MessageType.WATCH:
+      return `Movie night: ${payload.text ?? ''}`;
+    case MessageType.WATCH_STATE:
+      return 'Movie night';
     case MessageType.ARRIVED:
       return `${mine ? 'You arrived' : 'Arrived'} at ${payload.text || 'their destination'}`;
     default:
