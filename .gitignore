@@ -1,0 +1,7 @@
+# Your papers, login and settings stay on the server.
+/data/
+/.env
+/config.toml
+
+__pycache__/
+*.pyc

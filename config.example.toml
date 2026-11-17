@@ -1,0 +1,55 @@
+# Past papers settings.
+# After changing this file, run:  docker compose restart papers
+
+[inbox]
+# How often to look in the Inbox for new files, in seconds.
+scan_seconds = 15
+# A file is only sorted once it has stopped changing for this many seconds,
+# so copies that are still coming over Wi-Fi are left alone.
+settle_seconds = 10
+
+[download]
+# Where to download papers from. Leave it empty to turn downloading off.
+# Copy a working paper link from your usual past papers site, then swap the
+# file name at the end for {filename}. For example, a link like
+#   https://example-papers.com/igcse/0620/2024/0620_s24_qp_42.pdf
+# becomes
+#   https://example-papers.com/igcse/{code}/{year}/{filename}
+# Placeholders: {filename} {code} {subject} {year} {yy} {session} {type} {component}
+# Test it with:  docker compose run --rm papers check-source
+url = ""
+
+# Subjects to keep complete, by syllabus code.
+subjects = ["0620", "0625", "0580", "0478", "0510", "0610"]
+
+# Years to download. last_year defaults to the current year.
+first_year = 2018
+# last_year = 2025
+
+# m = Feb/March, s = May/June, w = Oct/Nov
+sessions = ["m", "s", "w"]
+
+# qp = question paper, ms = mark scheme, in = insert (reading texts, data sheets)
+# Also available: er = examiner report, gt = grade thresholds,
+#                 ci = confidential instructions, pm = pre-release material
+types = ["qp", "ms", "in"]
+
+# Seconds to wait between requests, so the site isn't hammered.
+delay_seconds = 1.0
+
+# How often to check for newly published papers, in hours.
+every_hours = 24
+
+[download.papers]
+# Paper numbers to look for in each subject. Variants (41, 42, 43) are tried
+# automatically. Subjects not listed here get papers 1 to 6.
+"0478" = [1, 2]
+"0510" = [1, 2, 3, 4]
+"0580" = [1, 2, 3, 4]
+"0610" = [1, 2, 3, 4, 5, 6]
+"0620" = [1, 2, 3, 4, 5, 6]
+"0625" = [1, 2, 3, 4, 5, 6]
+
+[subject_names]
+# Rename subject folders and files if you like, for example:
+# "0510" = "English"

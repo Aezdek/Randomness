@@ -1,0 +1,28 @@
+# Past papers: a sorted library of Cambridge past papers, shared to the iPad.
+# First time: ./setup.sh   Then: docker compose up -d --build
+
+services:
+  # Sorts the Inbox into the library and downloads missing papers.
+  papers:
+    build: .
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - ./data:/data
+      - ./config.toml:/config/config.toml:ro
+    depends_on:
+      - share
+
+  # The file share the iPad connects to (Files > Connect to Server).
+  share:
+    build: ./samba
+    restart: unless-stopped
+    ports:
+      - "${SMB_PORT:-445}:445"
+    environment:
+      SMB_USER: ${SMB_USER:?run ./setup.sh first}
+      SMB_PASSWORD: ${SMB_PASSWORD:?run ./setup.sh first}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ./data:/data
