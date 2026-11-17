@@ -366,7 +366,12 @@ fun Chat(threadId: String, focus: String? = null) {
             // of several new messages leaves the newest below, out of view; whoever was looking at the latest is taken
             // down to it. (Counting how far up the list is would call that "scrolled up".)
             val wasAtLatest = newestSeen == null || listState.layoutInfo.visibleItemsInfo.any { it.key == newestSeen }
-            newestSeen = messages.lastOrNull()?.id
+            // The newest message that draws something: list changes, watch updates and a run of nudges draw nothing, and
+            // an item with no height can't be "on screen" to tell whether the reader was at the bottom.
+            newestSeen = messages.lastOrNull { m ->
+                val p = m.payloadAs<MessagePayload>()
+                p?.type != MessageType.LIST_CHANGE && p?.type != MessageType.WATCH_STATE && p?.type != MessageType.NUDGE
+            }?.id ?: messages.lastOrNull()?.id
             if (!focused && focus != null) {
                 focused = true
                 jump(focus)
