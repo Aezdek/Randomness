@@ -139,8 +139,15 @@ export function useUser(id: string | undefined | null): UserDto | undefined {
 }
 
 export function useProfile(id: string | undefined | null): ProfilePayload | undefined {
-  const index = useIndex();
-  return id ? index.profiles[id]?.payload : undefined;
+  return useProfileEntity(id)?.payload;
+}
+
+/**
+ * Someone's profile, re-rendering only when that profile changes (not on every new message, like [useIndex] does).
+ * Profile entities keep their identity across index rebuilds, so the selector's answer stays equal until it changes.
+ */
+export function useProfileEntity(id: string | undefined | null): Entity<ProfilePayload> | undefined {
+  return useApp((s) => (id ? buildIndex(s).profiles[id] : undefined));
 }
 
 /** Characters a name (someone's display name, a group's) shows: another member's app could send any number. */

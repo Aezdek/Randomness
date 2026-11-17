@@ -1,14 +1,15 @@
 import { AlertCircle, ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Send, Smile, Square, Timer, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { chatCustom, DEFAULT_REACTION, eventText, themeOf, themeStyle, type ChatCustom } from '../../core/chat';
 import { deleteObject, edit, markRead, react as reactTo, recordView, sendChatEvent, sendMessage, votePoll } from '../../core/compose';
 import { messageOf } from '../../core/errors';
 import { prepare, prepareVoice, upload } from '../../core/media';
 import { Audience, disappearingLabel, Kind, MessageType, type MessagePayload, type Poll, type ReactionPayload, type StoryPayload, type VotePayload } from '../../core/payloads';
-import { nameIn, threadTitle, useIndex } from '../../core/selectors';
-import { toast, useApp, type Entity } from '../../core/store';
+import { buildIndex, nameIn, threadTitle, useIndex, useProfileEntity } from '../../core/selectors';
+import { getState, toast, useApp, type Entity } from '../../core/store';
+import { useShallow } from 'zustand/react/shallow';
 import { realtime } from '../../core/ws';
 import { Avatar } from '../../ui/Avatar';
 import { ago, Center, RichText, Spinner } from '../../ui/bits';
@@ -32,7 +33,13 @@ import { isAlbum, sendPlan } from '../../core/circle';
 const QUICK = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 /** "14:32" in the viewer's own clock format. */
-const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+// Formatters are made once: building one costs far more than using it, and a long chat formats thousands of times.
+const CLOCK = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+const DAY_MONTH = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const FULL = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const clock = (at: number) => CLOCK.format(at);
 /** Instagram's centred stamps between messages: "Today 14:32", "Yesterday 09:10", "Mon 14:32", "3 Oct 14:32". */
 function chatStamp(at: number, now = Date.now()) {
   const d = new Date(at);
@@ -42,10 +49,10 @@ function chatStamp(at: number, now = Date.now()) {
   const time = clock(at);
   if (days === 0) return `Today ${time}`;
   if (days === 1) return `Yesterday ${time}`;
-  if (days < 7) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
-  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })}, ${time}`;
+  if (days < 7) return `${WEEKDAY.format(d)} ${time}`;
+  return `${(d.getFullYear() === today.getFullYear() ? DAY_MONTH : DAY_MONTH_YEAR).format(d)}, ${time}`;
 }
-const fullTime = (at: number) => new Date(at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const fullTime = (at: number) => FULL.format(at);
 
 /**
  * The chat's touch gestures, as on Instagram: drag the chat left to slide every message over and show its time (it
@@ -257,7 +264,8 @@ function LongText({ text }: { text: string }) {
   );
 }
 
-function Bubble({
+/** One message. Memoised: typing, or a new message arriving, leaves the bubbles already drawn alone. */
+const Bubble = memo(function Bubble({
   message,
   mine,
   onReply,
@@ -268,32 +276,36 @@ function Bubble({
 }: {
   message: Entity<MessagePayload>;
   mine: boolean;
-  onReply: () => void;
-  onEdit: () => void;
+  onReply: (message: Entity<MessagePayload>) => void;
+  onEdit: (message: Entity<MessagePayload>) => void;
   showAvatar: boolean;
   /** Group chats name the sender above the first of their messages in a row. */
   showName: boolean;
   custom: ChatCustom;
 }) {
-  const index = useIndex();
-  const entities = useApp((s) => s.entities);
-  const users = useApp((s) => s.users);
+  // Only what this message needs from the store, so a new message elsewhere in the chat doesn't redraw it.
+  const p = message.payload;
+  const reactions = useApp(
+    useShallow((s) => (buildIndex(s).children[message.dto.id] ?? NONE).filter((e) => e.dto.kind === Kind.REACTION) as Entity<ReactionPayload>[]),
+  );
+  const replyTarget = useApp((s) => (p.replyTo ? (s.entities[p.replyTo] as Entity<MessagePayload> | undefined) : undefined));
+  const story = useApp((s) => (p.storyId ? (s.entities[p.storyId] as Entity<StoryPayload> | undefined) : undefined));
   const me = useApp((s) => s.me!);
+  // The sender renaming themselves redraws the name; nicknames come with [custom].
+  useProfileEntity(message.dto.authorId);
   const [menu, setMenu] = useState(false);
   const [moreEmoji, setMoreEmoji] = useState(false);
   const [opened, setOpened] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const longPress = useLongPress(() => setMenu(true));
-  const p = message.payload;
-  const reactions = (index.children[message.dto.id] ?? []).filter((e) => e.dto.kind === Kind.REACTION) as Entity<ReactionPayload>[];
-  const replyTarget = p.replyTo ? (entities[p.replyTo] as Entity<MessagePayload> | undefined) : undefined;
   const once = message.dto.audience === Audience.ONCE;
   const vanish = message.dto.audience === Audience.VANISH;
   const big = p.type === MessageType.HEART || (p.type === MessageType.TEXT && (p.text ?? '').length <= 32 && /^\p{Extended_Pictographic}{1,3}$/u.test(p.text ?? ''));
-  const story = p.storyId ? (entities[p.storyId] as Entity<StoryPayload> | undefined) : undefined;
   const threadId = message.dto.threadId ?? null;
-  const thread = useApp((s) => (threadId ? s.threads[threadId] : undefined));
-  const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, index, users));
+  // Only the daily question needs the chat itself, which changes with every message.
+  const thread = useApp((s) => (threadId && p.type === MessageType.DAILY ? s.threads[threadId] : undefined));
+  // Read when drawn rather than subscribed to: the users map changes whenever someone is active.
+  const name = (id: string) => (id === me.id ? 'You' : nameIn(threadId, id, buildIndex(getState()), getState().users));
   const pinned = custom.pinned.includes(message.dto.id);
   const forwardable =
     !once && !vanish && ([MessageType.TEXT, MessageType.MEDIA, MessageType.VOICE, MessageType.SHARE, MessageType.HEART] as string[]).includes(p.type);
@@ -386,7 +398,7 @@ function Bubble({
             <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="React">
               <Smile size={16} />
             </button>
-            <button className="icon-btn sm" onClick={onReply} aria-label="Reply">
+            <button className="icon-btn sm" onClick={() => onReply(message)} aria-label="Reply">
               <CornerUpLeft size={16} />
             </button>
             <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="More">
@@ -425,7 +437,7 @@ function Bubble({
           </div>
         )}
         <div className="menu">
-          <button onClick={() => (setMenu(false), onReply())}>Reply</button>
+          <button onClick={() => (setMenu(false), onReply(message))}>Reply</button>
           {forwardable && <button onClick={() => (setMenu(false), setForwarding(true))}>Forward</button>}
           {p.text && <button onClick={() => (setMenu(false), void navigator.clipboard.writeText(p.text ?? ''))}>Copy</button>}
           {threadId && message.dto.audience !== Audience.VANISH && message.dto.audience !== Audience.ONCE && (
@@ -433,7 +445,7 @@ function Bubble({
               {pinned ? 'Unpin' : 'Pin'}
             </button>
           )}
-          {mine && p.type === MessageType.TEXT && <button onClick={() => (setMenu(false), onEdit())}>Edit</button>}
+          {mine && p.type === MessageType.TEXT && <button onClick={() => (setMenu(false), onEdit(message))}>Edit</button>}
           {mine && (
             <button className="danger" onClick={() => (setMenu(false), void deleteObject(message.dto.id).catch((e) => toast(messageOf(e), 'error')))}>
               Unsend
@@ -455,7 +467,7 @@ function Bubble({
       {forwarding && <ShareSheet open onClose={() => setForwarding(false)} forward={p} />}
     </div>
   );
-}
+});
 
 /** A group-chat poll: tap an option to vote (tap it again to take the vote back); everyone sees who voted for what. */
 function PollCard({ message }: { message: Entity<MessagePayload> }) {
@@ -605,8 +617,15 @@ export function Chat() {
   const presence = useApp((s) => s.presence);
   const index = useIndex();
   const navigate = useNavigate();
-  const messages = index.messages[threadId] ?? [];
-  const custom = chatCustom(index.messages[threadId]);
+  const messages = useMemo(() => index.messages[threadId] ?? [], [index, threadId]);
+  // Worked out once per change to the chat, not on every keystroke, and the same object while nothing in it changed
+  // (a new message makes a new one), so the bubbles it's handed to don't all redraw.
+  const kept = useRef<ChatCustom | null>(null);
+  const custom = useMemo(() => {
+    const next = chatCustom(index.messages[threadId]);
+    if (kept.current && JSON.stringify(kept.current) === JSON.stringify(next)) return kept.current;
+    return (kept.current = next);
+  }, [index, threadId]);
   const theme = themeOf(custom.theme);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<Entity<MessagePayload> | null>(null);
@@ -633,6 +652,25 @@ export function Chat() {
   const shownThread = useRef<string | null>(null);
   const [below, setBelow] = useState<number | null>(null);
   const lastAuthor = messages.at(-1)?.dto.authorId;
+  // Only the newest messages are drawn, as on Instagram; older ones come in pages as you scroll up. A chat with
+  // thousands of messages would otherwise draw them all, and redraw them all, every time anything changed.
+  const [shown, setShown] = useState(PAGE);
+  const heightBefore = useRef<number | null>(null);
+  useEffect(() => setShown(PAGE), [threadId]);
+  const first = Math.max(0, messages.length - shown);
+  const visible = useMemo(() => messages.slice(first), [messages, first]);
+  const showOlder = (count = PAGE) => {
+    if (first === 0) return;
+    heightBefore.current = scroller.current?.scrollHeight ?? null;
+    setShown((n) => n + count);
+  };
+  // Older messages appear above: keep the ones being read where they were.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || heightBefore.current === null) return;
+    el.scrollTop += el.scrollHeight - heightBefore.current;
+    heightBefore.current = null;
+  }, [shown]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -652,6 +690,7 @@ export function Chat() {
     if (!el) return;
     atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     setBelow((n) => (atBottom.current ? null : (n ?? 0)));
+    if (el.scrollTop < 400 && heightBefore.current === null) showOlder();
   };
   const toLatest = () => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' });
 
@@ -661,6 +700,22 @@ export function Chat() {
     const mine = thread.members.find((m) => m.userId === me.id);
     if (mine && messages.at(-1)!.dto.receivedAt > mine.lastReadAt) void markRead(threadId).catch(() => undefined);
   }, [lastId, threadId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The same functions on every render, so the memoised bubbles stay as they are while you type.
+  const replyToMessage = useCallback((m: Entity<MessagePayload>) => {
+    setReplyTo(m);
+    document.getElementById('chat-input')?.focus();
+  }, []);
+  const editMessage = useCallback((m: Entity<MessagePayload>) => {
+    setEditing(m);
+    setText(safeText(m.payload.text));
+  }, []);
+
+  /** Makes sure a message is drawn (it may be older than the page on screen), so it can be scrolled to. */
+  const reveal = (messageId: string) => {
+    const at = messages.findIndex((m) => m.dto.id === messageId);
+    if (at >= 0 && at < first) setShown(messages.length - at + 10);
+  };
 
   const replyById = useCallback(
     (id: string) => {
@@ -679,6 +734,7 @@ export function Chat() {
   useEffect(() => {
     if (!jumpTo || !thread) return;
     setGallery(false);
+    reveal(jumpTo);
     const timer = setTimeout(() => {
       const el = document.getElementById(`msg-${jumpTo}`);
       if (!el) return toast('That message is no longer in the chat');
@@ -818,20 +874,22 @@ export function Chat() {
   /** Scrolls to a message (a pin, a search result) and flashes it. */
   const jump = (messageId: string) => {
     setInfo(false);
-    requestAnimationFrame(() => {
+    reveal(messageId);
+    // Two frames: one for React to draw an older message that wasn't on screen, one for layout.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const el = document.getElementById(`msg-${messageId}`);
       if (!el) return toast('That message is no longer in the chat');
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       el.classList.remove('flash');
       void el.offsetWidth;
       el.classList.add('flash');
-    });
+    }));
   };
   const pinnedMessage = [...custom.pinned].reverse().map((id) => messages.find((m) => m.dto.id === id)).find(Boolean) as Entity<MessagePayload> | undefined;
   const nameOf = (id: string) => nameIn(threadId, id, index, users);
 
   // Seen receipts: under my newest message, who has read up to it.
-  const lastMine = [...messages].reverse().find((m) => m.dto.authorId === me.id && !LINES.includes((m.payload as MessagePayload).type));
+  const lastMine = messages.findLast((m) => m.dto.authorId === me.id && !LINES.includes((m.payload as MessagePayload).type));
   const seenBy = lastMine ? thread.members.filter((m) => m.userId !== me.id && m.lastReadAt >= lastMine.dto.receivedAt).map((m) => m.userId) : [];
 
   return (
@@ -908,7 +966,7 @@ export function Chat() {
         {showGallery && <AlbumGallery threadId={threadId} onAdd={() => file.current?.click()} onOpenChat={() => setGallery(false)} />}
         <div className="chat-scroll-wrap" style={showGallery ? { display: 'none' } : undefined}>
         <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
-          <div className="chat-intro">
+          <div className="chat-intro" hidden={first > 0}>
             {thread.isGroup ? (
               <span className="group-avatar large">
                 {others.slice(0, 2).map((id) => (
@@ -927,7 +985,15 @@ export function Chat() {
             )}
             <p className="faint e2ee-note">🔒 Messages and calls are end-to-end encrypted. Not even the server can read them.</p>
           </div>
-          {messages.map((m, i) => {
+          {first > 0 && (
+            <div className="chat-older">
+              <button className="btn btn-secondary btn-sm" onClick={() => showOlder()}>
+                Earlier messages
+              </button>
+            </div>
+          )}
+          {visible.map((m, j) => {
+            const i = first + j;
             const prev = messages[i - 1];
             const nextMsg = messages[i + 1];
             const newDay = !prev || new Date(prev.dto.receivedAt).toDateString() !== new Date(m.dto.receivedAt).toDateString();
@@ -951,14 +1017,8 @@ export function Chat() {
                     showAvatar={showAvatar}
                     showName={showName}
                     custom={custom}
-                    onReply={() => {
-                      setReplyTo(m as Entity<MessagePayload>);
-                      document.getElementById('chat-input')?.focus();
-                    }}
-                    onEdit={() => {
-                      setEditing(m as Entity<MessagePayload>);
-                      setText(safeText(payload.text));
-                    }}
+                    onReply={replyToMessage}
+                    onEdit={editMessage}
                   />
                   </Guard>
                 )}
@@ -1169,6 +1229,11 @@ export function Chat() {
 }
 
 /** Messages drawn as a line in the middle of the chat (or, for list changes, not at all) rather than as a bubble. */
+/** How many messages a chat draws at first, and how many more each time you scroll near the top. */
+const PAGE = 60;
+
+const NONE: Entity[] = [];
+
 const LINES: string[] = [MessageType.SYSTEM, MessageType.NUDGE, MessageType.ARRIVED, MessageType.LIST_CHANGE, MessageType.WATCH_STATE, MessageType.WATCH];
 
 /** A nudge straight after another from the same person: a hundred of them are still one line in the chat. */

@@ -1,5 +1,5 @@
 import { useApp } from '../core/store';
-import { useIndex } from '../core/selectors';
+import { useProfile } from '../core/selectors';
 import { useMediaUrl } from './Media';
 
 const GRADIENTS = [
@@ -27,10 +27,10 @@ interface AvatarProps {
 }
 
 export function Avatar({ userId, size = 40, presence, className = '' }: AvatarProps) {
-  const index = useIndex();
+  // Only this person's profile, user and presence: a new message elsewhere leaves the avatar alone.
   const user = useApp((s) => (userId ? s.users[userId] : undefined));
   const online = useApp((s) => (userId ? s.presence[userId] : false));
-  const profile = userId ? index.profiles[userId]?.payload : undefined;
+  const profile = useProfile(userId);
   const url = useMediaUrl(profile?.avatar ?? null);
   const label = (profile?.displayName || user?.username || '?').trim();
   return (

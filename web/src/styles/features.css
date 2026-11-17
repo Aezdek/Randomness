@@ -2637,6 +2637,14 @@ input[type='range'] {
   flex-direction: column;
   gap: 2px;
 }
+.chat-intro[hidden] {
+  display: none;
+}
+.chat-older {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
 .chat-intro {
   display: flex;
   flex-direction: column;

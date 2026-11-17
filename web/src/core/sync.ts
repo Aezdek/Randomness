@@ -41,10 +41,32 @@ class SyncEngine {
       seenStories: seen ?? {},
       initialSyncDone: objects.length > 0,
     });
-    this.ingest(objects);
+    // Every object is checked again (its signature, its key) before it is shown, which takes a while for a long
+    // history. The newest come first, so the screen fills at once; the rest follow in small batches between frames,
+    // so the app stays responsive meanwhile, and appear together at the end.
+    await this.ingestInSteps(objects, FIRST_BATCH);
+  }
+
+  /**
+   * [ingest] for many objects at once (opening the app, the first sync): a batch at a time with a frame in between,
+   * so the app keeps responding while signatures are checked. The first [shownFirst] appear straight away (things with
+   * keys of their own first, as messages and reactions take theirs from them, then newest first); the rest together.
+   */
+  private async ingestInSteps(objects: ObjectDto[], shownFirst = 0) {
+    if (objects.length <= BATCH) return this.ingest(objects);
+    const rank = (dto: ObjectDto) => (CHILD_KEYED.has(dto.kind) ? 1 : 0);
+    const sorted = [...objects].sort((a, b) => rank(a) - rank(b) || b.createdAt - a.createdAt);
+    if (shownFirst) this.ingest(sorted.slice(0, shownFirst));
+    for (let at = shownFirst; at < sorted.length; at += BATCH) {
+      if (at > 0) await nextFrame();
+      if (!this.db) return;
+      this.ingest(sorted.slice(at, at + BATCH), false);
+    }
+    this.ingest([]);
   }
 
   close() {
+    this.held = {};
     this.db?.close();
     this.db = null;
     this.cursor = 0;
@@ -107,7 +129,7 @@ class SyncEngine {
       for (const id of response.removedThreadIds) this.removeWhere((e) => e.dto.threadId === id);
     }
     for (const id of response.deletedIds) this.remove(id);
-    this.ingest(response.objects);
+    await this.ingestInSteps(response.objects);
   }
 
   /** Pins identity keys on first sight and flags changes; refuses keys that are not self-signed. */
@@ -171,10 +193,13 @@ class SyncEngine {
     return [...new Set(out)].map(unb64);
   }
 
-  /** Decrypts what it can, retrying the rest as their parents arrive. */
-  ingest(dtos: ObjectDto[]) {
+  /** Opened but not yet shown (see [open]). */
+  private held: Record<string, Entity> = {};
+
+  /** Decrypts what it can, retrying the rest as their parents arrive. With [show] false it holds them back for later. */
+  ingest(dtos: ObjectDto[], show = true) {
     for (const dto of dtos) this.pending.set(dto.id, dto);
-    const decoded: Record<string, Entity> = {};
+    const decoded = this.held;
     let progress = true;
     while (progress && this.pending.size) {
       progress = false;
@@ -186,6 +211,8 @@ class SyncEngine {
         if (result !== 'fail') decoded[id] = result;
       }
     }
+    if (!show) return;
+    this.held = {};
     if (Object.keys(decoded).length) useApp.setState((s) => ({ entities: { ...s.entities, ...decoded } }));
   }
 
@@ -353,3 +380,9 @@ export function headerOf(dto: ObjectDto) {
 }
 
 export const engine = new SyncEngine();
+
+/** How many objects are opened before the first screen, and how many per frame after it. */
+const FIRST_BATCH = 400;
+const BATCH = 150;
+
+const nextFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
