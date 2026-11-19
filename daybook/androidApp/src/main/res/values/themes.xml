@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the grouped background so there is no flash before the first frame. -->
+    <style name="Theme.Daybook" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorAccent">@color/accent</item>
+    </style>
+    <color name="background">#F2F2F7</color>
+    <color name="accent">#0066DB</color>
+    <color name="icon_background">#1A6EF0</color>
+</resources>

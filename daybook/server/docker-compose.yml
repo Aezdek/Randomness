@@ -1,0 +1,23 @@
+# Daybook sync server.
+#
+#   echo "DAYBOOK_TOKEN=$(openssl rand -hex 32)" > .env
+#   docker compose up -d
+#
+# The token in .env is what you paste into Settings > Sync Server on each device.
+# Put the server behind HTTPS before using it from your phone, for example with a Cloudflare Tunnel
+# pointing a hostname at http://localhost:8080.
+services:
+  daybook:
+    image: ghcr.io/aezdek/daybook-server:latest
+    # To build locally instead, run `./gradlew :server:installDist` in daybook/ and use:
+    # build: .
+    restart: unless-stopped
+    environment:
+      DAYBOOK_TOKEN: ${DAYBOOK_TOKEN:?Set DAYBOOK_TOKEN in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - daybook-data:/data
+
+volumes:
+  daybook-data:
