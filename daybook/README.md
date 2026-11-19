@@ -75,9 +75,15 @@ release when you push a `daybook-v*` tag:
 
 - **Android:** `Daybook-android` → `Daybook-1.0.N.apk`. CI signs it with the `DAYBOOK_*` signing secrets, or the existing
   `AEZPRINT_*` ones if those aren't set, so each new APK installs as an update.
-- **Linux:** `Daybook-linux` → `daybook_1.0.N-1_amd64.deb` (bundles its own Java runtime), installed with
-  `sudo apt install ./daybook_*.deb`. It shows up as **Daybook** in your app menu. A runnable JAR is there too, for
-  other distributions: `java -jar Daybook-linux-x64-*.jar` (needs Java 21).
+- **Linux:** `Daybook-linux` has an `.rpm` for Fedora and other RPM distributions, a `.deb` for Debian and Ubuntu, and a
+  runnable JAR for anything else (`java -jar Daybook-linux-x64-*.jar`, needs Java 21). The packages bundle their own
+  Java runtime, install to `/opt/daybook`, and add **Daybook** to your app menu.
+
+  ```bash
+  sudo dnf install ./daybook-1.0.N-1.x86_64.rpm
+  ```
+
+  On Debian or Ubuntu use `sudo apt install ./daybook_*.deb` instead.
 
 Then on each device open **Settings**, enter the server address and token, and tap **Connect**. **Test Connection**
 checks both without saving.
@@ -131,6 +137,12 @@ cd daybook
 ```bash
 ./gradlew :desktopApp:run
 ```
+
+```bash
+./gradlew :desktopApp:packageRpm
+```
+
+That needs `rpmbuild` (the `rpm-build` package on Fedora). `packageDeb` builds the `.deb` the same way.
 
 ```bash
 ./gradlew :androidApp:assembleDebug

@@ -117,10 +117,13 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build .deb and runnable JAR
+      - name: Install rpmbuild
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - name: Build .rpm, .deb and runnable JAR
         run: |
-          ./gradlew :desktopApp:packageDeb :desktopApp:packageUberJarForCurrentOS
+          ./gradlew :desktopApp:packageRpm :desktopApp:packageDeb :desktopApp:packageUberJarForCurrentOS
           mkdir -p dist
+          cp desktopApp/build/compose/binaries/main/rpm/*.rpm dist/
           cp desktopApp/build/compose/binaries/main/deb/*.deb dist/
           cp desktopApp/build/compose/jars/*.jar dist/Daybook-linux-x64-1.0.${GITHUB_RUN_NUMBER}.jar
           ls -la dist
