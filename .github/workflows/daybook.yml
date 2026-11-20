@@ -2,6 +2,8 @@ name: Daybook
 
 on:
   push:
+    # Naming tags without branches would make GitHub skip branch pushes entirely.
+    branches: ["**"]
     paths:
       - "daybook/**"
       - ".github/workflows/daybook.yml"
