@@ -12,6 +12,10 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.LocalDate
 import xyz.aezdek.daybook.Daybook
 import xyz.aezdek.daybook.core.Subject
+import xyz.aezdek.daybook.data.LocalStore
+import xyz.aezdek.daybook.data.MemoryLocalStore
+import xyz.aezdek.daybook.data.SnapshotStorage
+import xyz.aezdek.daybook.data.SqliteLocalStore
 import xyz.aezdek.daybook.data.TaskDraft
 import xyz.aezdek.daybook.server.ServerStore
 import xyz.aezdek.daybook.server.daybookModule
@@ -20,7 +24,40 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class TwoDeviceSyncTest {
+/** Runs every scenario with the SQLite store (Android, Linux). */
+class SqliteTwoDeviceSyncTest : TwoDeviceSyncTest() {
+    override suspend fun newStore(): LocalStore =
+        SqliteLocalStore.open(BundledSQLiteDriver(), ":memory:", Dispatchers.IO.limitedParallelism(1))
+}
+
+/** Runs every scenario with the in-memory store the web app uses, saving through its snapshot storage. */
+class MemoryTwoDeviceSyncTest : TwoDeviceSyncTest() {
+    private class Saved : SnapshotStorage {
+        var text: String? = null
+        override fun load() = text
+        override fun save(snapshot: String) { text = snapshot }
+    }
+
+    override suspend fun newStore(): LocalStore = MemoryLocalStore(Saved())
+
+    @Test
+    fun theSavedCopyRestoresEverythingIncludingUnsentEdits() = kotlinx.coroutines.test.runTest {
+        val saved = Saved()
+        val first = MemoryLocalStore(saved)
+        val record = xyz.aezdek.daybook.core.TaskRecord(
+            id = "t1", title = "Moments", subject = "physics", date = "2026-11-20",
+            createdAt = 1, updatedAt = 1, updatedBy = first.deviceId(),
+        )
+        first.putLocal(record)
+        val reopened = MemoryLocalStore(saved)
+        assertEquals(first.deviceId(), reopened.deviceId())
+        assertEquals(listOf(record), reopened.allTasks())
+        assertEquals(1, reopened.pendingCount(), "the unsent edit is still waiting after a reload")
+    }
+}
+
+abstract class TwoDeviceSyncTest {
+    abstract suspend fun newStore(): LocalStore
 
     private val token = "test-token-0123456789abcdef"
     private val config = SyncConfig(serverUrl = "http://localhost", token = token)
@@ -59,9 +96,7 @@ class TwoDeviceSyncTest {
     private suspend fun device(http: HttpClient, scope: CoroutineScope, start: Long): Device {
         val clock = Clock(start)
         val app = Daybook.open(
-            driver = BundledSQLiteDriver(),
-            databasePath = ":memory:",
-            dbDispatcher = Dispatchers.IO.limitedParallelism(1),
+            store = newStore(),
             http = http,
             configStore = MemoryConfigStore(config),
             scope = scope,

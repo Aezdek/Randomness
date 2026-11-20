@@ -89,7 +89,7 @@ private val SidebarWidth = 272.dp
 
 /**
  * The whole app. [systemDark] and [reduceMotion] come from the platform; [commands] carries keyboard
- * shortcuts on desktop.
+ * shortcuts on desktop and Escape on the web. [isWeb] adjusts Settings for the browser.
  */
 @Composable
 fun DaybookApp(
@@ -99,6 +99,7 @@ fun DaybookApp(
     commands: Flow<AppCommand> = emptyFlow(),
     initialTab: Tab = Tab.Today,
     initialDate: LocalDate? = null,
+    isWeb: Boolean = false,
 ) {
     val appearance by app.appearance.collectAsState()
     val dark = when (appearance) {
@@ -198,7 +199,7 @@ fun DaybookApp(
                             onOpen = { openEditor(it) },
                         )
                         Tab.Progress -> ProgressScreen(controller, tasks, examDate, today, selected, progressList, chrome)
-                        Tab.Settings -> SettingsScreen(app, settingsList, chrome)
+                        Tab.Settings -> SettingsScreen(app, settingsList, chrome, isWeb)
                     }
                 }
 

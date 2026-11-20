@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import xyz.aezdek.daybook.Daybook
+import xyz.aezdek.daybook.data.SqliteLocalStore
 import java.util.concurrent.TimeUnit
 
 class DaybookApplication : Application() {
@@ -33,9 +34,11 @@ class DaybookApplication : Application() {
         super.onCreate()
         daybook = runBlocking {
             Daybook.open(
-                driver = AndroidSQLiteDriver(),
-                databasePath = getDatabasePath("daybook.db").also { it.parentFile?.mkdirs() }.absolutePath,
-                dbDispatcher = Dispatchers.IO.limitedParallelism(1),
+                store = SqliteLocalStore.open(
+                    driver = AndroidSQLiteDriver(),
+                    path = getDatabasePath("daybook.db").also { it.parentFile?.mkdirs() }.absolutePath,
+                    dispatcher = Dispatchers.IO.limitedParallelism(1),
+                ),
                 http = HttpClient(OkHttp),
                 configStore = AndroidConfigStore(this@DaybookApplication),
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

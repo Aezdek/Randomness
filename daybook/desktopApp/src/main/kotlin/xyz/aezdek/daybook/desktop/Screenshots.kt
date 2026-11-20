@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
 import xyz.aezdek.daybook.Daybook
+import xyz.aezdek.daybook.data.SqliteLocalStore
 import xyz.aezdek.daybook.core.SyncResponse
 import xyz.aezdek.daybook.data.LocalStore
 import kotlin.time.Clock
@@ -84,9 +85,7 @@ private class SampleConfig : ConfigStore {
 
 private suspend fun sampleApp(): Daybook {
     val app = Daybook.open(
-        driver = BundledSQLiteDriver(),
-        databasePath = ":memory:",
-        dbDispatcher = Dispatchers.IO.limitedParallelism(1),
+        store = SqliteLocalStore.open(BundledSQLiteDriver(), ":memory:", Dispatchers.IO.limitedParallelism(1)),
         http = HttpClient(OkHttp),
         configStore = SampleConfig(),
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

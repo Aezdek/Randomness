@@ -1,10 +1,13 @@
 # Daybook
 
 A daily study planner for A Level **Computer Science (9618)**, **Mathematics (9709)** and **Physics (9702)**.
-Set yourself tasks for each subject, tick them off, and see the same list on your Android phone and your Linux laptop.
+Set yourself tasks for each subject, tick them off, and see the same list on your Android phone, your Linux laptop and
+any browser.
 
-- **Android app** and **Linux desktop app** from one Kotlin Multiplatform codebase, with Compose for the UI.
-- **Offline first.** Each device keeps its own SQLite copy and works with no connection; edits sync when it's back.
+- **Android app**, **Linux desktop app** and **website** from one Kotlin Multiplatform codebase, with Compose for the UI.
+  The website is the same app compiled to WebAssembly, and your sync server hosts it.
+- **Offline first.** Each device keeps its own copy (SQLite in the apps, browser storage on the web) and works with no
+  connection; edits sync when it's back.
 - **Live sync** through a small self-hosted server: a tick on the phone shows on the laptop within a second or two.
 - **Designed to Apple's Human Interface Guidelines** (see [Design](#design)).
 
@@ -24,6 +27,8 @@ Set yourself tasks for each subject, tick them off, and see the same list on you
                   │  POST /api/sync       │
                   ├──────────►  Server  ◄─┤   GET /api/wait  (long poll)
                   │           (SQLite)    │
+ Browser ─────────┘   also serves /       └── the website itself
+ (local storage)
 ```
 
 - Every edit is written locally first and marked as unsent. Within about half a second the app pushes unsent edits
@@ -68,13 +73,25 @@ uptime checks.
 | `DAYBOOK_DB` | `/data/daybook.db` in Docker | The SQLite file. Back this up. |
 | `DAYBOOK_PORT` / `DAYBOOK_HOST` | `8080` / `0.0.0.0` | |
 
-## 2. Install the apps
+## 2. Open it in a browser
+
+The server hosts the website at its own address, so open `https://daybook.aezdek.xyz` (or wherever you put it). Go to
+**Settings**: the server address is already filled in. Enter the token and press **Connect**.
+
+- Tasks are kept in that browser too, so the page keeps working if the connection drops.
+- Your browser's menu can install it as an app (**Install Daybook** in Chrome or Edge, **Add to Home Screen** on a phone).
+- It needs WebAssembly garbage collection: Firefox 120, Chrome 119, Safari 18.2 or newer.
+- First load is about 5 MB (most of it the Skia graphics engine). Later visits only check for changes.
+- If the address is behind Cloudflare Access, the browser signs in through Access as usual. The service-token fields
+  are only for the apps.
+
+## 3. Install the apps
 
 Every push that touches `daybook/` runs the **Daybook** workflow. Download from the run's artifacts, or from the
 release when you push a `daybook-v*` tag:
 
-- **Android:** `Daybook-android` → `Daybook-1.0.N.apk`. CI signs it with the `DAYBOOK_*` signing secrets, or the existing
-  `AEZPRINT_*` ones if those aren't set, so each new APK installs as an update.
+- **Android:** `Daybook-android` → `Daybook-1.0.N.apk`. CI signs it with the release key in the repository secrets
+  (see [Signing](#signing)). Without them it builds a debug APK, which installs separately from the release one.
 - **Linux:** `Daybook-linux` has an `.rpm` for Fedora and other RPM distributions, a `.deb` for Debian and Ubuntu, and a
   runnable JAR for anything else (`java -jar Daybook-linux-x64-*.jar`, needs Java 21). The packages bundle their own
   Java runtime, install to `/opt/daybook`, and add **Daybook** to your app menu.
@@ -90,6 +107,21 @@ checks both without saving.
 
 The desktop app keeps its data in `~/.local/share/daybook/` and its settings in `~/.config/daybook/config.json`. Both
 are readable only by you. On Android the token is stored encrypted with a key held in the Android Keystore.
+
+### Signing
+
+Release APKs are signed with one key, so each build installs as an update over the last. Add these repository secrets
+(Settings → Secrets and variables → Actions):
+
+| Secret | |
+|---|---|
+| `DAYBOOK_KEYSTORE_BASE64` | The keystore file, base64-encoded: `base64 -w0 daybook-release.jks` |
+| `DAYBOOK_KEYSTORE_PASSWORD` | Its password |
+| `DAYBOOK_KEY_ALIAS` | `daybook` |
+| `DAYBOOK_KEY_PASSWORD` | The key's password (the same as the keystore's) |
+
+Keep the keystore somewhere safe. If it's lost, new builds can't update an installed app: you'd have to uninstall it,
+which also deletes that phone's unsynced tasks.
 
 ### Keyboard shortcuts (Linux)
 
@@ -152,6 +184,14 @@ That needs `rpmbuild` (the `rpm-build` package on Fedora). `packageDeb` builds t
 ./gradlew :desktopApp:screenshots
 ```
 
+```bash
+./gradlew :server:installDist
+```
+
+That builds the server with the website inside it (`:webApp:webDist` on its own builds just the website, into
+`webApp/build/dist/web`). The website is plain ES modules and WebAssembly, loaded without a bundler; `index.html` maps
+the one npm import, `@js-joda/core`, to a vendored copy.
+
 The last one renders the real screens offscreen with sample tasks, to `desktopApp/build/screenshots/`.
 
 | Module | |
@@ -161,6 +201,8 @@ The last one renders the real screens offscreen with sample tasks, to `desktopAp
 | `shared` | Local store, sync engine, and the whole Compose UI, for Android and desktop. |
 | `androidApp` | Android entry point, encrypted settings, background sync. |
 | `desktopApp` | Linux entry point, packaging, keyboard shortcuts. |
+| `webApp` | Browser entry point (WebAssembly), browser storage, the page and its install manifest. |
 
-The tests cover the protocol, the server (auth, conflicts, paging, long poll) and two devices syncing through a real
-in-process server, including offline conflicts, a device with a slow clock, deletes with undo, and live updates.
+The tests cover the protocol, the server (auth, conflicts, paging, long poll, serving the website) and two devices
+syncing through a real in-process server, including offline conflicts, a device with a slow clock, deletes with undo,
+and live updates. The sync scenarios run against both local stores, SQLite and the browser one.

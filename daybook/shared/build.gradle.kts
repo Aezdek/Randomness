@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -19,6 +20,8 @@ kotlin {
         androidResources { enable = true }
     }
     jvm("desktop")
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs { browser() }
 
     compilerOptions {
         optIn.addAll(
@@ -43,22 +46,28 @@ kotlin {
             api(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.json)
-            api(libs.androidx.sqlite)
         }
+        // Android and Linux keep the local store in SQLite; the web build keeps it in browser storage.
+        val nonWebMain = create("nonWebMain") {
+            dependsOn(commonMain.get())
+            dependencies { api(libs.androidx.sqlite) }
+        }
+        androidMain { dependsOn(nonWebMain) }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.sqlite.framework)
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.coroutines.android)
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
+            dependsOn(nonWebMain)
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.androidx.sqlite.bundled)
                 implementation(libs.kotlinx.coroutines.swing)
             }
         }
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)

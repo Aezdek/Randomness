@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Daybook</title>
+  <meta name="description" content="Daily A Level study planner for CS, Maths and Physics, synced with your phone and laptop.">
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; background: #F2F2F7; }
+    #daybook { position: fixed; inset: 0; }
+    #loading {
+      position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center;
+      font: 15px/20px system-ui, -apple-system, "Segoe UI", sans-serif; color: rgba(60, 60, 67, 0.78);
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #000; }
+      #loading { color: rgba(235, 235, 245, 0.6); }
+    }
+  </style>
+  <!-- The app is plain ES modules plus WebAssembly, with no bundler. This maps the one npm import. -->
+  <script type="importmap">
+    { "imports": { "@js-joda/core": "./vendor/js-joda-core.mjs" } }
+  </script>
+  <script type="module">
+    // Daybook needs WebAssembly garbage collection: Firefox 120, Chrome 119, Safari 18.2 or newer.
+    import('./daybook.mjs').catch((error) => {
+      console.error(error);
+      document.getElementById('loading').textContent =
+        'Daybook couldn\u2019t start in this browser. Update Firefox, Chrome or Safari, then reload.';
+    });
+  </script>
+</head>
+<body>
+  <div id="daybook"></div>
+  <div id="loading">Loading Daybook…</div>
+  <noscript>Daybook needs JavaScript turned on.</noscript>
+</body>
+</html>

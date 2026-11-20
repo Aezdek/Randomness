@@ -1,14 +1,11 @@
 package xyz.aezdek.daybook
 
-import androidx.sqlite.SQLiteDriver
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
 import xyz.aezdek.daybook.data.LocalStore
 import xyz.aezdek.daybook.data.TaskRepository
 import xyz.aezdek.daybook.sync.Appearance
@@ -18,8 +15,8 @@ import xyz.aezdek.daybook.sync.SyncEngine
 import kotlin.time.Clock
 
 /**
- * The app's composition root: one per process. Each platform opens it with its own SQLite driver,
- * database path, HTTP client and config storage.
+ * The app's composition root: one per process. Each platform opens it with its own local store, HTTP
+ * client and config storage.
  */
 class Daybook private constructor(
     val store: LocalStore,
@@ -44,17 +41,13 @@ class Daybook private constructor(
     fun start() = sync.start()
 
     companion object {
+        /** [store] is the platform's local store: SQLite on Android and Linux, browser storage on the web. */
         suspend fun open(
-            driver: SQLiteDriver,
-            databasePath: String,
-            dbDispatcher: CoroutineDispatcher,
+            store: LocalStore,
             http: HttpClient,
             configStore: ConfigStore,
             scope: CoroutineScope = CoroutineScope(SupervisorJob()),
             clock: () -> Long = { Clock.System.now().toEpochMilliseconds() },
-        ): Daybook {
-            val store = withContext(dbDispatcher) { LocalStore(driver, databasePath, dbDispatcher) }
-            return Daybook(store, store.deviceId(), http, configStore, scope, clock).also { it.sync.loadStatus() }
-        }
+        ): Daybook = Daybook(store, store.deviceId(), http, configStore, scope, clock).also { it.sync.loadStatus() }
     }
 }

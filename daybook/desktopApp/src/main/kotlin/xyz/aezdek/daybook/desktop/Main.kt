@@ -24,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
 import xyz.aezdek.daybook.Daybook
+import xyz.aezdek.daybook.data.SqliteLocalStore
 import xyz.aezdek.daybook.ui.AppCommand
 import xyz.aezdek.daybook.ui.DaybookApp
 import java.awt.Dimension
@@ -31,9 +32,7 @@ import java.awt.Dimension
 fun main() {
     val daybook = runBlocking {
         Daybook.open(
-            driver = BundledSQLiteDriver(),
-            databasePath = DesktopPaths.database.absolutePath,
-            dbDispatcher = Dispatchers.IO.limitedParallelism(1),
+            store = SqliteLocalStore.open(BundledSQLiteDriver(), DesktopPaths.database.absolutePath, Dispatchers.IO.limitedParallelism(1)),
             http = HttpClient(OkHttp),
             configStore = DesktopConfigStore(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

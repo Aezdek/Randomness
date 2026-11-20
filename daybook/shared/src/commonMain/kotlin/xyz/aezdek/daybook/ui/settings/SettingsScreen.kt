@@ -53,7 +53,7 @@ private sealed interface TestResult {
 }
 
 @Composable
-fun SettingsScreen(app: Daybook, listState: LazyListState, chrome: PaddingValues) {
+fun SettingsScreen(app: Daybook, listState: LazyListState, chrome: PaddingValues, isWeb: Boolean = false) {
     val colors = Apple.colors
     val scope = rememberCoroutineScope()
     val saved by app.sync.config.collectAsState()
@@ -101,8 +101,13 @@ fun SettingsScreen(app: Daybook, listState: LazyListState, chrome: PaddingValues
             Column(Modifier.readable()) {
                 GroupedSection(
                     header = "Sync Server",
-                    footer = "Each device keeps its own copy of your tasks and works offline. The server passes changes between them. " +
-                        "Use the address and token of your Daybook server.",
+                    footer = if (isWeb) {
+                        "This page keeps a copy of your tasks in this browser and syncs it with the server it was loaded from. " +
+                            "Enter the token of your Daybook server."
+                    } else {
+                        "Each device keeps its own copy of your tasks and works offline. The server passes changes between them. " +
+                            "Use the address and token of your Daybook server."
+                    },
                     rows = listOf(
                         {
                             FieldRow(
@@ -127,7 +132,8 @@ fun SettingsScreen(app: Daybook, listState: LazyListState, chrome: PaddingValues
             }
         }
 
-        item(key = "access") {
+        // In a browser, Cloudflare Access signs you in with a cookie, so no service token is needed.
+        if (!isWeb) item(key = "access") {
             GroupedSection(
                 modifier = Modifier.readable(),
                 header = "Cloudflare Access",
@@ -209,7 +215,8 @@ fun SettingsScreen(app: Daybook, listState: LazyListState, chrome: PaddingValues
             GroupedSection(
                 modifier = Modifier.readable(),
                 header = "About",
-                footer = "Subjects follow Cambridge International A Level syllabuses 9618, 9709 and 9702. Text is set in Inter, under the SIL Open Font License.",
+                footer = "Subjects follow Cambridge International A Level syllabuses 9618, 9709 and 9702. Text is set in Inter, under the SIL Open Font License." +
+                    if (isWeb) " Dates use js-joda, © Philipp Thürwächter and Pattrick Hüper, under the BSD licence." else "",
                 rows = listOf(
                     { ListRow("Daybook", icon = Symbols.info, value = "1.0") },
                     { ListRow("This Device", icon = Symbols.laptop, value = app.deviceId.take(8)) },

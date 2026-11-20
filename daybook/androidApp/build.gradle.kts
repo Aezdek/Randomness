@@ -9,11 +9,12 @@ plugins {
 // same key and installs as an update over the previous one.
 fun signing(env: String, prop: String): String? =
     System.getenv(env)?.takeIf { it.isNotBlank() } ?: providers.gradleProperty(prop).orNull
-val keystorePath = signing("DAYBOOK_KEYSTORE_PATH", "daybook.keystore")
-val keystorePassword = signing("DAYBOOK_KEYSTORE_PASSWORD", "daybook.storePassword")
-val keyAlias = signing("DAYBOOK_KEY_ALIAS", "daybook.keyAlias")
-val keyPassword = signing("DAYBOOK_KEY_PASSWORD", "daybook.keyPassword")
-val hasReleaseSigning = listOf(keystorePath, keystorePassword, keyAlias, keyPassword).all { !it.isNullOrBlank() }
+// Named so they can't be confused with the signing config's own properties inside create("release").
+val signingStoreFile = signing("DAYBOOK_KEYSTORE_PATH", "daybook.keystore")
+val signingStorePassword = signing("DAYBOOK_KEYSTORE_PASSWORD", "daybook.storePassword")
+val signingKeyAlias = signing("DAYBOOK_KEY_ALIAS", "daybook.keyAlias")
+val signingKeyPassword = signing("DAYBOOK_KEY_PASSWORD", "daybook.keyPassword")
+val hasReleaseSigning = listOf(signingStoreFile, signingStorePassword, signingKeyAlias, signingKeyPassword).all { !it.isNullOrBlank() }
 
 android {
     namespace = "xyz.aezdek.daybook"
@@ -30,10 +31,10 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystorePath!!)
-                storePassword = keystorePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
             }
         }
     }

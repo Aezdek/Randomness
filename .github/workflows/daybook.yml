@@ -151,14 +151,17 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build server distribution
+      - name: Build server distribution (includes the website)
         run: |
           ./gradlew :server:installDist
           tar -C server/build/install -czf daybook-server.tar.gz daybook-server
+          tar -C webApp/build/dist -czf daybook-web.tar.gz web
       - uses: actions/upload-artifact@v4
         with:
           name: Daybook-server
-          path: daybook/daybook-server.tar.gz
+          path: |
+            daybook/daybook-server.tar.gz
+            daybook/daybook-web.tar.gz
       - name: Build image
         run: docker build -t daybook-server server
       # The image is only published for a release tag or a manual run, never for an ordinary push.
