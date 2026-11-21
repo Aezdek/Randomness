@@ -1,5 +1,5 @@
 import { Camera, ChevronLeft, KeyRound, Clapperboard, Compass, Heart, Home, Menu, MessageCircle, Moon, PanelLeftClose, PanelLeftOpen, PlusSquare, Search, Sun, WifiOff } from 'lucide-react';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom';
 import { usePushPrefsMirror } from '../../core/notifyPrefs';
 import { unreadCount, useIndex } from '../../core/selectors';
@@ -14,19 +14,32 @@ import { Activity, useActivityBadge } from '../activity/Activity';
 import { CallHost } from '../calls/CallHost';
 import { calls } from '../calls/calls';
 import { CreateHost } from '../create/CreateHost';
-import { Explore } from '../explore/Explore';
 import { Home as HomePage } from '../feed/Home';
 import { PostModal, PostPage } from '../feed/PostView';
 import { Chat } from '../messages/Chat';
 import { Inbox } from '../messages/Inbox';
 import { Profile } from '../profile/Profile';
-import { Reels } from '../reels/Reels';
 import { Settings, settingsTitle } from '../settings/Settings';
-import { Admin } from '../admin/Admin';
-import { Verify } from '../settings/Verify';
-import { StoryViewerPage } from '../stories/StoryViewer';
 import { SignInAlert } from '../security/Alerts';
 import { LocationSharer } from '../messages/Circle';
+
+// Screens opened now and then are their own downloads, so the app starts with less to read: the inbox, chats, feed
+// and profiles come at once, these when first opened (and quietly in the background once the app is idle).
+const loadExplore = () => import('../explore/Explore');
+const loadReels = () => import('../reels/Reels');
+const loadStories = () => import('../stories/StoryViewer');
+const loadVerify = () => import('../settings/Verify');
+const loadAdmin = () => import('../admin/Admin');
+const Explore = lazy(() => loadExplore().then((m) => ({ default: m.Explore })));
+const Reels = lazy(() => loadReels().then((m) => ({ default: m.Reels })));
+const StoryViewerPage = lazy(() => loadStories().then((m) => ({ default: m.StoryViewerPage })));
+const Verify = lazy(() => loadVerify().then((m) => ({ default: m.Verify })));
+const Admin = lazy(() => loadAdmin().then((m) => ({ default: m.Admin })));
+const prefetchScreens = () => {
+  const go = () => [loadExplore, loadReels, loadStories, loadVerify, loadAdmin].forEach((load) => void load().catch(() => undefined));
+  if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 5000 });
+  else setTimeout(go, 2000);
+};
 
 function useRealtimeWiring() {
   const navigate = useNavigate();
@@ -277,6 +290,7 @@ function ConnectionBanner() {
 export function Shell() {
   useRealtimeWiring();
   usePushPrefsMirror();
+  useEffect(prefetchScreens, []);
   const location = useLocation();
   const background = (location.state as { background?: Location } | null)?.background;
   const page = (background ?? location).pathname;
@@ -288,6 +302,7 @@ export function Shell() {
       <main className="main">
         {/* One page that can't be shown doesn't take the app with it; going anywhere else starts afresh. */}
         <Guard key={page} fallback={<PageError />}>
+        <Suspense fallback={null}>
         <Routes location={background ?? location}>
           <Route path="/" element={<HomePage />} />
           <Route path="/explore" element={<Explore />} />
@@ -308,6 +323,7 @@ export function Shell() {
           <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
+        </Suspense>
         </Guard>
         {background && (
           <Routes>

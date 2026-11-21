@@ -45,8 +45,8 @@ async function start(token: string, me: Me, keys: AccountKeys) {
 }
 
 export async function restoreSession() {
-  await initSodium();
-  const stored = await loadSession();
+  // Both at once: the crypto library loading and the saved session being read don't wait for each other.
+  const [, stored] = await Promise.all([initSodium(), loadSession()]);
   if (!stored) {
     resetApp('signedOut');
     return;

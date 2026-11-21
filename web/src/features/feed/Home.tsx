@@ -1,5 +1,5 @@
 import { Camera, Lock, Sparkles } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { displayName, useIndex } from '../../core/selectors';
 import { useApp } from '../../core/store';
@@ -102,6 +102,9 @@ function Welcome() {
   );
 }
 
+/** Posts drawn at first, and added each time you scroll near the end. */
+const FEED_PAGE = 5;
+
 export function Home() {
   const index = useIndex();
   const users = useApp((s) => s.users);
@@ -117,6 +120,17 @@ export function Home() {
       }),
     [index.posts, users, me.id],
   );
+  // A few posts at first and more as you scroll, as on Instagram: each post decrypts its photos, so drawing (and
+  // fetching) the whole feed at once made Home slow to open. The next ones load well before you reach them.
+  const [shown, setShown] = useState(FEED_PAGE);
+  const more = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = more.current;
+    if (!el) return;
+    const watcher = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setShown((n) => n + FEED_PAGE), { rootMargin: '1500px 0px' });
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, [shown, feed.length]);
   return (
     <div className="home">
       <div className="home-feed">
@@ -128,15 +142,18 @@ export function Home() {
             <Spinner />
           </Center>
         ) : feed.length ? (
-          feed.map((entity) => (
-            <Guard key={entity.dto.id}>
-              <PostCard entity={entity} />
-            </Guard>
-          ))
+          <>
+            {feed.slice(0, shown).map((entity) => (
+              <Guard key={entity.dto.id}>
+                <PostCard entity={entity} />
+              </Guard>
+            ))}
+            {shown < feed.length && <div ref={more} className="feed-more" aria-hidden />}
+          </>
         ) : (
           <Welcome />
         )}
-        {feed.length > 0 && (
+        {feed.length > 0 && shown >= feed.length && (
           <div className="caught-up">
             <span className="check">✓</span>
             <b>You’re all caught up</b>

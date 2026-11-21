@@ -1,6 +1,6 @@
 // Plans and live location inside a chat: the cards in the conversation, the sheets that make them, and the sharer that
 // keeps your own live location up to date while this tab is open.
-import { CalendarClock, CalendarDays, Check, Clock, Hand, HelpCircle, ListChecks, ListTodo, MapPin, MessageCircleQuestion, Navigation, Paperclip, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, Check, Clock, Eye, Hand, Heart, HelpCircle, ListChecks, ListTodo, MapPin, MessageCircleQuestion, Navigation, Paperclip, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   answerPlan,
@@ -338,11 +338,13 @@ function distance(lat1: number, lng1: number, lat2: number, lng2: number) {
 
 // -------------------------------------------------------------------------------------------------------- the menu
 
-export type ChatExtra = 'plan' | 'location' | 'poll' | 'file' | 'list' | 'daily' | 'countdown' | 'nudge' | 'later';
+export type ChatExtra = 'plan' | 'location' | 'poll' | 'file' | 'list' | 'daily' | 'countdown' | 'nudge' | 'later' | 'once' | 'quick';
 
 /** The composer's "+": plans, live location and (in groups) polls. */
-export function ExtrasSheet({ open, onClose, onPick, group }: { open: boolean; onClose: () => void; onPick: (what: ChatExtra) => void; group: boolean }) {
+export function ExtrasSheet({ open, onClose, onPick, group, quick = '❤️' }: { open: boolean; onClose: () => void; onPick: (what: ChatExtra) => void; group: boolean; quick?: string }) {
   const items: { id: ChatExtra; label: string; sub: string; icon: typeof MapPin }[] = [
+    { id: 'quick', label: `Send ${quick}`, sub: 'The chat’s quick reaction, on its own', icon: Heart },
+    { id: 'once', label: 'View once', sub: 'A photo or video that opens once, then it’s gone', icon: Eye },
     { id: 'file', label: 'File', sub: 'Any file, up to 250 MB, sent as it is', icon: Paperclip },
     { id: 'plan', label: 'Plan', sub: 'A time and place, and who’s going', icon: CalendarDays },
     { id: 'location', label: 'Live location', sub: 'Where you are, for a set time', icon: Navigation },

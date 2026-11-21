@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 import type { AccountKeys } from '../crypto/account';
-import { concat, sodium } from '../crypto/sodium';
+import { concat, initSodium, sodium } from '../crypto/sodium';
 import type { Me } from './types';
 
 /**
@@ -51,6 +51,8 @@ export async function loadSession(): Promise<{ token: string; me: Me; keys: Acco
   if (!current) return null;
   try {
     const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: current.iv as BufferSource }, current.deviceKey, current.wrappedKeys));
+    // restoreSession loads the crypto library alongside this; it is needed from here on.
+    await initSodium();
     const signSk = plain.slice(0, 64);
     const boxSk = plain.slice(64, 96);
     sodium.memzero(plain);

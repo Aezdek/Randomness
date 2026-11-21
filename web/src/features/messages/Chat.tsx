@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowDown, ArrowLeft, Camera, CornerUpLeft, Eye, Forward, Ghost, Heart, ImagePlus, Info, ListChecks, Mic, MoreHorizontal, Pause, Phone, PhoneMissed, Pin, Play, Plus, Send, Smile, Square, Timer, Video, X } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowLeft, CornerUpLeft, EllipsisVertical, Eye, Forward, Ghost, Image as ImageIcon, ImagePlus, Info, ListChecks, Mic, Pause, Phone, PhoneMissed, Pin, Play, Plus, Reply, Send, Smile, Square, Sticker, Timer, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -294,6 +294,7 @@ const Bubble = memo(function Bubble({
   // The sender renaming themselves redraws the name; nicknames come with [custom].
   useProfileEntity(message.dto.authorId);
   const [menu, setMenu] = useState(false);
+  const [reacting, setReacting] = useState(false);
   const [moreEmoji, setMoreEmoji] = useState(false);
   const [opened, setOpened] = useState(false);
   const [forwarding, setForwarding] = useState(false);
@@ -391,20 +392,36 @@ const Bubble = memo(function Bubble({
             {content}
             {p.edited && <span className="edited">Edited</span>}
           </div>
-          <span className="msg-actions">
-            <time className="msg-hover-time" dateTime={new Date(message.dto.receivedAt).toISOString()} title={fullTime(message.dto.receivedAt)}>
+          {/* Instagram's hover bar: react and reply next to the message, more beyond them (mirrored for your own). */}
+          <span className={`msg-actions ${reacting ? 'held' : ''}`} title={fullTime(message.dto.receivedAt)}>
+            <button className="msg-action" onClick={() => setReacting((r) => !r)} aria-label="React" aria-expanded={reacting}>
+              <Smile size={18} />
+            </button>
+            <button className="msg-action" onClick={() => onReply(message)} aria-label="Reply">
+              <Reply size={18} />
+            </button>
+            <button className="msg-action" onClick={() => setMenu(true)} aria-label="More">
+              <EllipsisVertical size={18} />
+            </button>
+            <time className="msg-hover-time" dateTime={new Date(message.dto.receivedAt).toISOString()}>
               {clock(message.dto.receivedAt)}
             </time>
-            <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="React">
-              <Smile size={16} />
-            </button>
-            <button className="icon-btn sm" onClick={() => onReply(message)} aria-label="Reply">
-              <CornerUpLeft size={16} />
-            </button>
-            <button className="icon-btn sm" onClick={() => setMenu(true)} aria-label="More">
-              <MoreHorizontal size={16} />
-            </button>
           </span>
+          {reacting && (
+            <>
+              <div className="react-pill-scrim" onPointerDown={() => setReacting(false)} />
+              <motion.div className="react-pill" role="menu" initial={{ opacity: 0, scale: 0.9, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.14 }}>
+                {QUICK.map((e) => (
+                  <motion.button key={e} role="menuitem" whileHover={{ scale: 1.25 }} whileTap={{ scale: 0.9 }} onClick={() => (setReacting(false), void reactTo(message, e))}>
+                    {e}
+                  </motion.button>
+                ))}
+                <button className="react-pill-more" onClick={() => (setReacting(false), setMoreEmoji(true), setMenu(true))} aria-label="More emojis">
+                  <Plus size={18} />
+                </button>
+              </motion.div>
+            </>
+          )}
         </div>
         <span className="msg-swipe-reply" aria-hidden>
           <CornerUpLeft size={18} />
@@ -635,7 +652,6 @@ export function Chat() {
   // usable meanwhile (several can go at once).
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
   const [info, setInfo] = useState(false);
-  const [once, setOnce] = useState(false);
   const [vanish, setVanish] = useVanish(threadId);
   const [polling, setPolling] = useState(false);
   const [extras, setExtras] = useState(false);
@@ -644,6 +660,7 @@ export function Chat() {
   const scroller = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const anyFile = useRef<HTMLInputElement>(null);
+  const onceFile = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const lastTyping = useRef(0);
@@ -831,11 +848,9 @@ export function Chat() {
     });
   };
 
-  const attach = (list: FileList) => {
+  const attach = (list: FileList, viewOnce = false) => {
     const files = [...list].slice(0, 10);
     if (!files.length) return;
-    const viewOnce = once;
-    setOnce(false);
     const first = files[0];
     dispatch(
       {
@@ -1133,17 +1148,14 @@ export function Chat() {
             <Recorder onDone={voice} onCancel={() => setRecording(false)} />
           ) : (
             <form className="chat-composer" onSubmit={submit}>
-              <button type="button" className="icon-btn sm cam" onClick={() => file.current?.click()} aria-label="Send photo or video">
-                <Camera size={18} />
-              </button>
               <button
                 type="button"
-                className={`icon-btn sm emoji-toggle ${emojiOpen ? 'on' : ''}`}
+                className={`icon-btn composer-icon emoji-toggle ${emojiOpen ? 'on' : ''}`}
                 onClick={() => setEmojiOpen((o) => !o)}
                 aria-label="Emoji"
                 aria-expanded={emojiOpen}
               >
-                <Smile size={20} />
+                <Smile size={24} strokeWidth={1.75} />
               </button>
               <input
                 ref={input}
@@ -1166,25 +1178,14 @@ export function Chat() {
                 </button>
               ) : (
                 <>
-                  <button type="button" className="icon-btn sm" onClick={() => setRecording(true)} aria-label="Record voice message">
-                    <Mic size={20} />
+                  <button type="button" className="icon-btn composer-icon" onClick={() => setRecording(true)} aria-label="Record voice message">
+                    <Mic size={24} strokeWidth={1.75} />
                   </button>
-                  <button type="button" className={`icon-btn sm ${once ? 'on-once' : ''}`} onClick={() => setOnce((o) => !o)} aria-label="View once" title="Next photo is view-once">
-                    <Eye size={20} />
+                  <button type="button" className="icon-btn composer-icon" onClick={() => file.current?.click()} aria-label="Send photo or video">
+                    <ImageIcon size={24} strokeWidth={1.75} />
                   </button>
-                  <button type="button" className="icon-btn sm" onClick={() => file.current?.click()} aria-label="Gallery">
-                    <ImagePlus size={20} />
-                  </button>
-                  <button type="button" className="icon-btn sm" onClick={() => setExtras(true)} aria-label="Add to chat" title="Plan, live location or poll">
-                    <Plus size={21} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn sm quick-reaction"
-                    onClick={() => void send({ type: MessageType.HEART, text: custom.quickReaction === DEFAULT_REACTION ? null : custom.quickReaction })}
-                    aria-label={`Send ${custom.quickReaction}`}
-                  >
-                    {custom.quickReaction === DEFAULT_REACTION ? <Heart size={20} /> : <span aria-hidden>{custom.quickReaction}</span>}
+                  <button type="button" className="icon-btn composer-icon" onClick={() => setExtras(true)} aria-label="Add to chat" title="Files, plans, lists, view-once photos and more">
+                    <Sticker size={24} strokeWidth={1.75} />
                   </button>
                 </>
               )}
@@ -1198,11 +1199,27 @@ export function Chat() {
         open={extras}
         onClose={() => setExtras(false)}
         group={thread.isGroup}
+        quick={custom.quickReaction}
         onPick={(what) => {
-          if (what === 'poll') setPolling(true);
+          if (what === 'quick') void send({ type: MessageType.HEART, text: custom.quickReaction === DEFAULT_REACTION ? null : custom.quickReaction });
+          else if (what === 'once') onceFile.current?.click();
+          else if (what === 'poll') setPolling(true);
           else if (what === 'file') anyFile.current?.click();
           else if (what === 'nudge') void sendNudge(threadId).catch((e) => toast(messageOf(e), 'error'));
           else setExtra(what);
+        }}
+      />
+      {/* A photo or video that opens once: its own input, so a cancelled pick leaves the next photo an ordinary one. */}
+      <input
+        ref={onceFile}
+        type="file"
+        accept="image/*,video/*,.heic,.heif"
+        hidden
+        aria-label="Send a view-once photo or video"
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files?.length) attach(files, true);
+          e.target.value = '';
         }}
       />
       {/* Outside the composer, whose own file input is the photo and video one. */}
@@ -1230,7 +1247,7 @@ export function Chat() {
 
 /** Messages drawn as a line in the middle of the chat (or, for list changes, not at all) rather than as a bubble. */
 /** How many messages a chat draws at first, and how many more each time you scroll near the top. */
-const PAGE = 60;
+const PAGE = 30;
 
 const NONE: Entity[] = [];
 

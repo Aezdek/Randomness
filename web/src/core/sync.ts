@@ -44,7 +44,8 @@ class SyncEngine {
     // Every object is checked again (its signature, its key) before it is shown, which takes a while for a long
     // history. The newest come first, so the screen fills at once; the rest follow in small batches between frames,
     // so the app stays responsive meanwhile, and appear together at the end.
-    await this.ingestInSteps(objects, FIRST_BATCH);
+    // Only the first batch is waited for: the app shows as soon as it's in, and the rest arrive in the background.
+    void this.ingestInSteps(objects, FIRST_BATCH).catch((e) => console.warn('Opening stored objects failed', e));
   }
 
   /**
@@ -382,7 +383,7 @@ export function headerOf(dto: ObjectDto) {
 export const engine = new SyncEngine();
 
 /** How many objects are opened before the first screen, and how many per frame after it. */
-const FIRST_BATCH = 400;
-const BATCH = 150;
+const FIRST_BATCH = 150;
+const BATCH = 100;
 
 const nextFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
